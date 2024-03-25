@@ -56,6 +56,8 @@ struct CommandArgs {
     elem_inputs: usize,
     #[arg(short = 't', long)]
     exec_type: ExecType,
+    #[arg(short = 'G', long)]
+    opencl_group_len: Option<usize>,
 }
 
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
@@ -258,6 +260,11 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
     assert_eq!(circuit.outputs().len(), 0);
     println!("Elem inputs: {}", elem_inputs);
+    let opencl_config = OpenCLBuilderConfig {
+        optimize_negs: true,
+        group_len: cmd_args.opencl_group_len,
+        group_vec: false,
+    };
     let exec_type = cmd_args.exec_type;
     let result = match exec_type {
         ExecType::CPU => {
@@ -273,7 +280,8 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
                     .get(didx)
                     .unwrap(),
             );
-            let builder = BasicMapperBuilder::new(OpenCLBuilder::new(&device, None));
+            let builder =
+                BasicMapperBuilder::new(OpenCLBuilder::new(&device, Some(opencl_config.clone())));
             do_command_with_opencl_mapper(builder, circuit.clone(), elem_inputs)
         }
         ExecType::CPUAndOpenCL
@@ -287,7 +295,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
                     .into_iter()
                     .map(|dev_id| {
                         let device = Device::new(dev_id.clone());
-                        OpenCLBuilder::new(&device, None)
+                        OpenCLBuilder::new(&device, Some(opencl_config.clone()))
                     })
                     .collect::<Vec<_>>()
             } else if let ExecType::CPUAndOpenCL1D(didx) = exec_type {
@@ -297,8 +305,8 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
                     .map(|dev_id| {
                         let device = Device::new(dev_id.clone());
                         [
-                            OpenCLBuilder::new(&device, None),
-                            OpenCLBuilder::new(&device, None),
+                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
                         ]
                     })
                     .flatten()
@@ -310,7 +318,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
                     .into_iter()
                     .map(|dev_id| {
                         let device = Device::new(dev_id);
-                        OpenCLBuilder::new(&device, None)
+                        OpenCLBuilder::new(&device, Some(opencl_config.clone()))
                     })
                     .collect::<Vec<_>>()
             } else {
@@ -321,8 +329,8 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
                     .map(|dev_id| {
                         let device = Device::new(dev_id);
                         [
-                            OpenCLBuilder::new(&device, None),
-                            OpenCLBuilder::new(&device, None),
+                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
                         ]
                     })
                     .flatten()
