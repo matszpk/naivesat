@@ -54,6 +54,86 @@ struct Args {
     exec_type: ExecType,
 }
 
+fn do_command(exec_type: ExecType) {
+    //let (circuit, input_map) = gen_bench_circuit_type(ctype, n);
+    //println!("Circuit length: {}", circuit.len());
+    match exec_type {
+        ExecType::CPU => {
+            println!("Execute in CPU");
+            let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
+            //do_command_with_par_mapper(cmd, builder, n, ctype, circuit, input_map);
+        }
+        ExecType::OpenCL(didx) => {
+            println!("Execute in OpenCL device={}", didx);
+            let device = Device::new(
+                *get_all_devices(CL_DEVICE_TYPE_GPU)
+                    .unwrap()
+                    .get(didx)
+                    .unwrap(),
+            );
+            let builder = BasicMapperBuilder::new(OpenCLBuilder::new(&device, None));
+            //do_command_with_mapper(cmd, builder, n, ctype, circuit, input_map);
+        }
+        ExecType::CPUAndOpenCL
+        | ExecType::CPUAndOpenCLD
+        | ExecType::CPUAndOpenCL1(_)
+        | ExecType::CPUAndOpenCL1D(_) => {
+            let par_builder = CPUBuilder::new(None);
+            let seq_builders = if let ExecType::CPUAndOpenCL1(didx) = exec_type {
+                println!("Execute in CPUAndOpenCL1");
+                get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
+                    .into_iter()
+                    .map(|dev_id| {
+                        let device = Device::new(dev_id.clone());
+                        OpenCLBuilder::new(&device, None)
+                    })
+                    .collect::<Vec<_>>()
+            } else if let ExecType::CPUAndOpenCL1D(didx) = exec_type {
+                println!("Execute in CPUAndOpenCL1D");
+                get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
+                    .into_iter()
+                    .map(|dev_id| {
+                        let device = Device::new(dev_id.clone());
+                        [
+                            OpenCLBuilder::new(&device, None),
+                            OpenCLBuilder::new(&device, None),
+                        ]
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>()
+            } else if matches!(exec_type, ExecType::CPUAndOpenCL) {
+                println!("Execute in CPUAndOpenCL");
+                get_all_devices(CL_DEVICE_TYPE_GPU)
+                    .unwrap()
+                    .into_iter()
+                    .map(|dev_id| {
+                        let device = Device::new(dev_id);
+                        OpenCLBuilder::new(&device, None)
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                println!("Execute in CPUAndOpenCLD");
+                get_all_devices(CL_DEVICE_TYPE_GPU)
+                    .unwrap()
+                    .into_iter()
+                    .map(|dev_id| {
+                        let device = Device::new(dev_id);
+                        [
+                            OpenCLBuilder::new(&device, None),
+                            OpenCLBuilder::new(&device, None),
+                        ]
+                    })
+                    .flatten()
+                    .collect::<Vec<_>>()
+            };
+            let builder = ParSeqMapperBuilder::new(par_builder, seq_builders);
+            println!("Do execute");
+            //let (exec, input) = do_exec_bench0_parseq_0(builder, circuit, input_map);
+            //do_exec_bench0_parseq_1(exec, &input);
+        }
+    }
+}
+
 fn main() {
     let args = Args::parse();
     println!("Hello, world!: {:?}", args.exec_type);
