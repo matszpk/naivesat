@@ -161,8 +161,10 @@ fn do_command_with_opencl_mapper<'a>(
         .execute_direct(
             &input,
             None,
-            |_, _, output, arg| {
-                if output[0] != 0 {
+            |result, _, output, arg| {
+                if result.is_some() {
+                    result
+                } else if output[0] != 0 {
                     let elem_idx =
                         output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
