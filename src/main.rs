@@ -58,14 +58,133 @@ struct CommandArgs {
     exec_type: ExecType,
 }
 
+const AGGR_OUTPUT_CPU_CODE: &str = r##"{
+    uint32_t i = 0;
+    uint32_t* out = (uint32_t*)output;
+    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+        uint32_t v;
+        GET_U32(v, o0, i);
+        if ((v != 0) && (__sync_fetch_and_or(out, v) == 0)) {
+            out[1] = idx;
+            out[2] = i;
+        }
+    }
+}"##;
+
+const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
+    uint i = 0;
+    uint* out = (uint*)output;
+    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+        uint v;
+        GET_U32(v, o0, i);
+        if ((v != 0) && (atomic_or(out, v) == 0)) {
+            out[1] = idx;
+            out[2] = i;
+        }
+    }
+}"##;
+
+fn do_command_with_par_mapper<'a>(
+    mut mapper: ParBasicMapperBuilder<
+        'a,
+        CPUDataReader<'a>,
+        CPUDataWriter<'a>,
+        CPUDataHolder,
+        CPUExecutor,
+        CPUBuilder<'a>,
+    >,
+    circuit: Circuit<usize>,
+    elem_inputs: usize,
+) -> Option<u128> {
+    mapper.add_with_config(
+        "formula",
+        circuit,
+        CodeConfig::new()
+            .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
+            .arg_inputs(Some(&(elem_inputs..).collect::<Vec<usize>>()))
+            .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+            .aggr_output_len(Some(3)),
+    );
+    let word_len = mapper.word_len();
+    let mut execs = mapper.build().unwrap();
+    let input = execs[0].new_data(16);
+    execs[0]
+        .execute_direct(
+            &input,
+            None,
+            |_, output, arg| {
+                if output[0] != 0 {
+                    let elem_idx =
+                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
+                    Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
+                } else {
+                    None
+                }
+            },
+            |a, b| {
+                if a.is_some() {
+                    a
+                } else {
+                    b
+                }
+            },
+            |a| a.is_some(),
+        )
+        .unwrap()
+}
+
+fn do_command_with_opencl_mapper<'a>(
+    mut mapper: BasicMapperBuilder<
+        'a,
+        OpenCLDataReader<'a>,
+        OpenCLDataWriter<'a>,
+        OpenCLDataHolder,
+        OpenCLExecutor,
+        OpenCLBuilder<'a>,
+    >,
+    circuit: Circuit<usize>,
+    elem_inputs: usize,
+) -> Option<u128> {
+    mapper.add_with_config(
+        "formula",
+        circuit,
+        CodeConfig::new()
+            .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
+            .arg_inputs(Some(&(elem_inputs..).collect::<Vec<usize>>()))
+            .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+            .aggr_output_len(Some(3)),
+    );
+    let word_len = mapper.word_len();
+    let mut execs = mapper.build().unwrap();
+    let input = execs[0].new_data(16);
+    execs[0]
+        .execute_direct(
+            &input,
+            None,
+            |_, _, output, arg| {
+                if output[0] != 0 {
+                    let elem_idx =
+                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
+                    Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
+                } else {
+                    None
+                }
+            },
+            |a| a.is_some(),
+        )
+        .unwrap()
+}
+
 fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecType) {
-    //let (circuit, input_map) = gen_bench_circuit_type(ctype, n);
-    //println!("Circuit length: {}", circuit.len());
-    match exec_type {
+    let input_len = circuit.input_len();
+    assert!(cmd_args.elem_inputs <= 37);
+    assert!(input_len - cmd_args.elem_inputs <= 64);
+    assert_eq!(circuit.outputs().len(), 0);
+    let result = match exec_type {
         ExecType::CPU => {
             println!("Execute in CPU");
             let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
-            //do_command_with_par_mapper(cmd, builder, n, ctype, circuit, input_map);
+            do_command_with_par_mapper(builder, circuit, cmd_args.elem_inputs)
         }
         ExecType::OpenCL(didx) => {
             println!("Execute in OpenCL device={}", didx);
@@ -76,7 +195,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecTyp
                     .unwrap(),
             );
             let builder = BasicMapperBuilder::new(OpenCLBuilder::new(&device, None));
-            //do_command_with_mapper(cmd, builder, n, ctype, circuit, input_map);
+            do_command_with_opencl_mapper(builder, circuit, cmd_args.elem_inputs)
         }
         ExecType::CPUAndOpenCL
         | ExecType::CPUAndOpenCLD
@@ -134,7 +253,14 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecTyp
             println!("Do execute");
             //let (exec, input) = do_exec_bench0_parseq_0(builder, circuit, input_map);
             //do_exec_bench0_parseq_1(exec, &input);
+            None
         }
+    };
+
+    if let Some(result) = result {
+        println!("Found Input: {1:0$b}", input_len, result);
+    } else {
+        println!("Unsatisfiable!");
     }
 }
 
