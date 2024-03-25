@@ -3,10 +3,12 @@ use gatenative::mapper::*;
 use gatenative::opencl_build_exec::*;
 use gatenative::parseq_mapper::*;
 use gatenative::*;
+use gatesim::*;
 
 use clap::Parser;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 
+use std::fs;
 use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug)]
@@ -48,13 +50,15 @@ impl FromStr for ExecType {
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args {
+struct CommandArgs {
     circuit: String,
-    #[arg(short = 'E', long)]
+    #[arg(short = 'e', long, default_value_t = 24)]
+    elem_inputs: usize,
+    #[arg(short = 't', long)]
     exec_type: ExecType,
 }
 
-fn do_command(exec_type: ExecType) {
+fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecType) {
     //let (circuit, input_map) = gen_bench_circuit_type(ctype, n);
     //println!("Circuit length: {}", circuit.len());
     match exec_type {
@@ -135,6 +139,8 @@ fn do_command(exec_type: ExecType) {
 }
 
 fn main() {
-    let args = Args::parse();
-    println!("Hello, world!: {:?}", args.exec_type);
+    let cmd_args = CommandArgs::parse();
+    let circuit =
+        Circuit::<usize>::from_str(&fs::read_to_string(cmd_args.circuit).unwrap()).unwrap();
+    println!("Hello, world!: {:?}", cmd_args.exec_type);
 }
