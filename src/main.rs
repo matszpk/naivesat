@@ -105,7 +105,7 @@ fn do_command_with_par_mapper<'a>(
             .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
             .aggr_output_len(Some(3)),
     );
-    let word_len = mapper.word_len();
+    let word_len = 1;
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
     execs[0]
