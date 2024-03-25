@@ -11,7 +11,7 @@ use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug)]
 enum ExecType {
-    ParCPU,
+    CPU,
     OpenCL(usize),
     CPUAndOpenCL,
     CPUAndOpenCLD,
@@ -22,8 +22,8 @@ enum ExecType {
 impl FromStr for ExecType {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, String> {
-        if s == "par_cpu" {
-            Ok(ExecType::ParCPU)
+        if s == "cpu" {
+            Ok(ExecType::CPU)
         } else if s.starts_with("opencl:") {
             Ok(ExecType::OpenCL(
                 usize::from_str(&s[7..]).map_err(|e| e.to_string())?,
