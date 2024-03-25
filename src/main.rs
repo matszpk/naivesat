@@ -154,7 +154,7 @@ fn do_command_with_opencl_mapper<'a>(
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
             .aggr_output_len(Some(3)),
     );
-    let word_len = 1;
+    let word_len = mapper.word_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
     execs[0]
