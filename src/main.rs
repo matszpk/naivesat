@@ -96,6 +96,7 @@ fn do_command_with_par_mapper<'a>(
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
+    let arg_steps = 1u128 << (circuit.input_len() - elem_inputs);
     mapper.add_with_config(
         "formula",
         circuit,
@@ -113,6 +114,7 @@ fn do_command_with_par_mapper<'a>(
             &input,
             None,
             |_, output, arg| {
+                println!("Step: {} / {}", arg, arg_steps);
                 if output[0] != 0 {
                     let elem_idx =
                         output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
@@ -145,6 +147,7 @@ fn do_command_with_opencl_mapper<'a>(
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
+    let arg_steps = 1u128 << (circuit.input_len() - elem_inputs);
     mapper.add_with_config(
         "formula",
         circuit,
@@ -162,6 +165,7 @@ fn do_command_with_opencl_mapper<'a>(
             &input,
             None,
             |result, _, output, arg| {
+                println!("Step: {} / {}", arg, arg_steps);
                 if result.is_some() {
                     result
                 } else if output[0] != 0 {
@@ -177,16 +181,89 @@ fn do_command_with_opencl_mapper<'a>(
         .unwrap()
 }
 
-fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecType) {
+fn do_command_with_parseq_mapper<'a>(
+    mut mapper: ParSeqMapperBuilder<
+        'a,
+        CPUDataReader<'a>,
+        CPUDataWriter<'a>,
+        CPUDataHolder,
+        CPUExecutor,
+        CPUBuilder<'a>,
+        OpenCLDataReader<'a>,
+        OpenCLDataWriter<'a>,
+        OpenCLDataHolder,
+        OpenCLExecutor,
+        OpenCLBuilder<'a>,
+    >,
+    circuit: Circuit<usize>,
+    elem_inputs: usize,
+) -> Option<u128> {
+    let arg_steps = 1u128 << (circuit.input_len() - elem_inputs);
+    mapper.add_with_config(
+        "formula",
+        circuit,
+        &(elem_inputs..).collect::<Vec<usize>>(),
+        Some(&(0..elem_inputs).collect::<Vec<usize>>()),
+        |sel| match sel {
+            ParSeqSelection::Par => ParSeqDynamicConfig::new()
+                .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+                .aggr_output_len(Some(3)),
+            ParSeqSelection::Seq(_) => ParSeqDynamicConfig::new()
+                .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+                .aggr_output_len(Some(3)),
+        },
+    );
+    let cpu_word_len = mapper.word_len(ParSeqSelection::Par);
+    let mut execs = mapper.build().unwrap();
+    let input = execs[0].new_data(16);
+    execs[0]
+        .execute_direct(
+            &input,
+            None,
+            |sel, _, output, arg| {
+                println!("Step: {} / {}", arg, arg_steps);
+                let word_len = if matches!(sel, ParSeqSelection::Par) {
+                    cpu_word_len
+                } else {
+                    1
+                };
+                if output[0] != 0 {
+                    let elem_idx =
+                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
+                    Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
+                } else {
+                    None
+                }
+            },
+            |a, b| {
+                if a.is_some() {
+                    a
+                } else {
+                    b
+                }
+            },
+            |a| a.is_some(),
+        )
+        .unwrap()
+}
+
+fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
-    assert!(cmd_args.elem_inputs <= 37);
-    assert!(input_len - cmd_args.elem_inputs <= 64);
+    let elem_inputs = if cmd_args.elem_inputs >= input_len {
+        input_len - 1
+    } else {
+        cmd_args.elem_inputs
+    };
+    assert!(elem_inputs > 0 && elem_inputs <= 37);
+    assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
     assert_eq!(circuit.outputs().len(), 0);
+    println!("Elem inputs: {}", elem_inputs);
+    let exec_type = cmd_args.exec_type;
     let result = match exec_type {
         ExecType::CPU => {
             println!("Execute in CPU");
             let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
-            do_command_with_par_mapper(builder, circuit, cmd_args.elem_inputs)
+            do_command_with_par_mapper(builder, circuit, elem_inputs)
         }
         ExecType::OpenCL(didx) => {
             println!("Execute in OpenCL device={}", didx);
@@ -197,7 +274,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecTyp
                     .unwrap(),
             );
             let builder = BasicMapperBuilder::new(OpenCLBuilder::new(&device, None));
-            do_command_with_opencl_mapper(builder, circuit, cmd_args.elem_inputs)
+            do_command_with_opencl_mapper(builder, circuit, elem_inputs)
         }
         ExecType::CPUAndOpenCL
         | ExecType::CPUAndOpenCLD
@@ -253,9 +330,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecTyp
             };
             let builder = ParSeqMapperBuilder::new(par_builder, seq_builders);
             println!("Do execute");
-            //let (exec, input) = do_exec_bench0_parseq_0(builder, circuit, input_map);
-            //do_exec_bench0_parseq_1(exec, &input);
-            None
+            do_command_with_parseq_mapper(builder, circuit, elem_inputs)
         }
     };
 
@@ -268,7 +343,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs, exec_type: ExecTyp
 
 fn main() {
     let cmd_args = CommandArgs::parse();
-    let circuit =
-        Circuit::<usize>::from_str(&fs::read_to_string(cmd_args.circuit).unwrap()).unwrap();
-    println!("Hello, world!: {:?}", cmd_args.exec_type);
+    let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
+    let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
+    do_command(circuit, cmd_args);
 }
