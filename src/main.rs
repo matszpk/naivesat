@@ -263,7 +263,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
         ExecType::CPU => {
             println!("Execute in CPU");
             let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
-            do_command_with_par_mapper(builder, circuit, elem_inputs)
+            do_command_with_par_mapper(builder, circuit.clone(), elem_inputs)
         }
         ExecType::OpenCL(didx) => {
             println!("Execute in OpenCL device={}", didx);
@@ -274,7 +274,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
                     .unwrap(),
             );
             let builder = BasicMapperBuilder::new(OpenCLBuilder::new(&device, None));
-            do_command_with_opencl_mapper(builder, circuit, elem_inputs)
+            do_command_with_opencl_mapper(builder, circuit.clone(), elem_inputs)
         }
         ExecType::CPUAndOpenCL
         | ExecType::CPUAndOpenCLD
@@ -330,12 +330,16 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
             };
             let builder = ParSeqMapperBuilder::new(par_builder, seq_builders);
             println!("Do execute");
-            do_command_with_parseq_mapper(builder, circuit, elem_inputs)
+            do_command_with_parseq_mapper(builder, circuit.clone(), elem_inputs)
         }
     };
 
     if let Some(result) = result {
-        println!("Found Input: {1:0$b}", input_len, result);
+        if !circuit.eval((0..input_len).map(|b| (result >> b) & 1 != 0))[0] {
+            println!("INCORRECT!! {1:0$b}", input_len, result);
+        } else {
+            println!("Found Input: {1:0$b}", input_len, result);
+        }
     } else {
         println!("Unsatisfiable!");
     }
