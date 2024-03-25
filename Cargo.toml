@@ -1,0 +1,10 @@
+[package]
+name = "naivesat"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gatesim = { path="../gatesim", version="0.1.0" }
+gatenative = { path="../gatenative", version="0.1.0" }
+clap = "4.0.0"
+opencl3 = "0.9"
