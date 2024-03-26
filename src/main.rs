@@ -349,7 +349,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
         if !circuit.eval((0..input_len).map(|b| (result >> b) & 1 != 0))[0] {
             println!("INCORRECT!! {1:0$b}", input_len, result);
         } else {
-            println!("Found Input: {1:0$b}", input_len, result);
+            println!("Found Input: {1:00$b}", input_len, result);
         }
     } else {
         println!("Unsatisfiable!");
