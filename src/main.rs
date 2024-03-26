@@ -75,7 +75,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 
 const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
     uint i = 0;
-    uint* out = (uint*)output;
+    global uint* out = (global uint*)output;
     for (i = 0; i < (TYPE_LEN >> 5); i++) {
         uint v;
         GET_U32(v, o0, i);
@@ -230,7 +230,7 @@ fn do_command_with_parseq_mapper<'a>(
                 let word_len = if matches!(sel, ParSeqSelection::Par) {
                     cpu_word_len
                 } else {
-                    1
+                    32
                 };
                 if output[0] != 0 {
                     let elem_idx =
@@ -347,7 +347,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
 
     if let Some(result) = result {
         if !circuit.eval((0..input_len).map(|b| (result >> b) & 1 != 0))[0] {
-            println!("INCORRECT!! {1:0$b}", input_len, result);
+            println!("INCORRECT!! {1:00$b}", input_len, result);
         } else {
             println!("Found Input: {1:00$b}", input_len, result);
         }
