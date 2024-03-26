@@ -98,13 +98,14 @@ fn do_command_with_par_mapper<'a>(
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
-    let arg_steps = 1u128 << (circuit.input_len() - elem_inputs);
+    let input_len = circuit.input_len();
+    let arg_steps = 1u128 << (input_len - elem_inputs);
     mapper.add_with_config(
         "formula",
         circuit,
         CodeConfig::new()
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
-            .arg_inputs(Some(&(elem_inputs..).collect::<Vec<usize>>()))
+            .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
             .aggr_output_len(Some(3)),
     );
@@ -149,13 +150,14 @@ fn do_command_with_opencl_mapper<'a>(
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
-    let arg_steps = 1u128 << (circuit.input_len() - elem_inputs);
+    let input_len = circuit.input_len();
+    let arg_steps = 1u128 << (input_len - elem_inputs);
     mapper.add_with_config(
         "formula",
         circuit,
         CodeConfig::new()
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
-            .arg_inputs(Some(&(elem_inputs..).collect::<Vec<usize>>()))
+            .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
             .aggr_output_len(Some(3)),
     );
@@ -200,11 +202,12 @@ fn do_command_with_parseq_mapper<'a>(
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
-    let arg_steps = 1u128 << (circuit.input_len() - elem_inputs);
+    let input_len = circuit.input_len();
+    let arg_steps = 1u128 << (input_len - elem_inputs);
     mapper.add_with_config(
         "formula",
         circuit,
-        &(elem_inputs..).collect::<Vec<usize>>(),
+        &(elem_inputs..input_len).collect::<Vec<usize>>(),
         Some(&(0..elem_inputs).collect::<Vec<usize>>()),
         |sel| match sel {
             ParSeqSelection::Par => ParSeqDynamicConfig::new()
