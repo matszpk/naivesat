@@ -258,7 +258,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     };
     assert!(elem_inputs > 0 && elem_inputs <= 37);
     assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
-    assert_eq!(circuit.outputs().len(), 0);
+    assert_eq!(circuit.outputs().len(), 1);
     println!("Elem inputs: {}", elem_inputs);
     let opencl_config = OpenCLBuilderConfig {
         optimize_negs: true,
