@@ -69,6 +69,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         if ((v != 0) && (__sync_fetch_and_or(out, v) == 0)) {
             out[1] = idx;
             out[2] = i;
+            out[0] = v;
         }
     }
 }"##;
@@ -82,6 +83,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
         if ((v != 0) && (atomic_or(out, v) == 0)) {
             out[1] = idx;
             out[2] = i;
+            atomic_xchg(out, v);
         }
     }
 }"##;
