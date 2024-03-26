@@ -109,7 +109,7 @@ fn do_command_with_par_mapper<'a>(
             .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
             .aggr_output_len(Some(3)),
     );
-    let word_len = mapper.word_len();
+    let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
     execs[0]
@@ -120,7 +120,7 @@ fn do_command_with_par_mapper<'a>(
                 println!("Step: {} / {}", arg, arg_steps);
                 if output[0] != 0 {
                     let elem_idx =
-                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
+                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * type_len);
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
                 } else {
                     None
@@ -161,7 +161,7 @@ fn do_command_with_opencl_mapper<'a>(
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
             .aggr_output_len(Some(3)),
     );
-    let word_len = mapper.word_len();
+    let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
     execs[0]
@@ -174,7 +174,7 @@ fn do_command_with_opencl_mapper<'a>(
                     result
                 } else if output[0] != 0 {
                     let elem_idx =
-                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
+                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * type_len);
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
                 } else {
                     None
@@ -218,7 +218,10 @@ fn do_command_with_parseq_mapper<'a>(
                 .aggr_output_len(Some(3)),
         },
     );
-    let cpu_word_len = mapper.word_len(ParSeqSelection::Par);
+    let cpu_type_len = mapper.type_len(ParSeqSelection::Par);
+    let opencl_type_lens = (0..mapper.seq_builder_num())
+        .map(|i| mapper.type_len(ParSeqSelection::Seq(i)))
+        .collect::<Vec<_>>();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
     execs[0]
@@ -227,14 +230,13 @@ fn do_command_with_parseq_mapper<'a>(
             None,
             |sel, _, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
-                let word_len = if matches!(sel, ParSeqSelection::Par) {
-                    cpu_word_len
-                } else {
-                    32
+                let type_len = match sel {
+                    ParSeqSelection::Par => cpu_type_len,
+                    ParSeqSelection::Seq(i) => opencl_type_lens[i],
                 };
                 if output[0] != 0 {
                     let elem_idx =
-                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * word_len);
+                        output[0].trailing_zeros() | (output[2] << 5) | (output[1] * type_len);
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
                 } else {
                     None
