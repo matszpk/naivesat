@@ -1,0 +1,57 @@
+Radeon Vega 56: Clock: 1474MHz
+Radeon RX 480: Clock: 1191MHz
+time ./target/release/naivesat -t opencl:0 ../gateexamples1/prime_69690421.circuit
+Found Input: 000000000000000110111010101000000000000100110011100001
+real    0m18,689s
+user    0m12,441s
+sys     0m4,376s
+
+time ./target/release/naivesat -e 28 -t opencl:0 ../gateexamples1/prime_69690421.circuit
+Found Input: 000000000000000110111010101000000000000100110011100001
+real    0m15,068s
+user    0m2,252s
+sys     0m1,970s
+
+time ./target/release/naivesat -e 32 -t opencl:0 ../gateexamples1/prime_69690421.circuit
+Found Input: 000000000000000110111010101000000000000100110011100001
+real    0m14,959s
+user    0m1,627s
+sys     0m1,865s
+
+time ./target/release/naivesat -e 28 -t cpu ../gateexamples1/prime_69690421.circuit
+Found Input: 000000000000000110111010101000000000000100110011100001
+real    5m41,738s
+user    90m12,258s
+sys     0m0,604s
+
+time ./target/release/naivesat -e 32 -t opencl:1 ../gateexamples1/prime_69690421.circuit
+Found Input: 000000000000000110111010101000000000000100110011100001
+real    0m28,676s
+user    0m1,202s
+sys     0m1,870s
+
+time ./target/release/naivesat -e 28 -t cpu_and_opencl ../gateexamples1/prime_69690421.circuit
+Found Input: 000000000000000110111010101000000000000100110011100001
+real    0m13,860s
+user    2m29,075s
+sys     0m0,721s
+
+time ./target/release/naivesat -e 30 -t cpu_and_opencl_d ../gateexamples1/prime_69690421.circuit
+Found Input: 000000000000000110111010101000000000000100110011100001
+real    0m16,131s
+user    2m31,901s
+sys     0m0,547s
+
+time ./target/release/naivesat -e 32 -t opencl:0 \
+    ../gateexamples1prime2_79232427409088286464352359.circuit
+Found Input: 01111001010000101100100010011011000101010101
+real    34m5,548s
+user    0m17,166s
+sys     0m1,315s
+
+time ./target/release/naivesat -e 28 -t cpu_and_opencl_d \
+    ../gateexamples1/prime2_79232427409088286464352359.circuit
+Found Input: 01111001010000101100100010011011000101010101
+real    23m10,451s
+user    353m43,276s
+sys     0m19,653s

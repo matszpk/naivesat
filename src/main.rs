@@ -258,95 +258,108 @@ fn do_command_with_parseq_mapper<'a>(
 
 fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
-    let elem_inputs = if cmd_args.elem_inputs >= input_len {
-        input_len - 1
+    let result = if input_len >= 10 {
+        let elem_inputs = if cmd_args.elem_inputs >= input_len {
+            input_len - 1
+        } else {
+            cmd_args.elem_inputs
+        };
+        assert!(elem_inputs > 0 && elem_inputs <= 37);
+        assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
+        assert_eq!(circuit.outputs().len(), 1);
+        println!("Elem inputs: {}", elem_inputs);
+        let opencl_config = OpenCLBuilderConfig {
+            optimize_negs: true,
+            group_len: cmd_args.opencl_group_len,
+            group_vec: false,
+        };
+        let exec_type = cmd_args.exec_type;
+        match exec_type {
+            ExecType::CPU => {
+                println!("Execute in CPU");
+                let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
+                do_command_with_par_mapper(builder, circuit.clone(), elem_inputs)
+            }
+            ExecType::OpenCL(didx) => {
+                println!("Execute in OpenCL device={}", didx);
+                let device = Device::new(
+                    *get_all_devices(CL_DEVICE_TYPE_GPU)
+                        .unwrap()
+                        .get(didx)
+                        .unwrap(),
+                );
+                let builder = BasicMapperBuilder::new(OpenCLBuilder::new(
+                    &device,
+                    Some(opencl_config.clone()),
+                ));
+                do_command_with_opencl_mapper(builder, circuit.clone(), elem_inputs)
+            }
+            ExecType::CPUAndOpenCL
+            | ExecType::CPUAndOpenCLD
+            | ExecType::CPUAndOpenCL1(_)
+            | ExecType::CPUAndOpenCL1D(_) => {
+                let par_builder = CPUBuilder::new(None);
+                let seq_builders = if let ExecType::CPUAndOpenCL1(didx) = exec_type {
+                    println!("Execute in CPUAndOpenCL1");
+                    get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id.clone());
+                            OpenCLBuilder::new(&device, Some(opencl_config.clone()))
+                        })
+                        .collect::<Vec<_>>()
+                } else if let ExecType::CPUAndOpenCL1D(didx) = exec_type {
+                    println!("Execute in CPUAndOpenCL1D");
+                    get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id.clone());
+                            [
+                                OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                                OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                            ]
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>()
+                } else if matches!(exec_type, ExecType::CPUAndOpenCL) {
+                    println!("Execute in CPUAndOpenCL");
+                    get_all_devices(CL_DEVICE_TYPE_GPU)
+                        .unwrap()
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id);
+                            OpenCLBuilder::new(&device, Some(opencl_config.clone()))
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    println!("Execute in CPUAndOpenCLD");
+                    get_all_devices(CL_DEVICE_TYPE_GPU)
+                        .unwrap()
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id);
+                            [
+                                OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                                OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                            ]
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>()
+                };
+                let builder = ParSeqMapperBuilder::new(par_builder, seq_builders);
+                println!("Do execute");
+                do_command_with_parseq_mapper(builder, circuit.clone(), elem_inputs)
+            }
+        }
     } else {
-        cmd_args.elem_inputs
-    };
-    assert!(elem_inputs > 0 && elem_inputs <= 37);
-    assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
-    assert_eq!(circuit.outputs().len(), 1);
-    println!("Elem inputs: {}", elem_inputs);
-    let opencl_config = OpenCLBuilderConfig {
-        optimize_negs: true,
-        group_len: cmd_args.opencl_group_len,
-        group_vec: false,
-    };
-    let exec_type = cmd_args.exec_type;
-    let result = match exec_type {
-        ExecType::CPU => {
-            println!("Execute in CPU");
-            let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
-            do_command_with_par_mapper(builder, circuit.clone(), elem_inputs)
+        let mut result = None;
+        for v in 0..1 << input_len {
+            if circuit.eval((0..input_len).map(|b| (v >> b) & 1 != 0))[0] {
+                result = Some(v);
+                break;
+            }
         }
-        ExecType::OpenCL(didx) => {
-            println!("Execute in OpenCL device={}", didx);
-            let device = Device::new(
-                *get_all_devices(CL_DEVICE_TYPE_GPU)
-                    .unwrap()
-                    .get(didx)
-                    .unwrap(),
-            );
-            let builder =
-                BasicMapperBuilder::new(OpenCLBuilder::new(&device, Some(opencl_config.clone())));
-            do_command_with_opencl_mapper(builder, circuit.clone(), elem_inputs)
-        }
-        ExecType::CPUAndOpenCL
-        | ExecType::CPUAndOpenCLD
-        | ExecType::CPUAndOpenCL1(_)
-        | ExecType::CPUAndOpenCL1D(_) => {
-            let par_builder = CPUBuilder::new(None);
-            let seq_builders = if let ExecType::CPUAndOpenCL1(didx) = exec_type {
-                println!("Execute in CPUAndOpenCL1");
-                get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
-                    .into_iter()
-                    .map(|dev_id| {
-                        let device = Device::new(dev_id.clone());
-                        OpenCLBuilder::new(&device, Some(opencl_config.clone()))
-                    })
-                    .collect::<Vec<_>>()
-            } else if let ExecType::CPUAndOpenCL1D(didx) = exec_type {
-                println!("Execute in CPUAndOpenCL1D");
-                get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
-                    .into_iter()
-                    .map(|dev_id| {
-                        let device = Device::new(dev_id.clone());
-                        [
-                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
-                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
-                        ]
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>()
-            } else if matches!(exec_type, ExecType::CPUAndOpenCL) {
-                println!("Execute in CPUAndOpenCL");
-                get_all_devices(CL_DEVICE_TYPE_GPU)
-                    .unwrap()
-                    .into_iter()
-                    .map(|dev_id| {
-                        let device = Device::new(dev_id);
-                        OpenCLBuilder::new(&device, Some(opencl_config.clone()))
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                println!("Execute in CPUAndOpenCLD");
-                get_all_devices(CL_DEVICE_TYPE_GPU)
-                    .unwrap()
-                    .into_iter()
-                    .map(|dev_id| {
-                        let device = Device::new(dev_id);
-                        [
-                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
-                            OpenCLBuilder::new(&device, Some(opencl_config.clone())),
-                        ]
-                    })
-                    .flatten()
-                    .collect::<Vec<_>>()
-            };
-            let builder = ParSeqMapperBuilder::new(par_builder, seq_builders);
-            println!("Do execute");
-            do_command_with_parseq_mapper(builder, circuit.clone(), elem_inputs)
-        }
+        result
     };
 
     if let Some(result) = result {
