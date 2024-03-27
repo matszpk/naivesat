@@ -28,13 +28,14 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {}
 fn simple_solve(circuit: Circuit<usize>, unknowns: usize) {
     let input_len = circuit.input_len();
     let total_comb_num = 1u128 << unknowns;
+    let total_step_num = 1u128 << input_len;
     let mut solution = None;
     'a: for v in 0..total_comb_num {
         let mut state = std::iter::repeat(false)
             .take(input_len - unknowns)
             .chain((0..unknowns).map(|b| (v >> b) & 1 != 0))
             .collect::<Vec<_>>();
-        loop {
+        for _ in 0..total_step_num {
             let next_state = circuit.eval(state.clone());
             if *next_state.last().unwrap() {
                 solution = Some((
