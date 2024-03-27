@@ -7,6 +7,10 @@ edition = "2021"
 name = "naivesat"
 path = "src/main.rs"
 
+[[bin]]
+name = "naivesatostop"
+path = "src/satostop.rs"
+
 [dependencies]
 gatesim = { path="../gatesim", version="0.1.0" }
 gatenative = { path="../gatenative", version="0.1.0" }
