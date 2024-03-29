@@ -115,6 +115,7 @@ fn do_command_with_par_mapper<'a>(
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
+    println!("Start execution");
     let start = SystemTime::now();
     let result = execs[0]
         .execute_direct(
@@ -171,6 +172,7 @@ fn do_command_with_opencl_mapper<'a>(
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
+    println!("Start execution");
     let start = SystemTime::now();
     let result = execs[0]
         .execute_direct(
@@ -235,6 +237,7 @@ fn do_command_with_parseq_mapper<'a>(
         .collect::<Vec<_>>();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
+    println!("Start execution");
     let start = SystemTime::now();
     let result = execs[0]
         .execute_direct(
@@ -360,7 +363,6 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
                         .collect::<Vec<_>>()
                 };
                 let builder = ParSeqMapperBuilder::new(par_builder, seq_builders);
-                println!("Do execute");
                 do_command_with_parseq_mapper(builder, circuit.clone(), elem_inputs)
             }
         }
