@@ -65,14 +65,7 @@ struct CommandArgs {
 }
 
 fn do_solve_with_opencl_mapper<'a>(
-    mut mapper: BasicMapperBuilder<
-        'a,
-        OpenCLDataReader<'a>,
-        OpenCLDataWriter<'a>,
-        OpenCLDataHolder,
-        OpenCLExecutor,
-        OpenCLBuilder<'a>,
-    >,
+    mut mapper: OpenCLBasicMapperBuilder<'a>,
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,
@@ -142,14 +135,7 @@ fn gen_output_transform_code(postfix: &str, range: Range<usize>) -> String {
 }
 
 fn do_solve_with_opencl_mapper_2<'a>(
-    mut mapper: BasicMapperBuilder<
-        'a,
-        OpenCLDataReader<'a>,
-        OpenCLDataWriter<'a>,
-        OpenCLDataHolder,
-        OpenCLExecutor,
-        OpenCLBuilder<'a>,
-    >,
+    mut mapper: OpenCLBasicMapperBuilder<'a>,
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,

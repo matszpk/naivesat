@@ -10,7 +10,7 @@ use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 
 use std::fs;
 use std::str::FromStr;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 #[derive(Clone, Copy, Debug)]
 enum ExecType {
@@ -90,14 +90,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
 }"##;
 
 fn do_command_with_par_mapper<'a>(
-    mut mapper: ParBasicMapperBuilder<
-        'a,
-        CPUDataReader<'a>,
-        CPUDataWriter<'a>,
-        CPUDataHolder,
-        CPUExecutor,
-        CPUBuilder<'a>,
-    >,
+    mut mapper: CPUParBasicMapperBuilder<'a>,
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
@@ -147,14 +140,7 @@ fn do_command_with_par_mapper<'a>(
 }
 
 fn do_command_with_opencl_mapper<'a>(
-    mut mapper: BasicMapperBuilder<
-        'a,
-        OpenCLDataReader<'a>,
-        OpenCLDataWriter<'a>,
-        OpenCLDataHolder,
-        OpenCLExecutor,
-        OpenCLBuilder<'a>,
-    >,
+    mut mapper: OpenCLBasicMapperBuilder<'a>,
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
@@ -199,19 +185,7 @@ fn do_command_with_opencl_mapper<'a>(
 }
 
 fn do_command_with_parseq_mapper<'a>(
-    mut mapper: ParSeqMapperBuilder<
-        'a,
-        CPUDataReader<'a>,
-        CPUDataWriter<'a>,
-        CPUDataHolder,
-        CPUExecutor,
-        CPUBuilder<'a>,
-        OpenCLDataReader<'a>,
-        OpenCLDataWriter<'a>,
-        OpenCLDataHolder,
-        OpenCLExecutor,
-        OpenCLBuilder<'a>,
-    >,
+    mut mapper: CPUOpenCLParSeqMapperBuilder<'a>,
     circuit: Circuit<usize>,
     elem_inputs: usize,
 ) -> Option<u128> {
