@@ -78,6 +78,7 @@ fn do_solve_with_opencl_mapper<'a>(
     elem_inputs: usize,
 ) {
     let input_len = circuit.input_len();
+    let output_len = input_len + 1;
     let arg_steps = 1u128 << (input_len - elem_inputs);
     mapper.add_with_config(
         "formula",
@@ -91,18 +92,20 @@ fn do_solve_with_opencl_mapper<'a>(
     let input = execs[0].new_data(16);
     let mut ot = execs[0]
         .output_transformer(
-            (input_len + 1 + 31) & !31,
-            &(0..input_len + 1).collect::<Vec<_>>(),
+            (output_len + 31) & !31,
+            &(0..output_len).collect::<Vec<_>>(),
         )
         .unwrap();
     let start = SystemTime::now();
+    let word_per_elem = (output_len + 31) >> 5;
+    let mut outbuf = execs[0].new_data(word_per_elem << elem_inputs);
     execs[0]
         .execute(
             &input,
             (),
             |result, _, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
-                let _ = ot.transform(output).unwrap();
+                ot.transform_reuse(output, &mut outbuf).unwrap();
             },
             |_| false,
         )
