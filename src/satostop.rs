@@ -175,7 +175,7 @@ fn do_solve_with_opencl_mapper_2<'a>(
             .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
             .aggr_output_len(Some(word_per_elem * (1 << elem_inputs)))
-            .is_ignore_previous_outputs(true),
+            .dont_clear_outputs(true),
     );
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
