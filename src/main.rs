@@ -10,6 +10,7 @@ use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 
 use std::fs;
 use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 
 #[derive(Clone, Copy, Debug)]
 enum ExecType {
@@ -114,7 +115,8 @@ fn do_command_with_par_mapper<'a>(
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
-    execs[0]
+    let start = SystemTime::now();
+    let result = execs[0]
         .execute_direct(
             &input,
             None,
@@ -137,7 +139,10 @@ fn do_command_with_par_mapper<'a>(
             },
             |a| a.is_some(),
         )
-        .unwrap()
+        .unwrap();
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    result
 }
 
 fn do_command_with_opencl_mapper<'a>(
@@ -166,7 +171,8 @@ fn do_command_with_opencl_mapper<'a>(
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
-    execs[0]
+    let start = SystemTime::now();
+    let result = execs[0]
         .execute_direct(
             &input,
             None,
@@ -184,7 +190,10 @@ fn do_command_with_opencl_mapper<'a>(
             },
             |a| a.is_some(),
         )
-        .unwrap()
+        .unwrap();
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    result
 }
 
 fn do_command_with_parseq_mapper<'a>(
@@ -226,7 +235,8 @@ fn do_command_with_parseq_mapper<'a>(
         .collect::<Vec<_>>();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
-    execs[0]
+    let start = SystemTime::now();
+    let result = execs[0]
         .execute_direct(
             &input,
             None,
@@ -253,7 +263,10 @@ fn do_command_with_parseq_mapper<'a>(
             },
             |a| a.is_some(),
         )
-        .unwrap()
+        .unwrap();
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    result
 }
 
 fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
