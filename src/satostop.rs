@@ -112,12 +112,19 @@ fn do_solve_with_opencl_mapper<'a>(
 }
 
 const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
-    uint i, j;
-    global uint* output_u = ((global uint*)output) + idx * ((OUTPUT_NUM + 31) & ~31) *
-            (TYPE_LEN >> 5);
+    global uint* output_u = ((global uint*)output) + idx *
+        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
+#if OUTPUT_NUM <= 32
     OUTPUT_TRANSFORM_FIRST_32(output_u);
-#if OUTPUT_NUM > 32
-    OUTPUT_TRANSFORM_LAST_32(output_u + 32 * (TYPE_LEN >> 5));
+#else
+    uint i;
+    uint temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
+    OUTPUT_TRANSFORM_FIRST_32(temp);
+    OUTPUT_TRANSFORM_LAST_32(temp + 32 * (TYPE_LEN >> 5));
+    for (i = 0; i < TYPE_LEN; i++) {
+        output_u[i*2] = temp[i];
+        output_u[i*2 + 1] = temp[i + TYPE_LEN];
+    }
 #endif
 }"##;
 
@@ -164,7 +171,8 @@ fn do_solve_with_opencl_mapper_2<'a>(
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
             .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-            .aggr_output_len(Some(word_per_elem * (1 << elem_inputs))),
+            .aggr_output_len(Some(word_per_elem * (1 << elem_inputs)))
+            .is_ignore_previous_outputs(true),
     );
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
