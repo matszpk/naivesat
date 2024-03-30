@@ -116,7 +116,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
     uint i;
     uint temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
     OUTPUT_TRANSFORM_FIRST_32(temp);
-    OUTPUT_TRANSFORM_LAST_32(temp + 32 * (TYPE_LEN >> 5));
+    OUTPUT_TRANSFORM_SECOND_32(temp + 32 * (TYPE_LEN >> 5));
     for (i = 0; i < TYPE_LEN; i++) {
         output_u[i*2] = temp[i];
         output_u[i*2 + 1] = temp[i + TYPE_LEN];
@@ -124,7 +124,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
 #endif
 }"##;
 
-fn gen_output_transform_code(postfix: &str, range: Range<usize>) -> String {
+fn gen_output_transform_def(postfix: &str, range: Range<usize>) -> String {
     let args = range.clone().map(|i| format!("o{}", i)).collect::<Vec<_>>();
     format!(
         "#define OUTPUT_TRANSFORM_{}(O) OUTPUT_TRANSFORM_B{}(O,{})\n",
@@ -132,6 +132,14 @@ fn gen_output_transform_code(postfix: &str, range: Range<usize>) -> String {
         range.end - range.start,
         args.join(",")
     )
+}
+
+fn gen_output_transform_code(output_len: usize) -> String {
+    let mut defs = gen_output_transform_def("FIRST_32", 0..std::cmp::min(32, output_len));
+    if output_len > 32 {
+        defs.push_str(&gen_output_transform_def("SECOND_32", 32..output_len));
+    }
+    defs
 }
 
 fn do_solve_with_opencl_mapper_2<'a>(
@@ -145,13 +153,7 @@ fn do_solve_with_opencl_mapper_2<'a>(
     let arg_steps = 1u128 << (input_len - elem_inputs);
     mapper.transform_helpers();
     mapper.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
-    mapper.user_defs(&gen_output_transform_code(
-        "FIRST_32",
-        0..std::cmp::min(32, output_len),
-    ));
-    if output_len > 32 {
-        mapper.user_defs(&gen_output_transform_code("LAST_32", 32..output_len));
-    }
+    mapper.user_defs(&gen_output_transform_code(output_len));
     let word_per_elem = (output_len + 31) >> 5;
     mapper.add_with_config(
         "formula",
