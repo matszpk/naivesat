@@ -281,6 +281,86 @@ fn simple_solve(circuit: Circuit<usize>, unknowns: usize) {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_aggr_output_code_cpu() {
+        for output_len in [24, 32, 33, 44] {
+            let word_per_elem = (output_len + 31) >> 5;
+            let circuit =
+                Circuit::new(output_len, [], (0..output_len).map(|i| (i, false))).unwrap();
+            let mut builder = CPUBuilder::new(None);
+            builder.transform_helpers();
+            builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
+            builder.user_defs(&gen_output_transform_code(output_len));
+            builder.add_with_config(
+                "formula",
+                circuit,
+                CodeConfig::new()
+                    .elem_inputs(Some(&(0..20).collect::<Vec<usize>>()))
+                    .arg_inputs(Some(&(20..output_len).collect::<Vec<usize>>()))
+                    .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+                    .aggr_output_len(Some(word_per_elem * (1 << 20))),
+            );
+            let mut execs = builder.build().unwrap();
+            let input = execs[0].new_data(16);
+            let arg_mask = (1u64 << (output_len - 20)) - 1;
+            let arg = 138317356571 & arg_mask;
+            println!("Arg: {}", arg);
+            let output = execs[0].execute(&input, arg).unwrap().release();
+            assert_eq!(output.len(), word_per_elem * (1 << 20));
+            for i in 0..1 << 20 {
+                let out = if word_per_elem == 2 {
+                    (output[2 * i] as u64) | ((output[2 * i + 1] as u64) << 32)
+                } else {
+                    output[i] as u64
+                };
+                assert_eq!((i as u64) | (arg << 20), out, "{}: {}", output_len, i);
+            }
+        }
+    }
+
+    #[test]
+    fn test_aggr_output_code_opencl() {
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        for output_len in [24, 32, 33, 44] {
+            let word_per_elem = (output_len + 31) >> 5;
+            let circuit =
+                Circuit::new(output_len, [], (0..output_len).map(|i| (i, false))).unwrap();
+            let mut builder = OpenCLBuilder::new(&device, None);
+            builder.transform_helpers();
+            builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
+            builder.user_defs(&gen_output_transform_code(output_len));
+            builder.add_with_config(
+                "formula",
+                circuit,
+                CodeConfig::new()
+                    .elem_inputs(Some(&(0..20).collect::<Vec<usize>>()))
+                    .arg_inputs(Some(&(20..output_len).collect::<Vec<usize>>()))
+                    .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+                    .aggr_output_len(Some(word_per_elem * (1 << 20))),
+            );
+            let mut execs = builder.build().unwrap();
+            let input = execs[0].new_data(16);
+            let arg_mask = (1u64 << (output_len - 20)) - 1;
+            let arg = 138317356571 & arg_mask;
+            println!("Arg: {}", arg);
+            let output = execs[0].execute(&input, arg).unwrap().release();
+            assert_eq!(output.len(), word_per_elem * (1 << 20));
+            for i in 0..1 << 20 {
+                let out = if word_per_elem == 2 {
+                    (output[2 * i] as u64) | ((output[2 * i + 1] as u64) << 32)
+                } else {
+                    output[i] as u64
+                };
+                assert_eq!((i as u64) | (arg << 20), out, "{}: {}", output_len, i);
+            }
+        }
+    }
+}
+
 fn main() {
     for x in get_all_devices(CL_DEVICE_TYPE_GPU).unwrap() {
         println!("OpenCLDevice: {:?}", x);
