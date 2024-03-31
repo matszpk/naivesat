@@ -17,7 +17,7 @@ use std::time::{Duration, SystemTime};
 // current: State - current state
 // next: State - next state
 // path_len: State - length of path between current and next node
-// prec - number of precedessors for current node
+// prec - number of predecessors for current node
 // state - entry state. Values
 //   * unused, empty
 //   * used and not resolved
