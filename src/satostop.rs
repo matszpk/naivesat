@@ -64,8 +64,43 @@ struct CommandArgs {
     opencl_group_len: Option<usize>,
 }
 
-fn do_solve_with_opencl_mapper<'a>(
-    mut mapper: OpenCLBasicMapperBuilder<'a>,
+fn gen_output_transform_def(postfix: &str, range: Range<usize>) -> String {
+    let args = range.clone().map(|i| format!("o{}", i)).collect::<Vec<_>>();
+    format!(
+        "#define OUTPUT_TRANSFORM_{}(O) OUTPUT_TRANSFORM_B{}(O,{})\n",
+        postfix,
+        range.end - range.start,
+        args.join(",")
+    )
+}
+
+fn gen_output_transform_code(output_len: usize) -> String {
+    let mut defs = gen_output_transform_def("FIRST_32", 0..std::cmp::min(32, output_len));
+    if output_len > 32 {
+        defs.push_str(&gen_output_transform_def("SECOND_32", 32..output_len));
+    }
+    defs
+}
+
+const AGGR_OUTPUT_CPU_CODE: &str = r##"{
+    uint32_t* output_u = ((uint32_t*)output) + idx *
+        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
+#if OUTPUT_NUM <= 32
+    OUTPUT_TRANSFORM_FIRST_32(output_u);
+#else
+    uint32_t i;
+    uint32_t temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
+    OUTPUT_TRANSFORM_FIRST_32(temp);
+    OUTPUT_TRANSFORM_SECOND_32(temp + 32 * (TYPE_LEN >> 5));
+    for (i = 0; i < TYPE_LEN; i++) {
+        output_u[i*2] = temp[i];
+        output_u[i*2 + 1] = temp[i + TYPE_LEN];
+    }
+#endif
+}"##;
+
+fn do_solve_with_cpu_mapper<'a>(
+    mut mapper: CPUBasicMapperBuilder<'a>,
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,
@@ -73,32 +108,30 @@ fn do_solve_with_opencl_mapper<'a>(
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let arg_steps = 1u128 << (input_len - elem_inputs);
+    mapper.transform_helpers();
+    mapper.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
+    mapper.user_defs(&gen_output_transform_code(output_len));
+    let word_per_elem = (output_len + 31) >> 5;
     mapper.add_with_config(
         "formula",
         circuit,
         CodeConfig::new()
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
-            .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>())),
+            .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
+            .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+            .aggr_output_len(Some(word_per_elem * (1 << elem_inputs)))
+            .dont_clear_outputs(true),
     );
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
-    let mut ot = execs[0]
-        .output_transformer(
-            (output_len + 31) & !31,
-            &(0..output_len).collect::<Vec<_>>(),
-        )
-        .unwrap();
     let start = SystemTime::now();
-    let word_per_elem = (output_len + 31) >> 5;
-    let mut outbuf = execs[0].new_data(word_per_elem << elem_inputs);
     execs[0]
         .execute(
             &input,
             (),
             |result, _, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
-                ot.transform_reuse(output, &mut outbuf).unwrap();
             },
             |_| false,
         )
@@ -124,25 +157,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
 #endif
 }"##;
 
-fn gen_output_transform_def(postfix: &str, range: Range<usize>) -> String {
-    let args = range.clone().map(|i| format!("o{}", i)).collect::<Vec<_>>();
-    format!(
-        "#define OUTPUT_TRANSFORM_{}(O) OUTPUT_TRANSFORM_B{}(O,{})\n",
-        postfix,
-        range.end - range.start,
-        args.join(",")
-    )
-}
-
-fn gen_output_transform_code(output_len: usize) -> String {
-    let mut defs = gen_output_transform_def("FIRST_32", 0..std::cmp::min(32, output_len));
-    if output_len > 32 {
-        defs.push_str(&gen_output_transform_def("SECOND_32", 32..output_len));
-    }
-    defs
-}
-
-fn do_solve_with_opencl_mapper_2<'a>(
+fn do_solve_with_opencl_mapper<'a>(
     mut mapper: OpenCLBasicMapperBuilder<'a>,
     circuit: Circuit<usize>,
     unknowns: usize,
@@ -204,9 +219,8 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
         match exec_type {
             ExecType::CPU => {
                 println!("Execute in CPU");
-                let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
-                //do_command_with_par_mapper(builder, circuit.clone(), elem_inputs)
-                panic!("Unsupported!");
+                let builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(4096)));
+                do_solve_with_cpu_mapper(builder, circuit.clone(), unknowns, elem_inputs)
             }
             ExecType::OpenCL(didx) => {
                 println!("Execute in OpenCL device={}", didx);
@@ -220,8 +234,7 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
                     &device,
                     Some(opencl_config.clone()),
                 ));
-                //do_solve_with_opencl_mapper(builder, circuit.clone(), unknowns, elem_inputs)
-                do_solve_with_opencl_mapper_2(builder, circuit.clone(), unknowns, elem_inputs)
+                do_solve_with_opencl_mapper(builder, circuit.clone(), unknowns, elem_inputs)
             }
             ExecType::CPUAndOpenCL
             | ExecType::CPUAndOpenCLD
