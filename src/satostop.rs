@@ -13,6 +13,19 @@ use std::ops::Range;
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
+// HashMap entry structure
+// current: State - current state
+// next: State - next state
+// path_len: State - length of path between current and next node
+// precedessors - number of predecessors for current node
+// state - entry state. Values
+//   * unused, empty
+//   * used and not resolved
+//   * stopped at next
+//   * looped
+//   * flag that applied to other states: during allocation
+//     (can't be replaced by other thread).
+
 #[derive(Clone, Copy, Debug)]
 enum ExecType {
     CPU,
