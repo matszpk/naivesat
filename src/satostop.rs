@@ -526,7 +526,8 @@ mod tests {
             outputs[23416] = 0xdda0a1;
             outputs[34071] = 0x0451e8;
             outputs[44158] = 0x55df8a;
-            outputs[49774] = ((arg as u32) << 16) | 49774;
+            outputs[49774] = ((arg as u32) << arg_bit_place) | 49774;
+            outputs[53029] = 0xdda02 | (1 << 24);
             outputs
         };
         let mut hashmap = {
@@ -583,6 +584,14 @@ mod tests {
                 next: (arg << arg_bit_place) | 49774,
                 steps: 211,
                 predecessors: 10,
+                state: HASH_STATE_USED,
+            };
+            // stop not loop
+            hashmap[12061] = HashEntry {
+                current: 0xdda02,
+                next: (arg << arg_bit_place) | 53029,
+                steps: 1095,
+                predecessors: 12,
                 state: HASH_STATE_USED,
             };
             hashmap
@@ -644,11 +653,38 @@ mod tests {
                 predecessors: 10,
                 state: HASH_STATE_LOOPED,
             };
+            // stop not loop
+            hashmap[12061] = HashEntry {
+                current: 0xdda02,
+                next: 0xdda02,
+                steps: 1096,
+                predecessors: 12,
+                state: HASH_STATE_STOPPED,
+            };
             hashmap
         };
         for (i, he) in hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}: {}", 24, i);
         }
+
+        // 32-bit
+        // let output_len = 24 + 1;
+        // let arg_bit_place = 16;
+        // let arg: u64 = 119;
+        // let outputs = {
+        //     let mut outputs = vec![0u32; 1 << (16 + 1)];
+        //     outputs[2*612] = 0xaafa214;
+        //     outputs[2*612 + 1] = 0;
+        //     outputs[2*5941] = 0x062a01d7;
+        //     outputs[2*5941 + 1] = 1;
+        //     outputs[2*24616] = 0x13dda0a1;
+        //     outputs[2*24616 + 1] = 0;
+        //     outputs[2*31613] = 0xd60451e8;
+        //     outputs[2*31613 + 1] = 0;
+        //     outputs[2*45091] = 0xd155df8a;
+        //     outputs[2*51670] = ((arg as u32) << 24) | 7214977;
+        //     outputs
+        // };
     }
 }
 
