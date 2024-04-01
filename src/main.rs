@@ -68,7 +68,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         uint32_t v;
         GET_U32(v, o0, i);
         if ((v != 0) && (__sync_fetch_and_or(out, v) == 0)) {
-            out[1] = idx;
+            out[1] = idx & 0xffffffffU;
             out[2] = idx >> 5;
             out[3] = i;
             out[4] = v;
@@ -83,7 +83,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
         uint v;
         GET_U32(v, o0, i);
         if ((v != 0) && (atomic_or(out, v) == 0)) {
-            out[1] = idx;
+            out[1] = idx & 0xffffffffU;
             out[2] = idx >> 5;
             out[3] = i;
             out[4] = v;
