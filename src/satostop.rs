@@ -160,7 +160,7 @@ fn join_to_hashmap_cpu(
     hashmap: &mut [HashEntry],
 ) {
     let cpu_num = rayon::current_num_threads();
-    let chunk_num = std::cmp::max(cpu_num * 8, 64);
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), hashmap.len() >> 6);
     let chunk_len = hashmap.len() / chunk_num;
     let arg_start = arg << arg_bit_place;
     let arg_end = arg_start + (1u64 << arg_bit_place);
