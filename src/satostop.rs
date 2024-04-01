@@ -594,6 +594,22 @@ mod tests {
                 predecessors: 12,
                 state: HASH_STATE_USED,
             };
+            // used and belog arg range
+            hashmap[7955] = HashEntry {
+                current: 0xd0c9a0,
+                next: ((arg + 2) << arg_bit_place) | 6961,
+                steps: 731,
+                predecessors: 14,
+                state: HASH_STATE_USED,
+            };
+            // used and belog arg range
+            hashmap[921] = HashEntry {
+                current: 0x1afcdc,
+                next: ((arg - 2) << arg_bit_place) | 6961,
+                steps: 947,
+                predecessors: 7,
+                state: HASH_STATE_USED,
+            };
             hashmap
         };
         join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
@@ -660,6 +676,22 @@ mod tests {
                 steps: 1096,
                 predecessors: 12,
                 state: HASH_STATE_STOPPED,
+            };
+            // used and belog arg range
+            hashmap[7955] = HashEntry {
+                current: 0xd0c9a0,
+                next: ((arg + 2) << arg_bit_place) | 6961,
+                steps: 731,
+                predecessors: 14,
+                state: HASH_STATE_USED,
+            };
+            // used and belog arg range
+            hashmap[921] = HashEntry {
+                current: 0x1afcdc,
+                next: ((arg - 2) << arg_bit_place) | 6961,
+                steps: 947,
+                predecessors: 7,
+                state: HASH_STATE_USED,
             };
             hashmap
         };
