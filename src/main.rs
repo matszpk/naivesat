@@ -120,7 +120,7 @@ fn do_command_with_par_mapper<'a>(
                 println!("Step: {} / {}", arg, arg_steps);
                 if output[0] != 0 {
                     let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
-                        | (((output[1] as u128) + ((output[2] as u128) << 32))
+                        | (((output[1] as u128) | ((output[2] as u128) << 32))
                             * (type_len as u128));
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
                 } else {
@@ -174,7 +174,7 @@ fn do_command_with_opencl_mapper<'a>(
                 } else if output[0] != 0 {
                     println!("Output[2]: {}", output[2]);
                     let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
-                        | (((output[1] as u128) + ((output[2] as u128) << 32))
+                        | (((output[1] as u128) | ((output[2] as u128) << 32))
                             * (type_len as u128));
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
                 } else {
@@ -230,7 +230,7 @@ fn do_command_with_parseq_mapper<'a>(
                 };
                 if output[0] != 0 {
                     let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
-                        | (((output[1] as u128) + ((output[2] as u128) << 32))
+                        | (((output[1] as u128) | ((output[2] as u128) << 32))
                             * (type_len as u128));
                     Some(elem_idx | ((arg as u128) << elem_inputs))
                 } else {
