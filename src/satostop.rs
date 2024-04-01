@@ -590,7 +590,7 @@ mod tests {
             hashmap[12061] = HashEntry {
                 current: 0xdda02,
                 next: (arg << arg_bit_place) | 53029,
-                steps: 1095,
+                steps: 10950696030321,
                 predecessors: 12,
                 state: HASH_STATE_USED,
             };
@@ -673,7 +673,7 @@ mod tests {
             hashmap[12061] = HashEntry {
                 current: 0xdda02,
                 next: 0xdda02,
-                steps: 1096,
+                steps: 10950696030322,
                 predecessors: 12,
                 state: HASH_STATE_STOPPED,
             };
@@ -700,23 +700,195 @@ mod tests {
         }
 
         // 32-bit
-        // let output_len = 24 + 1;
-        // let arg_bit_place = 16;
-        // let arg: u64 = 119;
-        // let outputs = {
-        //     let mut outputs = vec![0u32; 1 << (16 + 1)];
-        //     outputs[2*612] = 0xaafa214;
-        //     outputs[2*612 + 1] = 0;
-        //     outputs[2*5941] = 0x062a01d7;
-        //     outputs[2*5941 + 1] = 1;
-        //     outputs[2*24616] = 0x13dda0a1;
-        //     outputs[2*24616 + 1] = 0;
-        //     outputs[2*31613] = 0xd60451e8;
-        //     outputs[2*31613 + 1] = 0;
-        //     outputs[2*45091] = 0xd155df8a;
-        //     outputs[2*51670] = ((arg as u32) << 24) | 7214977;
-        //     outputs
-        // };
+        let output_len = 32 + 1;
+        let arg_bit_place = 24;
+        let arg: u64 = 119;
+        let outputs = {
+            let mut outputs = vec![0u32; 1 << (24 + 1)];
+            outputs[2 * 61232] = 0xaafa214;
+            outputs[2 * 61232 + 1] = 0;
+            outputs[2 * 594167] = 0x062a01d7;
+            outputs[2 * 594167 + 1] = 1;
+            outputs[2 * 2461601] = 0x13dda0a1;
+            outputs[2 * 2461601 + 1] = 0;
+            outputs[2 * 3161365] = 0xd60451e8;
+            outputs[2 * 3161365 + 1] = 0;
+            outputs[2 * 4509138] = 0xd155df8a;
+            outputs[2 * 4509138 + 1] = 0;
+            outputs[2 * 5167006] = ((arg as u32) << 24) | 5167006;
+            outputs[2 * 5167006 + 1] = 0;
+            outputs[2 * 5972782] = 0x210689a1;
+            outputs[2 * 5972782 + 1] = 1;
+            outputs
+        };
+        let mut hashmap = {
+            let mut hashmap = vec![
+                HashEntry {
+                    current: 0,
+                    next: 0,
+                    steps: 0,
+                    predecessors: 0,
+                    state: HASH_STATE_UNUSED,
+                };
+                1 << 14
+            ];
+            hashmap[4901] = HashEntry {
+                current: 0x12895911,
+                next: (arg << arg_bit_place) | 61232,
+                steps: 481,
+                predecessors: 2,
+                state: HASH_STATE_USED,
+            };
+            // to stop
+            hashmap[9487] = HashEntry {
+                current: 0xd17490c3,
+                next: (arg << arg_bit_place) | 594167,
+                steps: 6505940239021677,
+                predecessors: 2,
+                state: HASH_STATE_USED,
+            };
+            hashmap[10771] = HashEntry {
+                current: 0x50ea061d,
+                next: (arg << arg_bit_place) | 3161365,
+                steps: 762,
+                predecessors: 3,
+                state: HASH_STATE_STOPPED,
+            };
+            hashmap[2971] = HashEntry {
+                current: (arg << arg_bit_place) | 2461601,
+                next: (arg << arg_bit_place) | 2461601,
+                steps: 1826,
+                predecessors: 8,
+                state: HASH_STATE_LOOPED,
+            };
+            // to loop
+            hashmap[3957] = HashEntry {
+                current: 0xd155df8a,
+                next: (arg << arg_bit_place) | 4509138,
+                steps: 2711,
+                predecessors: 5,
+                state: HASH_STATE_USED,
+            };
+            // to loop 2
+            hashmap[15995] = HashEntry {
+                current: 0x703921d,
+                next: (arg << arg_bit_place) | 5167006,
+                steps: 2181,
+                predecessors: 10,
+                state: HASH_STATE_USED,
+            };
+            // stop not loop
+            hashmap[12061] = HashEntry {
+                current: 0x210689a1,
+                next: (arg << arg_bit_place) | 5972782,
+                steps: 44195,
+                predecessors: 12,
+                state: HASH_STATE_USED,
+            };
+            // used and belog arg range
+            hashmap[7955] = HashEntry {
+                current: 0x3cd0c9a0,
+                next: ((arg + 2) << arg_bit_place) | 6961,
+                steps: 76631,
+                predecessors: 14,
+                state: HASH_STATE_USED,
+            };
+            // used and belog arg range
+            hashmap[921] = HashEntry {
+                current: 0x10fafcdc,
+                next: ((arg - 2) << arg_bit_place) | 6961,
+                steps: 94137,
+                predecessors: 7,
+                state: HASH_STATE_USED,
+            };
+            hashmap
+        };
+        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
+        let expected_hashmap = {
+            let mut hashmap = vec![
+                HashEntry {
+                    current: 0,
+                    next: 0,
+                    steps: 0,
+                    predecessors: 0,
+                    state: HASH_STATE_UNUSED,
+                };
+                1 << 14
+            ];
+            hashmap[4901] = HashEntry {
+                current: 0x12895911,
+                next: 0xaafa214,
+                steps: 482,
+                predecessors: 2,
+                state: HASH_STATE_USED,
+            };
+            // to stop
+            hashmap[9487] = HashEntry {
+                current: 0xd17490c3,
+                next: 0x062a01d7,
+                steps: 6505940239021678,
+                predecessors: 2,
+                state: HASH_STATE_STOPPED,
+            };
+            hashmap[10771] = HashEntry {
+                current: 0x50ea061d,
+                next: (arg << arg_bit_place) | 3161365,
+                steps: 762,
+                predecessors: 3,
+                state: HASH_STATE_STOPPED,
+            };
+            hashmap[2971] = HashEntry {
+                current: (arg << arg_bit_place) | 2461601,
+                next: (arg << arg_bit_place) | 2461601,
+                steps: 1826,
+                predecessors: 8,
+                state: HASH_STATE_LOOPED,
+            };
+            // to loop
+            hashmap[3957] = HashEntry {
+                current: 0xd155df8a,
+                next: 0xd155df8a,
+                steps: 2712,
+                predecessors: 5,
+                state: HASH_STATE_LOOPED,
+            };
+            // to loop 2
+            hashmap[15995] = HashEntry {
+                current: 0x703921d,
+                next: (arg << arg_bit_place) | 5167006,
+                steps: 2182,
+                predecessors: 10,
+                state: HASH_STATE_LOOPED,
+            };
+            // stop not loop
+            hashmap[12061] = HashEntry {
+                current: 0x210689a1,
+                next: 0x210689a1,
+                steps: 44196,
+                predecessors: 12,
+                state: HASH_STATE_STOPPED,
+            };
+            // used and belog arg range
+            hashmap[7955] = HashEntry {
+                current: 0x3cd0c9a0,
+                next: ((arg + 2) << arg_bit_place) | 6961,
+                steps: 76631,
+                predecessors: 14,
+                state: HASH_STATE_USED,
+            };
+            // used and belog arg range
+            hashmap[921] = HashEntry {
+                current: 0x10fafcdc,
+                next: ((arg - 2) << arg_bit_place) | 6961,
+                steps: 94137,
+                predecessors: 7,
+                state: HASH_STATE_USED,
+            };
+            hashmap
+        };
+        for (i, he) in hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}: {}", 32, i);
+        }
     }
 }
 
