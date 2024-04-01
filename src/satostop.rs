@@ -164,6 +164,7 @@ fn join_to_hashmap_cpu(
     let arg_end = arg + (1u64 << arg_bit_place);
     // word_per_elem - elem length in outputs in words (can be 1 or 2).
     let word_per_elem = (output_len + 31) >> 5;
+    let state_mask = (1u64 << (output_len - 1)) - 1;
     hashmap
         .chunks_mut(chunk_len)
         .enumerate()
@@ -176,12 +177,12 @@ fn join_to_hashmap_cpu(
                     // update hash entry next field.
                     let output_entry_start =
                         word_per_elem * usize::try_from(he.next - arg_start).unwrap();
-                    if word_per_elem == 2 {
-                        he.next = (outputs[output_entry_start] as u64)
-                            | ((outputs[output_entry_start + 1] as u64) << 32);
+                    he.next = (if word_per_elem == 2 {
+                        (outputs[output_entry_start] as u64)
+                            | ((outputs[output_entry_start + 1] as u64) << 32)
                     } else {
-                        he.next = outputs[output_entry_start] as u64;
-                    }
+                        outputs[output_entry_start] as u64
+                    }) & state_mask;
                 }
             }
         });
