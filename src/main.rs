@@ -69,8 +69,9 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         GET_U32(v, o0, i);
         if ((v != 0) && (__sync_fetch_and_or(out, v) == 0)) {
             out[1] = idx;
-            out[2] = i;
-            out[3] = v;
+            out[2] = idx >> 5;
+            out[3] = i;
+            out[4] = v;
         }
     }
 }"##;
@@ -83,8 +84,9 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
         GET_U32(v, o0, i);
         if ((v != 0) && (atomic_or(out, v) == 0)) {
             out[1] = idx;
-            out[2] = i;
-            out[3] = v;
+            out[2] = idx >> 5;
+            out[3] = i;
+            out[4] = v;
         }
     }
 }"##;
@@ -103,7 +105,7 @@ fn do_command_with_par_mapper<'a>(
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
             .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-            .aggr_output_len(Some(4)),
+            .aggr_output_len(Some(5)),
     );
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
@@ -117,8 +119,9 @@ fn do_command_with_par_mapper<'a>(
             |_, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
                 if output[0] != 0 {
-                    let elem_idx =
-                        output[3].trailing_zeros() | (output[2] << 5) | (output[1] * type_len);
+                    let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
+                        | (((output[1] as u128) + ((output[2] as u128) << 32))
+                            * (type_len as u128));
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
                 } else {
                     None
@@ -153,7 +156,7 @@ fn do_command_with_opencl_mapper<'a>(
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
             .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-            .aggr_output_len(Some(4)),
+            .aggr_output_len(Some(5)),
     );
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
@@ -169,8 +172,9 @@ fn do_command_with_opencl_mapper<'a>(
                 if result.is_some() {
                     result
                 } else if output[0] != 0 {
-                    let elem_idx =
-                        output[3].trailing_zeros() | (output[2] << 5) | (output[1] * type_len);
+                    let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
+                        | (((output[1] as u128) + ((output[2] as u128) << 32))
+                            * (type_len as u128));
                     Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
                 } else {
                     None
@@ -199,10 +203,10 @@ fn do_command_with_parseq_mapper<'a>(
         |sel| match sel {
             ParSeqSelection::Par => ParSeqDynamicConfig::new()
                 .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-                .aggr_output_len(Some(4)),
+                .aggr_output_len(Some(5)),
             ParSeqSelection::Seq(_) => ParSeqDynamicConfig::new()
                 .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-                .aggr_output_len(Some(4)),
+                .aggr_output_len(Some(5)),
         },
     );
     let cpu_type_len = mapper.type_len(ParSeqSelection::Par);
@@ -224,9 +228,10 @@ fn do_command_with_parseq_mapper<'a>(
                     ParSeqSelection::Seq(i) => opencl_type_lens[i],
                 };
                 if output[0] != 0 {
-                    let elem_idx =
-                        output[3].trailing_zeros() | (output[2] << 5) | (output[1] * type_len);
-                    Some((elem_idx as u128) | ((arg as u128) << elem_inputs))
+                    let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
+                        | (((output[1] as u128) + ((output[2] as u128) << 32))
+                            * (type_len as u128));
+                    Some(elem_idx | ((arg as u128) << elem_inputs))
                 } else {
                     None
                 }
