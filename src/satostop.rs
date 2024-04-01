@@ -96,6 +96,7 @@ fn gen_output_transform_code(output_len: usize) -> String {
     defs
 }
 
+// INFO: only higher bits are important because they impacts on hashmap entry index.
 #[inline]
 fn hash_function_64(bits: usize, value: u64) -> usize {
     let mask = u64::try_from((1u128 << bits) - 1).unwrap();
