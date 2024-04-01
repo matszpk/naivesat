@@ -69,7 +69,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         GET_U32(v, o0, i);
         if ((v != 0) && (__sync_fetch_and_or(out, v) == 0)) {
             out[1] = idx & 0xffffffffU;
-            out[2] = idx >> 5;
+            out[2] = idx >> 32;
             out[3] = i;
             out[4] = v;
         }
@@ -84,7 +84,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
         GET_U32(v, o0, i);
         if ((v != 0) && (atomic_or(out, v) == 0)) {
             out[1] = idx & 0xffffffffU;
-            out[2] = idx >> 5;
+            out[2] = idx >> 32;
             out[3] = i;
             out[4] = v;
         }
@@ -172,6 +172,7 @@ fn do_command_with_opencl_mapper<'a>(
                 if result.is_some() {
                     result
                 } else if output[0] != 0 {
+                    println!("Output[2]: {}", output[2]);
                     let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
                         | (((output[1] as u128) + ((output[2] as u128) << 32))
                             * (type_len as u128));
