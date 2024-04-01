@@ -7,6 +7,7 @@ use gatesim::*;
 
 use clap::Parser;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
+use rayon::prelude::*;
 
 use std::fs;
 use std::ops::Range;
@@ -95,6 +96,28 @@ fn gen_output_transform_code(output_len: usize) -> String {
     defs
 }
 
+fn hash_function_64(bits: usize, value: u64) -> usize {
+    let mask = u64::try_from((1u128 << bits) - 1).unwrap();
+    let half_bits = bits >> 1;
+    let quart_bits = bits >> 2;
+    let hash = (value ^ ((value >> half_bits) | (value << (bits - half_bits)))) & mask;
+    let hash = (hash ^ ((value >> quart_bits) | (value << (bits - quart_bits)))) & mask;
+    let hash = (hash ^ ((value << quart_bits) | (value >> (bits - quart_bits)))) & mask;
+    usize::try_from(hash & mask).unwrap()
+}
+
+const HASH_FUNC_OPENCL_DEF: &str = r##"
+#define HASH_FN(H,V) {
+    const uint bits = OUTPUT_NUM - 1;
+    cosnt uint half_bits = (OUTPUT_NUM - 1) >> 1;
+    cosnt uint quart_bits = (OUTPUT_NUM - 1) >> 1;
+    const ulong mask = (1ULL << bits) - 1ULL;
+    (H) = ((V) ^ (((V) >> half_bits) | ((V) << (bits - half_bits)))) & mask;
+    (H) = ((H) ^ (((V) >> quart_bits) | ((V) << (bits - quart_bits)))) & mask;
+    (H) = ((H) ^ (((V) << quart_bits) | ((V) >> (bits - quart_bits)))) & mask;
+}
+"##;
+
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     uint32_t* output_u = ((uint32_t*)output) + idx *
         ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
@@ -111,6 +134,58 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     }
 #endif
 }"##;
+
+#[repr(C)]
+struct HashEntry {
+    current: u64,
+    next: u64,
+    steps: u64,
+    predecessors: u32,
+    state: u32,
+}
+
+const HASH_STATE_UNUSED: u32 = 0;
+const HASH_STATE_USED: u32 = 1;
+const HASH_STATE_STOPPED: u32 = 2;
+const HASH_STATE_LOOPED: u32 = 3;
+const HASH_STATE_RESERVED_BY_OTHER_FLAG: u32 = 4;
+
+fn join_to_hashmap_cpu(
+    output_len: usize,
+    arg_bit_place: usize,
+    arg: u64,
+    outputs: &[u32],
+    hashmap: &mut [HashEntry],
+) {
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::max(cpu_num * 8, 64);
+    let chunk_len = hashmap.len() / chunk_num;
+    let arg_start = arg << arg_bit_place;
+    let arg_end = arg + (1u64 << arg_bit_place);
+    // word_per_elem - elem length in outputs in words (can be 1 or 2).
+    let word_per_elem = (output_len + 31) >> 5;
+    hashmap
+        .chunks_mut(chunk_len)
+        .enumerate()
+        .par_bridge()
+        .for_each(|(chunk_id, hashchunk)| {
+            let istart = chunk_id * chunk_len;
+            for (i, he) in hashchunk.iter_mut().enumerate() {
+                let i = istart + i;
+                if he.state == HASH_STATE_USED && arg_start >= he.next && he.next < arg_end {
+                    // update hash entry next field.
+                    let output_entry_start =
+                        word_per_elem * usize::try_from(he.next - arg_start).unwrap();
+                    if word_per_elem == 2 {
+                        he.next = (outputs[output_entry_start] as u64)
+                            | ((outputs[output_entry_start + 1] as u64) << 32);
+                    } else {
+                        he.next = outputs[output_entry_start] as u64;
+                    }
+                }
+            }
+        });
+}
 
 fn do_solve_with_cpu_mapper<'a>(
     mut mapper: CPUBasicMapperBuilder<'a>,
