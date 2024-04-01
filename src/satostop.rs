@@ -153,6 +153,7 @@ const HASH_STATE_LOOPED: u32 = 3;
 const HASH_STATE_RESERVED_BY_OTHER_FLAG: u32 = 4;
 
 // TODO: add setting looped entry from number of steps.
+// 2**state_bits or more steps - loop, check stop before check loop.
 fn join_to_hashmap_cpu(
     output_len: usize,
     arg_bit_place: usize,
