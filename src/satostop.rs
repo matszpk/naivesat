@@ -182,10 +182,11 @@ fn join_to_hashmap_cpu(
                     } else {
                         outputs[output_entry_start] as u64
                     };
+                    let old_next = he.next;
                     he.next = output & state_mask;
                     he.state = if ((output >> (output_len - 1)) & 1) != 0 {
                         HASH_STATE_STOPPED
-                    } else if he.next == he.current {
+                    } else if he.next == he.current || he.next == old_next {
                         HASH_STATE_LOOPED
                     } else {
                         HASH_STATE_USED
