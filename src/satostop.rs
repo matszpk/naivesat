@@ -172,17 +172,24 @@ fn join_to_hashmap_cpu(
         .for_each(|(chunk_id, hashchunk)| {
             let istart = chunk_id * chunk_len;
             for (i, he) in hashchunk.iter_mut().enumerate() {
-                let i = istart + i;
                 if he.state == HASH_STATE_USED && arg_start >= he.next && he.next < arg_end {
                     // update hash entry next field.
                     let output_entry_start =
                         word_per_elem * usize::try_from(he.next - arg_start).unwrap();
-                    he.next = (if word_per_elem == 2 {
+                    let output = if word_per_elem == 2 {
                         (outputs[output_entry_start] as u64)
                             | ((outputs[output_entry_start + 1] as u64) << 32)
                     } else {
                         outputs[output_entry_start] as u64
-                    }) & state_mask;
+                    };
+                    he.next = output & state_mask;
+                    he.state = if ((output >> (output_len - 1)) & 1) != 0 {
+                        HASH_STATE_STOPPED
+                    } else if he.next == he.current {
+                        HASH_STATE_LOOPED
+                    } else {
+                        HASH_STATE_USED
+                    };
                 }
             }
         });
