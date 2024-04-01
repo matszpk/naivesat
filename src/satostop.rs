@@ -96,25 +96,18 @@ fn gen_output_transform_code(output_len: usize) -> String {
     defs
 }
 
+#[inline]
 fn hash_function_64(bits: usize, value: u64) -> usize {
     let mask = u64::try_from((1u128 << bits) - 1).unwrap();
-    let half_bits = bits >> 1;
-    let quart_bits = bits >> 2;
-    let hash = (value ^ ((value >> half_bits) | (value << (bits - half_bits)))) & mask;
-    let hash = (hash ^ ((value >> quart_bits) | (value << (bits - quart_bits)))) & mask;
-    let hash = (hash ^ ((value << quart_bits) | (value >> (bits - quart_bits)))) & mask;
+    let hash = (value * 1710485021949031u64) ^ 0xb89d2ecda078ca1f;
     usize::try_from(hash & mask).unwrap()
 }
 
 const HASH_FUNC_OPENCL_DEF: &str = r##"
 #define HASH_FN(H,V) {
     const uint bits = OUTPUT_NUM - 1;
-    cosnt uint half_bits = (OUTPUT_NUM - 1) >> 1;
-    cosnt uint quart_bits = (OUTPUT_NUM - 1) >> 1;
     const ulong mask = (1ULL << bits) - 1ULL;
-    (H) = ((V) ^ (((V) >> half_bits) | ((V) << (bits - half_bits)))) & mask;
-    (H) = ((H) ^ (((V) >> quart_bits) | ((V) << (bits - quart_bits)))) & mask;
-    (H) = ((H) ^ (((V) << quart_bits) | ((V) >> (bits - quart_bits)))) & mask;
+    (H) = (((V) * 1710485021949031ULL) ^ 0xb89d2ecda078ca1fULL) mask;
 }
 "##;
 
@@ -513,6 +506,9 @@ mod tests {
 }
 
 fn main() {
+    for i in 0..1000000 {
+        println!("Hashfunction: {:016x} = {:016x}", i, hash_function_64(24, i))
+    }
     for x in get_all_devices(CL_DEVICE_TYPE_GPU).unwrap() {
         println!("OpenCLDevice: {:?}", x);
     }
