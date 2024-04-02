@@ -131,6 +131,22 @@ const HASH_FUNC_OPENCL_DEF: &str = r##"
 }
 "##;
 
+const HASH_ENTRY_OPENCL_DEF: &str = r##"
+typedef struct _HashEntry {
+    ulong current;
+    ulong next;
+    ulong steps;
+    uint predecessors;
+    uint state;
+} HashEntry;
+
+#define HASH_STATE_UNUSED (0)
+#define HASH_STATE_USED (1)
+#define HASH_STATE_STOPPED (2)
+#define HASH_STATE_LOOPED (3)
+#define HASH_STATE_RESERVED_BY_OTHER_FLAG (4)
+"##;
+
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 struct HashEntry {
@@ -203,20 +219,6 @@ fn join_to_hashmap_cpu(
 }
 
 const JOIN_TO_HASHMAP_OPENCL_CODE: &str = r##"
-typedef struct _HashEntry {
-    ulong current;
-    ulong next;
-    ulong steps;
-    uint predecessors;
-    uint state;
-} HashEntry;
-
-#define HASH_STATE_UNUSED (0)
-#define HASH_STATE_USED (1)
-#define HASH_STATE_STOPPED (2)
-#define HASH_STATE_LOOPED (3)
-#define HASH_STATE_RESERVED_BY_OTHER_FLAG (4)
-
 kernel void join_to_hashmap(ulong arg, const global uint* outputs, global HashEntry* hashmap) {
     const size_t idx = get_global_id(0);
     if (idx >= HASHMAP_LEN)
@@ -269,9 +271,8 @@ impl OpenCLJoinToHashMap {
             "-DOUTPUT_LEN=({}) -DARG_BIT_PLACE=({}) -DWORD_PER_ELEM=({}) -DHASHMAP_LEN=({})",
             output_len, arg_bit_place, word_per_elem, hashmap_len,
         );
-        let program =
-            Program::create_and_build_from_source(&context, JOIN_TO_HASHMAP_OPENCL_CODE, &defs)
-                .unwrap();
+        let source = HASH_ENTRY_OPENCL_DEF.to_string() + JOIN_TO_HASHMAP_OPENCL_CODE;
+        let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
         OpenCLJoinToHashMap {
             hashmap_len,
             cmd_queue,
@@ -380,6 +381,41 @@ fn join_hashmap_itself_cpu(
             }
         });
 }
+
+const JOIN_HASHMAP_ITSELF_OPENCL_CODE: &str = r##"
+typedef struct _HashEntry {
+    ulong current;
+    ulong next;
+    ulong steps;
+    uint predecessors;
+    uint state;
+} HashEntry;
+
+#define HASH_STATE_UNUSED (0)
+#define HASH_STATE_USED (1)
+#define HASH_STATE_STOPPED (2)
+#define HASH_STATE_LOOPED (3)
+#define HASH_STATE_RESERVED_BY_OTHER_FLAG (4)
+
+kernel void join_hashmap_itself_zero_pred(global HashEntry* out_hashmap) {
+    const size_t idx = get_global_id(0);
+    if (idx >= HASHMAP_LEN)
+        return;
+    out_hashmap[idx].predecessors = 0;
+}
+
+kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
+        global HashEntry* out_hashmap) {
+    const size_t idx = get_global_id(0);
+    if (idx >= HASHMAP_LEN)
+        return;
+    const global HashEntry* inhe = in_hashmap + idx;
+    global HashEntry* outhe = out_hashmap + idx;
+    if inhe->state == HASH_STATE_USED {
+        const next_hash = HASH
+    }
+}
+"##;
 
 //
 // main solver code
@@ -1929,7 +1965,7 @@ mod tests {
     fn test_join_hashmap_itself_cpu() {
         let state_len = 44;
         let hbits = 15;
-        let (mut hashmap, expected_hashmap) = join_hashmap_itself_data(state_len, hbits);
+        let (hashmap, expected_hashmap) = join_hashmap_itself_data(state_len, hbits);
         let preds_update = create_vec_of_atomic_u32(hashmap.len());
         let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
         join_hashmap_itself_cpu(state_len, preds_update.clone(), &hashmap, &mut out_hashmap);
