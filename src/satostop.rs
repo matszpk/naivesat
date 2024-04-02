@@ -206,10 +206,9 @@ struct HashEntry {
 #define HASH_STATE_LOOPED (3)
 #define HASH_STATE_RESERVED_BY_OTHER_FLAG (4)
 
-kernel join_to_hashmap(ulong arg, ulong hashmap_len, const global uint* outputs,
-        global uint* hashmap) {
+kernel join_to_hashmap(ulong arg, const global uint* outputs, global uint* hashmap) {
     const size_t idx = get_global_id(0);
-    if (idx < hashmap_len)
+    if (idx < HASHMAP_LEN)
         return;
     const ulong arg_start = arg << ARG_BIT_PLACE;
     const ulong arg_end = arg_start + (1ULL << ARG_BIT_PLACE);
@@ -240,6 +239,7 @@ kernel join_to_hashmap(ulong arg, ulong hashmap_len, const global uint* outputs,
 struct OpenCLJoinToHashMap {
     output_len: usize,
     arg_bit_place: usize,
+    hashmap_len: usize,
     cmd_queue: Arc<CommandQueue>,
     group_len: usize,
     kernel: Kernel,
@@ -249,6 +249,7 @@ impl OpenCLJoinToHashMap {
     fn new(
         output_len: usize,
         arg_bit_place: usize,
+        hashmap_len: usize,
         context: Arc<Context>,
         cmd_queue: Arc<CommandQueue>,
     ) -> Self {
@@ -256,8 +257,8 @@ impl OpenCLJoinToHashMap {
         let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
         let word_per_elem = (output_len + 31) >> 5;
         let defs = format!(
-            "-DOUTPUT_LEN=({}) -DARG_BIT_PLACE=({}) -DWORD_PER_ELEM=({})",
-            output_len, arg_bit_place, word_per_elem
+            "-DOUTPUT_LEN=({}) -DARG_BIT_PLACE=({}) -DWORD_PER_ELEM=({}) -DHASHMAP_LEN=({})",
+            output_len, arg_bit_place, word_per_elem, hashmap_len,
         );
         let program =
             Program::create_and_build_from_source(&context, JOIN_TO_HASHMAP_OPENCL_CODE, &defs)
@@ -265,30 +266,23 @@ impl OpenCLJoinToHashMap {
         OpenCLJoinToHashMap {
             output_len,
             arg_bit_place,
+            hashmap_len,
             cmd_queue,
             group_len,
             kernel: Kernel::create(&program, "join_to_hashmap").unwrap(),
         }
     }
 
-    fn execute(
-        &self,
-        arg: u64,
-        hashmap_len: usize,
-        outputs: &Buffer<u32>,
-        hashmap: &mut Buffer<HashEntry>,
-    ) {
+    fn execute(&self, arg: u64, outputs: &Buffer<u32>, hashmap: &mut Buffer<HashEntry>) {
         let cl_arg = cl_ulong::try_from(arg).unwrap();
-        let cl_hashmap_len = cl_ulong::try_from(hashmap_len).unwrap();
         unsafe {
             ExecuteKernel::new(&self.kernel)
                 .set_arg(&cl_arg)
-                .set_arg(&cl_hashmap_len)
                 .set_arg(&outputs)
                 .set_arg(&hashmap)
                 .set_local_work_size(self.group_len)
                 .set_global_work_size(
-                    ((hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
+                    ((self.hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
                 )
                 .enqueue_nd_range(&self.cmd_queue)
                 .unwrap();
