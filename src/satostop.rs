@@ -1568,10 +1568,10 @@ mod tests {
             )
             .unwrap();
             cmd_queue
-                .enqueue_write_buffer(&mut outputs_buffer, CL_BLOCKING, 0, &outputs, &[])
+                .enqueue_write_buffer(&mut outputs_buffer, CL_BLOCKING, 0, outputs, &[])
                 .unwrap();
             cmd_queue
-                .enqueue_write_buffer(&mut hashmap_buffer, CL_BLOCKING, 0, &hashmap, &[])
+                .enqueue_write_buffer(&mut hashmap_buffer, CL_BLOCKING, 0, hashmap, &[])
                 .unwrap();
             (outputs_buffer, hashmap_buffer, hashmap.len())
         }
@@ -2085,12 +2085,29 @@ mod tests {
                 hashmap.len(),
                 std::ptr::null_mut(),
             )
-            .unwrap();
+            .unwrap()
         };
-        // unsafe {
-        //     cmd_queue.enqueue_fill_buffer(&out_hashmap_buffer,
-        // }
-        // cmd_queue.finish();
+        unsafe {
+            cmd_queue
+                .enqueue_fill_buffer(
+                    &mut out_hashmap_buffer,
+                    &[HashEntry {
+                        current: 1115774,
+                        next: 494022,
+                        steps: 450589390239,
+                        state: 8459021,
+                        predecessors: 489481,
+                    }],
+                    0,
+                    std::mem::size_of::<HashEntry>() * hashmap.len(),
+                    &[],
+                )
+                .unwrap();
+            // cmd_queue
+            //     .enqueue_write_buffer(&mut in_hashmap_buffer, CL_BLOCKING, 0, &outputs, &[])
+            //     .unwrap();
+        }
+        cmd_queue.finish();
     }
 }
 
