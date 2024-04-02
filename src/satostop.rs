@@ -469,6 +469,20 @@ impl OpenCLJoinHashMapItself {
         }
     }
 
+    fn execute_reset_predecessors(&self, out_hashmap: &mut Buffer<HashEntry>) {
+        unsafe {
+            ExecuteKernel::new(&self.kernel_zero)
+                .set_arg(out_hashmap)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    ((self.hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)
+                .unwrap();
+            self.cmd_queue.finish().unwrap();
+        }
+    }
+
     fn execute(&self, in_hashmap: &Buffer<HashEntry>, out_hashmap: &mut Buffer<HashEntry>) {
         unsafe {
             ExecuteKernel::new(&self.kernel_zero)
