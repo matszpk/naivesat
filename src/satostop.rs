@@ -152,8 +152,6 @@ const HASH_STATE_STOPPED: u32 = 2;
 const HASH_STATE_LOOPED: u32 = 3;
 const HASH_STATE_RESERVED_BY_OTHER_FLAG: u32 = 4;
 
-// TODO: add setting looped entry from number of steps.
-// 2**state_bits or more steps - loop, check stop before check loop.
 fn join_to_hashmap_cpu(
     output_len: usize,
     arg_bit_place: usize,
@@ -189,7 +187,8 @@ fn join_to_hashmap_cpu(
                     he.next = output & state_mask;
                     he.state = if ((output >> (output_len - 1)) & 1) != 0 {
                         HASH_STATE_STOPPED
-                    } else if he.next == he.current || he.next == old_next {
+                    } else if state_mask <= he.steps || he.next == he.current || he.next == old_next
+                    {
                         HASH_STATE_LOOPED
                     } else {
                         HASH_STATE_USED
@@ -530,6 +529,8 @@ mod tests {
             outputs[44158] = 0x55df8a;
             outputs[49774] = ((arg as u32) << arg_bit_place) | 49774;
             outputs[53029] = 0xdda02 | (1 << 24);
+            outputs[59021] = 0x11aa22;
+            outputs[59045] = 0x77da1b | (1 << 24);
             outputs
         };
         let mut hashmap = {
@@ -588,12 +589,28 @@ mod tests {
                 predecessors: 10,
                 state: HASH_STATE_USED,
             };
+            // to loop 3
+            hashmap[14072] = HashEntry {
+                current: 0x2589fa,
+                next: (arg << arg_bit_place) | 59021,
+                steps: (1 << (output_len - 1)) - 1,
+                predecessors: 5,
+                state: HASH_STATE_USED,
+            };
             // stop not loop
             hashmap[12061] = HashEntry {
                 current: 0xdda02,
                 next: (arg << arg_bit_place) | 53029,
-                steps: 10950696030321,
+                steps: 108,
                 predecessors: 12,
+                state: HASH_STATE_USED,
+            };
+            // stop not loop 2
+            hashmap[14456] = HashEntry {
+                current: 0xfa2ca5,
+                next: (arg << arg_bit_place) | 59045,
+                steps: (1 << (output_len - 1)) - 1,
+                predecessors: 5,
                 state: HASH_STATE_USED,
             };
             // used and belog arg range
@@ -671,12 +688,28 @@ mod tests {
                 predecessors: 10,
                 state: HASH_STATE_LOOPED,
             };
+            // to loop 3
+            hashmap[14072] = HashEntry {
+                current: 0x2589fa,
+                next: 0x11aa22,
+                steps: 1 << (output_len - 1),
+                predecessors: 5,
+                state: HASH_STATE_LOOPED,
+            };
             // stop not loop
             hashmap[12061] = HashEntry {
                 current: 0xdda02,
                 next: 0xdda02,
-                steps: 10950696030322,
+                steps: 109,
                 predecessors: 12,
+                state: HASH_STATE_STOPPED,
+            };
+            // stop not loop 2
+            hashmap[14456] = HashEntry {
+                current: 0xfa2ca5,
+                next: 0x77da1b,
+                steps: 1 << (output_len - 1),
+                predecessors: 5,
                 state: HASH_STATE_STOPPED,
             };
             // used and belog arg range
@@ -745,7 +778,7 @@ mod tests {
             hashmap[9487] = HashEntry {
                 current: 0xd17490c3,
                 next: (arg << arg_bit_place) | 594167,
-                steps: 6505940239021677,
+                steps: 649,
                 predecessors: 2,
                 state: HASH_STATE_USED,
             };
@@ -828,7 +861,7 @@ mod tests {
             hashmap[9487] = HashEntry {
                 current: 0xd17490c3,
                 next: 0x062a01d7,
-                steps: 6505940239021678,
+                steps: 650,
                 predecessors: 2,
                 state: HASH_STATE_STOPPED,
             };
@@ -936,7 +969,7 @@ mod tests {
             hashmap[9487] = HashEntry {
                 current: 0xcd17490c3,
                 next: (arg << arg_bit_place) | 594167,
-                steps: 6505940239021677,
+                steps: 649,
                 predecessors: 2,
                 state: HASH_STATE_USED,
             };
@@ -1019,7 +1052,7 @@ mod tests {
             hashmap[9487] = HashEntry {
                 current: 0xcd17490c3,
                 next: 0x062a01d7 | (21 << 32),
-                steps: 6505940239021678,
+                steps: 650,
                 predecessors: 2,
                 state: HASH_STATE_STOPPED,
             };
