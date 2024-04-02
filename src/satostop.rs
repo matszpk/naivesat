@@ -1705,7 +1705,7 @@ mod tests {
                     next: 0x93102144323,
                     steps: 385491,
                     state: HASH_STATE_USED,
-                    predecessors: 14,
+                    predecessors: 12,
                 },
             );
             hashmap_insert(
@@ -1895,7 +1895,7 @@ mod tests {
                     next: 0x93102144323,
                     steps: 385491,
                     state: HASH_STATE_USED,
-                    predecessors: 15,
+                    predecessors: 13,
                 },
             );
             // not joined
