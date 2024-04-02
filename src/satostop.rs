@@ -398,7 +398,8 @@ kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
         return;
     const global HashEntry* inhe = in_hashmap + idx;
     global HashEntry* outhe = out_hashmap + idx;
-    const size_t hashentry_shift = STATE_LEN - HASHLEN_BITS;
+    const size_t hashentry_shift = STATE_LEN - HASHMAP_LEN_BITS;
+    const ulong state_mask = (1ULL << STATE_LEN) - 1ULL;
     if (inhe->state == HASH_STATE_USED) {
         const ulong next_hash = hash_function_64(inhe->next);
         const size_t next_idx = (next_hash >> hashentry_shift);
@@ -431,6 +432,66 @@ kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
     atomic_add(&outhe.predecessors, inhe.predecessors);
 }
 "##;
+
+struct OpenCLJoinHashMapItself {
+    hashmap_len: usize,
+    cmd_queue: Arc<CommandQueue>,
+    group_len: usize,
+    kernel_zero: Kernel,
+    kernel: Kernel,
+}
+
+impl OpenCLJoinHashMapItself {
+    fn new(
+        state_len: usize,
+        hashmap_len: usize,
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+    ) -> Self {
+        let device = Device::new(context.devices()[0]);
+        let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
+        let defs = format!(
+            "-DSTATE_LEN=({}) -DHASHMAP_LEN=({}) -DHASHMAP_LEN_BITS=({})",
+            state_len,
+            hashmap_len,
+            usize::BITS - hashmap_len.leading_zeros() - 1
+        );
+        let source = HASH_ENTRY_OPENCL_DEF.to_string()
+            + HASH_FUNC_OPENCL_DEF
+            + JOIN_HASHMAP_ITSELF_OPENCL_CODE;
+        let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
+        OpenCLJoinHashMapItself {
+            hashmap_len,
+            cmd_queue,
+            group_len,
+            kernel_zero: Kernel::create(&program, "join_hashmap_itself_zero_pred").unwrap(),
+            kernel: Kernel::create(&program, "join_hashmap_itself").unwrap(),
+        }
+    }
+
+    fn execute(&self, in_hashmap: &Buffer<HashEntry>, out_hashmap: &mut Buffer<HashEntry>) {
+        unsafe {
+            ExecuteKernel::new(&self.kernel)
+                .set_arg(out_hashmap)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    ((self.hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)
+                .unwrap();
+            ExecuteKernel::new(&self.kernel)
+                .set_arg(in_hashmap)
+                .set_arg(out_hashmap)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    ((self.hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)
+                .unwrap();
+            self.cmd_queue.finish().unwrap();
+        }
+    }
+}
 
 //
 // main solver code
