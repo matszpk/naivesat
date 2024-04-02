@@ -120,13 +120,13 @@ fn hash_function_64(bits: usize, value: u64) -> usize {
 }
 
 const HASH_FUNC_OPENCL_DEF: &str = r##"
-#define HASH_FN(H,V) {
-    const uint bits = OUTPUT_NUM - 1;
-    const ulong mask = (1ULL << bits) - 1ULL;
-    const uint half_bits = bits >> 1;
-    const ulong temp = ((V) * 9615409803190489167ULL);
-    (H) = (((V) * 6171710485021949031ULL) ^
-        ((temp << half_bits) | (temp >> (bits - half_bits))) ^
+ulong hash_function_64(ulong value) {
+    const uint bits = STATE_LEN;
+    const ulong mask = (1ULL << STATE_LEN) - 1ULL;
+    const uint half_bits = STATE_LEN >> 1;
+    const ulong temp = (value * 9615409803190489167ULL);
+    return ((value * 6171710485021949031ULL) ^
+        ((temp << half_bits) | (temp >> (STATE_LEN - half_bits))) ^
         0xb89d2ecda078ca1fULL) & mask;
 }
 "##;
@@ -383,20 +383,6 @@ fn join_hashmap_itself_cpu(
 }
 
 const JOIN_HASHMAP_ITSELF_OPENCL_CODE: &str = r##"
-typedef struct _HashEntry {
-    ulong current;
-    ulong next;
-    ulong steps;
-    uint predecessors;
-    uint state;
-} HashEntry;
-
-#define HASH_STATE_UNUSED (0)
-#define HASH_STATE_USED (1)
-#define HASH_STATE_STOPPED (2)
-#define HASH_STATE_LOOPED (3)
-#define HASH_STATE_RESERVED_BY_OTHER_FLAG (4)
-
 kernel void join_hashmap_itself_zero_pred(global HashEntry* out_hashmap) {
     const size_t idx = get_global_id(0);
     if (idx >= HASHMAP_LEN)
@@ -407,13 +393,42 @@ kernel void join_hashmap_itself_zero_pred(global HashEntry* out_hashmap) {
 kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
         global HashEntry* out_hashmap) {
     const size_t idx = get_global_id(0);
+    uint do_copy = 1;
     if (idx >= HASHMAP_LEN)
         return;
     const global HashEntry* inhe = in_hashmap + idx;
     global HashEntry* outhe = out_hashmap + idx;
-    if inhe->state == HASH_STATE_USED {
-        const next_hash = HASH
+    const size_t hashentry_shift = STATE_LEN - HASHLEN_BITS;
+    if (inhe->state == HASH_STATE_USED) {
+        const ulong next_hash = hash_function_64(inhe->next);
+        const size_t next_idx = (next_hash >> hashentry_shift);
+        const HashEntry* nexthe = in_hashmap + next_idx;
+        if (nexthe->state != HASH_STATE_UNUSED && nexthe->current == inhe.next) {
+            // if next found in hashmap entry
+            const ulong insteps = inhe->steps;
+            const ulong steps_sum = insteps + nexthe->steps;
+            outhe->current = inhe->current;
+            outhe->next = nexthe->next;
+            outhe->steps = steps_sum;
+            outhe->state = nexthe->state;
+            if outhe->state == HASH_STATE_USED {
+                if steps_sum < insteps || res > state_mask {
+                    // if overflow of steps or steps greater than max step number.
+                    // then loop
+                    outhe->state = HASH_STATE_LOOPED;
+                }
+            }
+            atomic_inc(&(out_hashmap[next_idx].predecessors));
+            do_copy = 0;
+        }
     }
+    if (do_copy) {
+        outhe->current = inhe->current;
+        outhe->next = inhe->next;
+        outhe->steps = inhe->steps;
+        outhe->state = inhe->state;
+    }
+    atomic_add(&outhe.predecessors, inhe.predecessors);
 }
 "##;
 
