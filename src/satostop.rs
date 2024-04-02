@@ -403,8 +403,8 @@ kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
     if (inhe->state == HASH_STATE_USED) {
         const ulong next_hash = hash_function_64(inhe->next);
         const size_t next_idx = (next_hash >> hashentry_shift);
-        const HashEntry* nexthe = in_hashmap + next_idx;
-        if (nexthe->state != HASH_STATE_UNUSED && nexthe->current == inhe.next) {
+        const global HashEntry* nexthe = in_hashmap + next_idx;
+        if (nexthe->state != HASH_STATE_UNUSED && nexthe->current == inhe->next) {
             // if next found in hashmap entry
             const ulong insteps = inhe->steps;
             const ulong steps_sum = insteps + nexthe->steps;
@@ -412,8 +412,8 @@ kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
             outhe->next = nexthe->next;
             outhe->steps = steps_sum;
             outhe->state = nexthe->state;
-            if outhe->state == HASH_STATE_USED {
-                if steps_sum < insteps || res > state_mask {
+            if (outhe->state == HASH_STATE_USED) {
+                if (steps_sum < insteps || steps_sum > state_mask) {
                     // if overflow of steps or steps greater than max step number.
                     // then loop
                     outhe->state = HASH_STATE_LOOPED;
@@ -429,7 +429,7 @@ kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
         outhe->steps = inhe->steps;
         outhe->state = inhe->state;
     }
-    atomic_add(&outhe.predecessors, inhe.predecessors);
+    atomic_add(&outhe->predecessors, inhe->predecessors);
 }
 "##;
 
@@ -2103,11 +2103,27 @@ mod tests {
                     &[],
                 )
                 .unwrap();
-            // cmd_queue
-            //     .enqueue_write_buffer(&mut in_hashmap_buffer, CL_BLOCKING, 0, &outputs, &[])
-            //     .unwrap();
+            cmd_queue
+                .enqueue_write_buffer(&mut in_hashmap_buffer, CL_BLOCKING, 0, &hashmap, &[])
+                .unwrap();
         }
-        cmd_queue.finish();
+        cmd_queue.finish().unwrap();
+        let join_itself = OpenCLJoinHashMapItself::new(
+            state_len,
+            hashmap.len(),
+            context.clone(),
+            cmd_queue.clone(),
+        );
+        join_itself.execute(&in_hashmap_buffer, &mut out_hashmap_buffer);
+        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        unsafe {
+            cmd_queue
+                .enqueue_read_buffer(&out_hashmap_buffer, CL_BLOCKING, 0, &mut out_hashmap, &[])
+                .unwrap();
+        }
+        for (i, he) in out_hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}", i);
+        }
     }
 }
 
