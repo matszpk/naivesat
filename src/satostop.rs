@@ -165,10 +165,9 @@ fn join_to_hashmap_cpu(
     let state_mask = (1u64 << (output_len - 1)) - 1;
     hashmap
         .chunks_mut(chunk_len)
-        .enumerate()
         .par_bridge()
-        .for_each(|(chunk_id, hashchunk)| {
-            for (i, he) in hashchunk.iter_mut().enumerate() {
+        .for_each(|hashchunk| {
+            for he in hashchunk {
                 if he.state == HASH_STATE_USED && arg_start <= he.next && he.next < arg_end {
                     // update hash entry next field.
                     let output_entry_start =
@@ -295,6 +294,33 @@ impl OpenCLJoinToHashMap {
         }
     }
 }
+
+//
+// join_hashmap_itself - join hash entries with other hash entries in hashmap
+//
+
+fn join_hashmap_itself(state_len: usize, in_hashmap: &[HashEntry], out_hashmap: &mut [HashEntry]) {
+    assert_eq!(in_hashmap.len(), out_hashmap.len());
+    assert_eq!(in_hashmap.len().count_ones(), 1);
+    let hashlen_bits = usize::BITS - in_hashmap.len().leading_zeros() - 1;
+    let hashentry_shift = state_len - hashlen_bits as usize;
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), in_hashmap.len() >> 6);
+    let chunk_len = in_hashmap.len() / chunk_num;
+    in_hashmap
+        .chunks(chunk_len)
+        .zip(out_hashmap.chunks_mut(chunk_len))
+        .par_bridge()
+        .for_each(
+            |(in_hashchunk, out_hashchunk)| {
+                for (inhe, outhe) in in_hashchunk.iter().zip(out_hashchunk.iter()) {}
+            },
+        );
+}
+
+//
+// main solver code
+//
 
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     uint32_t* output_u = ((uint32_t*)output) + idx *
