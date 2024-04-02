@@ -324,9 +324,15 @@ fn join_hashmap_itself_cpu(
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), in_hashmap.len() >> 6);
     let chunk_len = in_hashmap.len() / chunk_num;
     let state_mask = (1u64 << (state_len - 1)) - 1;
-    for v in preds_update.iter() {
-        v.store(0, atomic::Ordering::SeqCst);
-    }
+    // zeroing predecessors updates
+    preds_update
+        .chunks(chunk_len)
+        .par_bridge()
+        .for_each(|chunk| {
+            for v in chunk {
+                v.store(0, atomic::Ordering::SeqCst);
+            }
+        });
     // main routine
     in_hashmap
         .chunks(chunk_len)
@@ -364,9 +370,15 @@ fn join_hashmap_itself_cpu(
             }
         });
     // finally add predecessors updates to output hashmap
-    for (he, pred_update) in out_hashmap.iter_mut().zip(preds_update.iter()) {
-        he.predecessors += pred_update.load(atomic::Ordering::SeqCst);
-    }
+    out_hashmap
+        .chunks_mut(chunk_len)
+        .zip(preds_update.chunks(chunk_len))
+        .par_bridge()
+        .for_each(|(hchunk, pchunk)| {
+            for (he, pred_update) in hchunk.iter_mut().zip(pchunk.iter()) {
+                he.predecessors += pred_update.load(atomic::Ordering::SeqCst);
+            }
+        });
 }
 
 //
