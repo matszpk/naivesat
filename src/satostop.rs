@@ -20,7 +20,10 @@ use rayon::prelude::*;
 use std::fs;
 use std::ops::Range;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{self, AtomicU32},
+    Arc,
+};
 use std::time::SystemTime;
 
 // HashMap entry structure
@@ -299,7 +302,20 @@ impl OpenCLJoinToHashMap {
 // join_hashmap_itself - join hash entries with other hash entries in hashmap
 //
 
-fn join_hashmap_itself(state_len: usize, in_hashmap: &[HashEntry], out_hashmap: &mut [HashEntry]) {
+fn create_vec_of_atomic_u32(len: usize) -> Arc<Vec<AtomicU32>> {
+    Arc::new(
+        std::iter::repeat_with(|| AtomicU32::new(0))
+            .take(len)
+            .collect::<Vec<_>>(),
+    )
+}
+
+fn join_hashmap_itself_cpu(
+    state_len: usize,
+    preds_update: Arc<Vec<AtomicU32>>,
+    in_hashmap: &[HashEntry],
+    out_hashmap: &mut [HashEntry],
+) {
     assert_eq!(in_hashmap.len(), out_hashmap.len());
     assert_eq!(in_hashmap.len().count_ones(), 1);
     let hashlen_bits = usize::BITS - in_hashmap.len().leading_zeros() - 1;
@@ -307,15 +323,45 @@ fn join_hashmap_itself(state_len: usize, in_hashmap: &[HashEntry], out_hashmap: 
     let cpu_num = rayon::current_num_threads();
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), in_hashmap.len() >> 6);
     let chunk_len = in_hashmap.len() / chunk_num;
+    let state_mask = (1u64 << (state_len - 1)) - 1;
+    for v in preds_update.iter() {
+        v.store(0, atomic::Ordering::SeqCst);
+    }
+    // main routine
     in_hashmap
         .chunks(chunk_len)
         .zip(out_hashmap.chunks_mut(chunk_len))
         .par_bridge()
-        .for_each(
-            |(in_hashchunk, out_hashchunk)| {
-                for (inhe, outhe) in in_hashchunk.iter().zip(out_hashchunk.iter()) {}
-            },
-        );
+        .for_each(|(in_hashchunk, out_hashchunk)| {
+            for (inhe, outhe) in in_hashchunk.iter().zip(out_hashchunk.iter_mut()) {
+                if inhe.state == HASH_STATE_USED {
+                    let next_hash = hash_function_64(state_len, inhe.next);
+                    let nexthe = &in_hashmap[next_hash >> hashentry_shift];
+                    if nexthe.current == inhe.next {
+                        // if next found in hashmap entry
+                        outhe.current = inhe.current;
+                        outhe.next = nexthe.next;
+                        let (res, ov) = inhe.steps.overflowing_add(outhe.steps);
+                        outhe.steps = res;
+                        outhe.state = nexthe.state;
+                        if outhe.state == HASH_STATE_USED {
+                            if ov || res > state_mask {
+                                // if overflow of steps or steps greater than max step number.
+                                // then loop
+                                outhe.state = HASH_STATE_LOOPED;
+                            }
+                        }
+                        outhe.predecessors = inhe.predecessors;
+                        // update predecessors update for output hashmap
+                        preds_update[next_hash >> hashentry_shift]
+                            .fetch_add(1, atomic::Ordering::SeqCst);
+                    }
+                }
+            }
+        });
+    for (he, pred_update) in out_hashmap.iter_mut().zip(preds_update.iter()) {
+        he.predecessors += pred_update.load(atomic::Ordering::SeqCst);
+    }
 }
 
 //
