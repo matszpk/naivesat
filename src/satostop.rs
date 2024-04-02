@@ -6,9 +6,9 @@ use gatenative::*;
 use gatesim::*;
 
 use clap::Parser;
-use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 use opencl3::command_queue::CommandQueue;
 use opencl3::context::Context;
+use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 use opencl3::error_codes::ClError;
 use opencl3::kernel::{ExecuteKernel, Kernel};
 use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
@@ -191,22 +191,110 @@ fn join_to_hashmap_cpu(
         });
 }
 
+const JOIN_TO_HASHMAP_OPENCL_CODE: &str = r##"
+struct HashEntry {
+    ulong current,
+    ulong next,
+    ulong steps,
+    uint predecessors,
+    uint state
+}
+
+#define HASH_STATE_UNUSED (0)
+#define HASH_STATE_USED (1)
+#define HASH_STATE_STOPPED (2)
+#define HASH_STATE_LOOPED (3)
+#define HASH_STATE_RESERVED_BY_OTHER_FLAG (4)
+
+kernel join_to_hashmap(ulong arg, ulong hashmap_len, const global uint* outputs,
+        global uint* hashmap) {
+    const size_t idx = get_global_id(0);
+    if (idx < hashmap_len)
+        return;
+    const ulong arg_start = arg << ARG_BIT_PLACE;
+    const ulong arg_end = arg_start + (1ULL << ARG_BIT_PLACE);
+    global HashEntry* he = hashmap + idx;
+    if (he->state == HASH_STATE_USED && arg_start <= he->next && he->next < arg_end) {
+        const ulong state_mask = (1ULL << (OUTPUT_LEN - 1)) - 1ULL;
+#if WORD_PER_ELEM == 2
+        const size_t output_entry_start = (he->next - arg_start) << 1;
+        const ulong output = ((ulong)outputs[output_entry_start]) |
+            (((ulong)outputs[output_entry_start + 1]) << 32);
+#else
+        const ulong output = outputs[he->next - arg_start];
+#endif
+        const ulong old_next = he->next;
+        he->next = output & state_mask;
+        if (((output >> (OUTPUT_LEN - 1)) & 1) != 0) {
+            he->state = HASH_STATE_STOPPED;
+        } else if (state_mask <= he->steps || he->next == he->current || he->next == old_next) {
+            he->state = HASH_STATE_LOOPED;
+        } else {
+            he->state = HASH_STATE_USED;
+        }
+        he->steps += 1;
+    }
+}
+"##;
+
 struct OpenCLJoinToHashMap {
     output_len: usize,
     arg_bit_place: usize,
     cmd_queue: Arc<CommandQueue>,
+    group_len: usize,
     kernel: Kernel,
 }
 
 impl OpenCLJoinToHashMap {
-    // fn new(output_len: usize, arg_bit_place: usize, cmd_queue: Arc<CommandQueue>) {
-    //     OpenCLJoinToHashMap {
-    //         output_len,
-    //         arg_bit_place,
-    //         cmd_queue,
-    //         //kernel: prog
-    //     }
-    // }
+    fn new(
+        output_len: usize,
+        arg_bit_place: usize,
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+    ) -> Self {
+        let device = Device::new(context.devices()[0]);
+        let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
+        let word_per_elem = (output_len + 31) >> 5;
+        let defs = format!(
+            "-DOUTPUT_LEN=({}) -DARG_BIT_PLACE=({}) -DWORD_PER_ELEM=({})",
+            output_len, arg_bit_place, word_per_elem
+        );
+        let program =
+            Program::create_and_build_from_source(&context, JOIN_TO_HASHMAP_OPENCL_CODE, &defs)
+                .unwrap();
+        OpenCLJoinToHashMap {
+            output_len,
+            arg_bit_place,
+            cmd_queue,
+            group_len,
+            kernel: Kernel::create(&program, "join_to_hashmap").unwrap(),
+        }
+    }
+
+    fn execute(
+        &self,
+        arg: u64,
+        hashmap_len: usize,
+        outputs: &Buffer<u32>,
+        hashmap: &mut Buffer<HashEntry>,
+    ) {
+        let cl_arg = cl_ulong::try_from(arg).unwrap();
+        let cl_hashmap_len = cl_ulong::try_from(hashmap_len).unwrap();
+        unsafe {
+            ExecuteKernel::new(&self.kernel)
+                .set_arg(&cl_arg)
+                .set_arg(&cl_hashmap_len)
+                .set_arg(&outputs)
+                .set_arg(&hashmap)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    ((hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)
+                .unwrap();
+            self.cmd_queue.finish().unwrap();
+        }
+    }
 }
 
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
