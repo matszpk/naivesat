@@ -514,9 +514,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_join_to_hashmap_cpu() {
-        // 24-bit
+    fn join_to_hashmap_cpu_testcase_data_1(
+    ) -> (usize, usize, u64, Vec<u32>, Vec<HashEntry>, Vec<HashEntry>) {
         let output_len = 24 + 1;
         let arg_bit_place = 16;
         let arg: u64 = 173;
@@ -533,7 +532,7 @@ mod tests {
             outputs[59045] = 0x77da1b | (1 << 24);
             outputs
         };
-        let mut hashmap = {
+        let hashmap = {
             let mut hashmap = vec![
                 HashEntry {
                     current: 0,
@@ -631,7 +630,6 @@ mod tests {
             };
             hashmap
         };
-        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
         let expected_hashmap = {
             let mut hashmap = vec![
                 HashEntry {
@@ -730,11 +728,18 @@ mod tests {
             };
             hashmap
         };
-        for (i, he) in hashmap.into_iter().enumerate() {
-            assert_eq!(expected_hashmap[i], he, "{}: {}", 24, i);
-        }
+        (
+            output_len,
+            arg_bit_place,
+            arg,
+            outputs,
+            hashmap,
+            expected_hashmap,
+        )
+    }
 
-        // 32-bit
+    fn join_to_hashmap_cpu_testcase_data_2(
+    ) -> (usize, usize, u64, Vec<u32>, Vec<HashEntry>, Vec<HashEntry>) {
         let output_len = 32 + 1;
         let arg_bit_place = 24;
         let arg: u64 = 119;
@@ -760,7 +765,7 @@ mod tests {
             outputs[2 * 5904531 + 1] = 1;
             outputs
         };
-        let mut hashmap = {
+        let hashmap = {
             let mut hashmap = vec![
                 HashEntry {
                     current: 0,
@@ -858,7 +863,6 @@ mod tests {
             };
             hashmap
         };
-        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
         let expected_hashmap = {
             let mut hashmap = vec![
                 HashEntry {
@@ -957,11 +961,18 @@ mod tests {
             };
             hashmap
         };
-        for (i, he) in hashmap.into_iter().enumerate() {
-            assert_eq!(expected_hashmap[i], he, "{}: {}", 32, i);
-        }
+        (
+            output_len,
+            arg_bit_place,
+            arg,
+            outputs,
+            hashmap,
+            expected_hashmap,
+        )
+    }
 
-        // 40-bit
+    fn join_to_hashmap_cpu_testcase_data_3(
+    ) -> (usize, usize, u64, Vec<u32>, Vec<HashEntry>, Vec<HashEntry>) {
         let output_len = 40 + 1;
         let arg_bit_place = 24;
         let arg: u64 = 43051;
@@ -987,7 +998,7 @@ mod tests {
             outputs[2 * 5904531 + 1] = 142 | (1 << 8);
             outputs
         };
-        let mut hashmap = {
+        let hashmap = {
             let mut hashmap = vec![
                 HashEntry {
                     current: 0,
@@ -1085,7 +1096,6 @@ mod tests {
             };
             hashmap
         };
-        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
         let expected_hashmap = {
             let mut hashmap = vec![
                 HashEntry {
@@ -1184,6 +1194,38 @@ mod tests {
             };
             hashmap
         };
+        (
+            output_len,
+            arg_bit_place,
+            arg,
+            outputs,
+            hashmap,
+            expected_hashmap,
+        )
+    }
+
+    #[test]
+    fn test_join_to_hashmap_cpu() {
+        // 24-bit
+        let (output_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
+            join_to_hashmap_cpu_testcase_data_1();
+        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
+        for (i, he) in hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}: {}", 24, i);
+        }
+
+        // 32-bit
+        let (output_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
+            join_to_hashmap_cpu_testcase_data_2();
+        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
+        for (i, he) in hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}: {}", 32, i);
+        }
+
+        // 40-bit
+        let (output_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
+            join_to_hashmap_cpu_testcase_data_3();
+        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
         for (i, he) in hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}: {}", 40, i);
         }
