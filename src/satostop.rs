@@ -144,6 +144,10 @@ const HASH_STATE_STOPPED: u32 = 2;
 const HASH_STATE_LOOPED: u32 = 3;
 const HASH_STATE_RESERVED_BY_OTHER_FLAG: u32 = 4;
 
+//
+// join_to_hashmap - join outputs to hashmap
+//
+
 fn join_to_hashmap_cpu(
     output_len: usize,
     arg_bit_place: usize,
@@ -169,6 +173,7 @@ fn join_to_hashmap_cpu(
                     // update hash entry next field.
                     let output_entry_start =
                         word_per_elem * usize::try_from(he.next - arg_start).unwrap();
+                    // get output state
                     let output = if word_per_elem == 2 {
                         (outputs[output_entry_start] as u64)
                             | ((outputs[output_entry_start + 1] as u64) << 32)
@@ -178,9 +183,13 @@ fn join_to_hashmap_cpu(
                     let old_next = he.next;
                     he.next = output & state_mask;
                     he.state = if ((output >> (output_len - 1)) & 1) != 0 {
+                        // if stop enabled from output
                         HASH_STATE_STOPPED
                     } else if state_mask <= he.steps || he.next == he.current || he.next == old_next
                     {
+                        // if step number is bigger than max step number or
+                        // previous next equal to new next or current in hash entry equal to
+                        // new next then it is loop
                         HASH_STATE_LOOPED
                     } else {
                         HASH_STATE_USED
