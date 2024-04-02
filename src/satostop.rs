@@ -355,7 +355,11 @@ fn join_hashmap_itself_cpu(
                         // update predecessors update for output hashmap
                         preds_update[next_hash >> hashentry_shift]
                             .fetch_add(1, atomic::Ordering::SeqCst);
+                    } else {
+                        *outhe = *inhe;
                     }
+                } else {
+                    *outhe = *inhe;
                 }
             }
         });
