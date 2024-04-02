@@ -192,13 +192,13 @@ fn join_to_hashmap_cpu(
 }
 
 const JOIN_TO_HASHMAP_OPENCL_CODE: &str = r##"
-struct HashEntry {
-    ulong current,
-    ulong next,
-    ulong steps,
-    uint predecessors,
-    uint state
-}
+typedef struct _HashEntry {
+    ulong current;
+    ulong next;
+    ulong steps;
+    uint predecessors;
+    uint state;
+} HashEntry;
 
 #define HASH_STATE_UNUSED (0)
 #define HASH_STATE_USED (1)
@@ -206,9 +206,9 @@ struct HashEntry {
 #define HASH_STATE_LOOPED (3)
 #define HASH_STATE_RESERVED_BY_OTHER_FLAG (4)
 
-kernel join_to_hashmap(ulong arg, const global uint* outputs, global uint* hashmap) {
+kernel void join_to_hashmap(ulong arg, const global uint* outputs, global HashEntry* hashmap) {
     const size_t idx = get_global_id(0);
-    if (idx < HASHMAP_LEN)
+    if (idx >= HASHMAP_LEN)
         return;
     const ulong arg_start = arg << ARG_BIT_PLACE;
     const ulong arg_end = arg_start + (1ULL << ARG_BIT_PLACE);
@@ -237,8 +237,6 @@ kernel join_to_hashmap(ulong arg, const global uint* outputs, global uint* hashm
 "##;
 
 struct OpenCLJoinToHashMap {
-    output_len: usize,
-    arg_bit_place: usize,
     hashmap_len: usize,
     cmd_queue: Arc<CommandQueue>,
     group_len: usize,
@@ -264,8 +262,6 @@ impl OpenCLJoinToHashMap {
             Program::create_and_build_from_source(&context, JOIN_TO_HASHMAP_OPENCL_CODE, &defs)
                 .unwrap();
         OpenCLJoinToHashMap {
-            output_len,
-            arg_bit_place,
             hashmap_len,
             cmd_queue,
             group_len,
@@ -278,8 +274,8 @@ impl OpenCLJoinToHashMap {
         unsafe {
             ExecuteKernel::new(&self.kernel)
                 .set_arg(&cl_arg)
-                .set_arg(&outputs)
-                .set_arg(&hashmap)
+                .set_arg(outputs)
+                .set_arg(hashmap)
                 .set_local_work_size(self.group_len)
                 .set_global_work_size(
                     ((self.hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
@@ -1336,6 +1332,114 @@ mod tests {
             join_to_hashmap_cpu_testcase_data_3();
         join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
         for (i, he) in hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}: {}", 40, i);
+        }
+    }
+
+    fn join_to_hashmap_opencl_buffers(
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+        outputs: &[u32],
+        hashmap: &[HashEntry],
+    ) -> (Buffer<u32>, Buffer<HashEntry>, usize) {
+        unsafe {
+            let mut outputs_buffer = Buffer::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                outputs.len(),
+                std::ptr::null_mut(),
+            )
+            .unwrap();
+            let mut hashmap_buffer = Buffer::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                hashmap.len(),
+                std::ptr::null_mut(),
+            )
+            .unwrap();
+            cmd_queue
+                .enqueue_write_buffer(&mut outputs_buffer, CL_BLOCKING, 0, &outputs, &[])
+                .unwrap();
+            cmd_queue
+                .enqueue_write_buffer(&mut hashmap_buffer, CL_BLOCKING, 0, &hashmap, &[])
+                .unwrap();
+            (outputs_buffer, hashmap_buffer, hashmap.len())
+        }
+    }
+
+    #[test]
+    fn test_join_to_hashmap_opencl() {
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        let context = Arc::new(Context::from_device(&device).unwrap());
+        #[allow(deprecated)]
+        let cmd_queue =
+            Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
+        // 24-bit
+        let (output_len, arg_bit_place, arg, outputs, hashmap, expected_hashmap) =
+            join_to_hashmap_cpu_testcase_data_1();
+        let (outputs_buffer, mut hashmap_buffer, hashmap_len) =
+            join_to_hashmap_opencl_buffers(context.clone(), cmd_queue.clone(), &outputs, &hashmap);
+        let exec = OpenCLJoinToHashMap::new(
+            output_len,
+            arg_bit_place,
+            hashmap_len,
+            context.clone(),
+            cmd_queue.clone(),
+        );
+        exec.execute(arg, &outputs_buffer, &mut hashmap_buffer);
+        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        unsafe {
+            cmd_queue
+                .enqueue_read_buffer(&hashmap_buffer, CL_BLOCKING, 0, &mut out_hashmap, &[])
+                .unwrap();
+        }
+        for (i, he) in out_hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}: {}", 24, i);
+        }
+
+        // 32-bit
+        let (output_len, arg_bit_place, arg, outputs, hashmap, expected_hashmap) =
+            join_to_hashmap_cpu_testcase_data_2();
+        let (outputs_buffer, mut hashmap_buffer, hashmap_len) =
+            join_to_hashmap_opencl_buffers(context.clone(), cmd_queue.clone(), &outputs, &hashmap);
+        let exec = OpenCLJoinToHashMap::new(
+            output_len,
+            arg_bit_place,
+            hashmap_len,
+            context.clone(),
+            cmd_queue.clone(),
+        );
+        exec.execute(arg, &outputs_buffer, &mut hashmap_buffer);
+        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        unsafe {
+            cmd_queue
+                .enqueue_read_buffer(&hashmap_buffer, CL_BLOCKING, 0, &mut out_hashmap, &[])
+                .unwrap();
+        }
+        for (i, he) in out_hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}: {}", 32, i);
+        }
+
+        // 40-bit
+        let (output_len, arg_bit_place, arg, outputs, hashmap, expected_hashmap) =
+            join_to_hashmap_cpu_testcase_data_3();
+        let (outputs_buffer, mut hashmap_buffer, hashmap_len) =
+            join_to_hashmap_opencl_buffers(context.clone(), cmd_queue.clone(), &outputs, &hashmap);
+        let exec = OpenCLJoinToHashMap::new(
+            output_len,
+            arg_bit_place,
+            hashmap_len,
+            context.clone(),
+            cmd_queue.clone(),
+        );
+        exec.execute(arg, &outputs_buffer, &mut hashmap_buffer);
+        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        unsafe {
+            cmd_queue
+                .enqueue_read_buffer(&hashmap_buffer, CL_BLOCKING, 0, &mut out_hashmap, &[])
+                .unwrap();
+        }
+        for (i, he) in out_hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}: {}", 40, i);
         }
     }
