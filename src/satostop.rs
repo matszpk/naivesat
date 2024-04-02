@@ -471,7 +471,7 @@ impl OpenCLJoinHashMapItself {
 
     fn execute(&self, in_hashmap: &Buffer<HashEntry>, out_hashmap: &mut Buffer<HashEntry>) {
         unsafe {
-            ExecuteKernel::new(&self.kernel)
+            ExecuteKernel::new(&self.kernel_zero)
                 .set_arg(out_hashmap)
                 .set_local_work_size(self.group_len)
                 .set_global_work_size(
