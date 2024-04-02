@@ -2043,11 +2043,54 @@ mod tests {
         let hbits = 15;
         let (hashmap, expected_hashmap) = join_hashmap_itself_data(state_len, hbits);
         let preds_update = create_vec_of_atomic_u32(hashmap.len());
-        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        let mut out_hashmap = vec![
+            HashEntry {
+                current: 1115774,
+                next: 494022,
+                steps: 450589390239,
+                state: 8459021,
+                predecessors: 489481,
+            };
+            hashmap.len()
+        ];
         join_hashmap_itself_cpu(state_len, preds_update.clone(), &hashmap, &mut out_hashmap);
         for (i, he) in out_hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}", i);
         }
+    }
+
+    #[test]
+    fn test_join_hashmap_itself_opencl() {
+        let state_len = 44;
+        let hbits = 15;
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        let context = Arc::new(Context::from_device(&device).unwrap());
+        #[allow(deprecated)]
+        let cmd_queue =
+            Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
+        let (hashmap, expected_hashmap) = join_hashmap_itself_data(state_len, hbits);
+        let mut in_hashmap_buffer = unsafe {
+            Buffer::<HashEntry>::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                hashmap.len(),
+                std::ptr::null_mut(),
+            )
+            .unwrap()
+        };
+        let mut out_hashmap_buffer = unsafe {
+            Buffer::<HashEntry>::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                hashmap.len(),
+                std::ptr::null_mut(),
+            )
+            .unwrap();
+        };
+        // unsafe {
+        //     cmd_queue.enqueue_fill_buffer(&out_hashmap_buffer,
+        // }
+        // cmd_queue.finish();
     }
 }
 
