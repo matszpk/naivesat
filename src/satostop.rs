@@ -754,6 +754,10 @@ mod tests {
             outputs[2 * 5167006 + 1] = 0;
             outputs[2 * 5972782] = 0x210689a1;
             outputs[2 * 5972782 + 1] = 1;
+            outputs[2 * 5902199] = 0x11aa2233;
+            outputs[2 * 5902199 + 1] = 0;
+            outputs[2 * 5904531] = 0x77da1b1c;
+            outputs[2 * 5904531 + 1] = 1;
             outputs
         };
         let mut hashmap = {
@@ -812,12 +816,28 @@ mod tests {
                 predecessors: 10,
                 state: HASH_STATE_USED,
             };
+            // to loop 3
+            hashmap[14072] = HashEntry {
+                current: 0x2589fa11,
+                next: (arg << arg_bit_place) | 5902199,
+                steps: (1 << (output_len - 1)) - 1,
+                predecessors: 5,
+                state: HASH_STATE_USED,
+            };
             // stop not loop
             hashmap[12061] = HashEntry {
                 current: 0x210689a1,
                 next: (arg << arg_bit_place) | 5972782,
                 steps: 44195,
                 predecessors: 12,
+                state: HASH_STATE_USED,
+            };
+            // stop not loop 2
+            hashmap[14456] = HashEntry {
+                current: 0xfa2ca5d4,
+                next: (arg << arg_bit_place) | 5904531,
+                steps: (1 << (output_len - 1)) - 1,
+                predecessors: 5,
                 state: HASH_STATE_USED,
             };
             // used and belog arg range
@@ -895,12 +915,28 @@ mod tests {
                 predecessors: 10,
                 state: HASH_STATE_LOOPED,
             };
+            // to loop 3
+            hashmap[14072] = HashEntry {
+                current: 0x2589fa11,
+                next: 0x11aa2233,
+                steps: 1 << (output_len - 1),
+                predecessors: 5,
+                state: HASH_STATE_LOOPED,
+            };
             // stop not loop
             hashmap[12061] = HashEntry {
                 current: 0x210689a1,
                 next: 0x210689a1,
                 steps: 44196,
                 predecessors: 12,
+                state: HASH_STATE_STOPPED,
+            };
+            // stop not loop 2
+            hashmap[14456] = HashEntry {
+                current: 0xfa2ca5d4,
+                next: 0x77da1b1c,
+                steps: 1 << (output_len - 1),
+                predecessors: 5,
                 state: HASH_STATE_STOPPED,
             };
             // used and belog arg range
@@ -945,6 +981,10 @@ mod tests {
             outputs[2 * 5167006 + 1] = (arg >> 8) as u32;
             outputs[2 * 5972782] = 0x210689a1;
             outputs[2 * 5972782 + 1] = 206 | (1 << 8);
+            outputs[2 * 5902199] = 0x11aa2233;
+            outputs[2 * 5902199 + 1] = 93;
+            outputs[2 * 5904531] = 0x77da1b1c;
+            outputs[2 * 5904531 + 1] = 142 | (1 << 8);
             outputs
         };
         let mut hashmap = {
@@ -1003,12 +1043,28 @@ mod tests {
                 predecessors: 10,
                 state: HASH_STATE_USED,
             };
+            // to loop 3
+            hashmap[14072] = HashEntry {
+                current: 0x2589fa114a,
+                next: (arg << arg_bit_place) | 5902199,
+                steps: (1 << (output_len - 1)) - 1,
+                predecessors: 5,
+                state: HASH_STATE_USED,
+            };
             // stop not loop
             hashmap[12061] = HashEntry {
                 current: 0x21fb0689a1,
                 next: (arg << arg_bit_place) | 5972782,
                 steps: 44195,
                 predecessors: 12,
+                state: HASH_STATE_USED,
+            };
+            // stop not loop 2
+            hashmap[14456] = HashEntry {
+                current: 0xfa218ca5d4,
+                next: (arg << arg_bit_place) | 5904531,
+                steps: (1 << (output_len - 1)) - 1,
+                predecessors: 5,
                 state: HASH_STATE_USED,
             };
             // used and belog arg range
@@ -1086,12 +1142,28 @@ mod tests {
                 predecessors: 10,
                 state: HASH_STATE_LOOPED,
             };
+            // to loop 3
+            hashmap[14072] = HashEntry {
+                current: 0x2589fa114a,
+                next: 0x11aa2233 | (93 << 32),
+                steps: 1 << (output_len - 1),
+                predecessors: 5,
+                state: HASH_STATE_LOOPED,
+            };
             // stop not loop
             hashmap[12061] = HashEntry {
                 current: 0x21fb0689a1,
                 next: 0x210689a1 | (206 << 32),
                 steps: 44196,
                 predecessors: 12,
+                state: HASH_STATE_STOPPED,
+            };
+            // stop not loop 2
+            hashmap[14456] = HashEntry {
+                current: 0xfa218ca5d4,
+                next: 0x77da1b1c | (142 << 32),
+                steps: 1 << (output_len - 1),
+                predecessors: 5,
                 state: HASH_STATE_STOPPED,
             };
             // used and belog arg range
