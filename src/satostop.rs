@@ -1558,12 +1558,12 @@ mod tests {
         hashmap[idx] = e;
     }
 
-    #[test]
-    fn test_join_hashmap_itself_cpu() {
-        let state_len = 44;
-        let hbits = 15;
+    fn join_hashmap_itself_data(
+        state_len: usize,
+        hbits: usize,
+    ) -> (Vec<HashEntry>, Vec<HashEntry>) {
         let hashmap = {
-            let mut hashmap = vec![HashEntry::default(); 1 << 15];
+            let mut hashmap = vec![HashEntry::default(); 1 << hbits];
             hashmap_insert(
                 state_len,
                 hbits,
@@ -1749,11 +1749,8 @@ mod tests {
             // );
             hashmap
         };
-        let preds_update = create_vec_of_atomic_u32(hashmap.len());
-        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
-        join_hashmap_itself_cpu(state_len, preds_update.clone(), &hashmap, &mut out_hashmap);
         let expected_hashmap = {
-            let mut hashmap = vec![HashEntry::default(); 1 << 15];
+            let mut hashmap = vec![HashEntry::default(); 1 << hbits];
             hashmap_insert(
                 state_len,
                 hbits,
@@ -1925,6 +1922,17 @@ mod tests {
             );
             hashmap
         };
+        (hashmap, expected_hashmap)
+    }
+
+    #[test]
+    fn test_join_hashmap_itself_cpu() {
+        let state_len = 44;
+        let hbits = 15;
+        let (mut hashmap, expected_hashmap) = join_hashmap_itself_data(state_len, hbits);
+        let preds_update = create_vec_of_atomic_u32(hashmap.len());
+        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        join_hashmap_itself_cpu(state_len, preds_update.clone(), &hashmap, &mut out_hashmap);
         for (i, he) in out_hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}", i);
         }
