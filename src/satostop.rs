@@ -7,12 +7,21 @@ use gatesim::*;
 
 use clap::Parser;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
+use opencl3::command_queue::CommandQueue;
+use opencl3::context::Context;
+use opencl3::error_codes::ClError;
+use opencl3::kernel::{ExecuteKernel, Kernel};
+use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
+use opencl3::program::Program;
+use opencl3::types::{cl_mem, cl_mem_flags, cl_uint, cl_ulong, CL_BLOCKING};
+
 use rayon::prelude::*;
 
 use std::fs;
 use std::ops::Range;
 use std::str::FromStr;
-use std::time::{Duration, SystemTime};
+use std::sync::Arc;
+use std::time::SystemTime;
 
 // HashMap entry structure
 // current: State - current state
@@ -119,23 +128,6 @@ const HASH_FUNC_OPENCL_DEF: &str = r##"
 }
 "##;
 
-const AGGR_OUTPUT_CPU_CODE: &str = r##"{
-    uint32_t* output_u = ((uint32_t*)output) + idx *
-        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
-#if OUTPUT_NUM <= 32
-    OUTPUT_TRANSFORM_FIRST_32(output_u);
-#else
-    uint32_t i;
-    uint32_t temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
-    OUTPUT_TRANSFORM_FIRST_32(temp);
-    OUTPUT_TRANSFORM_SECOND_32(temp + 32 * (TYPE_LEN >> 5));
-    for (i = 0; i < TYPE_LEN; i++) {
-        output_u[i*2] = temp[i];
-        output_u[i*2 + 1] = temp[i + TYPE_LEN];
-    }
-#endif
-}"##;
-
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 struct HashEntry {
@@ -198,6 +190,41 @@ fn join_to_hashmap_cpu(
             }
         });
 }
+
+struct OpenCLJoinToHashMap {
+    output_len: usize,
+    arg_bit_place: usize,
+    cmd_queue: Arc<CommandQueue>,
+    kernel: Kernel,
+}
+
+impl OpenCLJoinToHashMap {
+    // fn new(output_len: usize, arg_bit_place: usize, cmd_queue: Arc<CommandQueue>) {
+    //     OpenCLJoinToHashMap {
+    //         output_len,
+    //         arg_bit_place,
+    //         cmd_queue,
+    //         //kernel: prog
+    //     }
+    // }
+}
+
+const AGGR_OUTPUT_CPU_CODE: &str = r##"{
+    uint32_t* output_u = ((uint32_t*)output) + idx *
+        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
+#if OUTPUT_NUM <= 32
+    OUTPUT_TRANSFORM_FIRST_32(output_u);
+#else
+    uint32_t i;
+    uint32_t temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
+    OUTPUT_TRANSFORM_FIRST_32(temp);
+    OUTPUT_TRANSFORM_SECOND_32(temp + 32 * (TYPE_LEN >> 5));
+    for (i = 0; i < TYPE_LEN; i++) {
+        output_u[i*2] = temp[i];
+        output_u[i*2 + 1] = temp[i + TYPE_LEN];
+    }
+#endif
+}"##;
 
 fn do_solve_with_cpu_mapper<'a>(
     mut mapper: CPUBasicMapperBuilder<'a>,
