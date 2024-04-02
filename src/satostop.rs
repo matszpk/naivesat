@@ -347,7 +347,7 @@ fn join_hashmap_itself_cpu(
                         // if next found in hashmap entry
                         outhe.current = inhe.current;
                         outhe.next = nexthe.next;
-                        let (res, ov) = inhe.steps.overflowing_add(outhe.steps);
+                        let (res, ov) = inhe.steps.overflowing_add(nexthe.steps);
                         outhe.steps = res;
                         outhe.state = nexthe.state;
                         if outhe.state == HASH_STATE_USED {
@@ -1539,6 +1539,394 @@ mod tests {
         }
         for (i, he) in out_hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}: {}", 40, i);
+        }
+    }
+
+    fn hashmap_insert(state_len: usize, hbits: usize, hashmap: &mut [HashEntry], e: HashEntry) {
+        assert_eq!(e.current >> state_len, 0);
+        assert_eq!(e.next >> state_len, 0);
+        let idx = hash_function_64(state_len, e.current) >> (state_len - hbits);
+        assert!(
+            hashmap[idx].state == HASH_STATE_UNUSED,
+            "{} {} {}: {} {}",
+            state_len,
+            hbits,
+            idx,
+            e.current,
+            hashmap[idx].state
+        );
+        hashmap[idx] = e;
+    }
+
+    #[test]
+    fn test_join_hashmap_itself_cpu() {
+        let state_len = 44;
+        let hbits = 15;
+        let hashmap = {
+            let mut hashmap = vec![HashEntry::default(); 1 << 15];
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xda02489490d,
+                    next: 0xe6730bc0114, // stopped
+                    steps: 3416,
+                    state: HASH_STATE_USED,
+                    predecessors: 7,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x50146d0acba,
+                    next: 0xc2a9588207b,
+                    steps: 771,
+                    state: HASH_STATE_USED,
+                    predecessors: 16,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x6bc3592a5d3,
+                    next: 0x94491894941,
+                    steps: 9940295402168,
+                    state: HASH_STATE_USED,
+                    predecessors: 16,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x7e05689bca1,
+                    next: 0x6bc3592a5d3,
+                    steps: 11058562066515,
+                    state: HASH_STATE_USED,
+                    predecessors: 18,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xed0a90551bc,
+                    next: 0xd0a9551b05d,
+                    steps: 76711,
+                    state: HASH_STATE_USED,
+                    predecessors: 27,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x14dc0a0452e,
+                    next: 0xa52065bc0a0,
+                    steps: 6829,
+                    state: HASH_STATE_USED,
+                    predecessors: 24,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xe6730bc0114,
+                    next: 0x0123494411a,
+                    steps: 2415,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 19,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xc2a9588207b,
+                    next: 0x293939391,
+                    steps: 2831,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 5,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xa52065bc0a0,
+                    next: 0xabcdefaaa,
+                    steps: 826611,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 22,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xd0a9551b05d,
+                    next: 0x55690a11a,
+                    steps: 1928921,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 14,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x26d0a46141c,
+                    next: 0xc562019a014,
+                    steps: 76792,
+                    state: HASH_STATE_USED,
+                    predecessors: 4,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xc562019a014,
+                    next: 0x93102144323,
+                    steps: 385491,
+                    state: HASH_STATE_USED,
+                    predecessors: 14,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x4a0589502a1,
+                    next: 0x70489302935,
+                    steps: 556111,
+                    state: HASH_STATE_USED,
+                    predecessors: 11,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x6d0a942961a, // this same hidx but not same current
+                    next: 0x1043aabbcc7,
+                    steps: 88211,
+                    state: HASH_STATE_USED,
+                    predecessors: 16,
+                },
+            );
+            // for i in 0..10000000 {
+            //     let state = 0x6d0a9405157 + i;
+            //     let hidx = hash_function_64(state_len, state) >> (state_len - hbits);
+            //     if i % 1000 == 0 {
+            //         println!("Hidx: {} {}", i, hidx);
+            //     }
+            //     if hidx == 11900 {
+            //         println!("State: 0x{:016x}", state);
+            //         break;
+            //     }
+            // }
+            // println!(
+            //     "Hashfunc: {}",
+            //     hash_function_64(state_len, 0x70489302935) >> (state_len - hbits)
+            // );
+            hashmap
+        };
+        let preds_update = create_vec_of_atomic_u32(hashmap.len());
+        let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        join_hashmap_itself_cpu(state_len, preds_update.clone(), &hashmap, &mut out_hashmap);
+        let expected_hashmap = {
+            let mut hashmap = vec![HashEntry::default(); 1 << 15];
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xda02489490d,
+                    next: 0x0123494411a, // stopped
+                    steps: 3416 + 2415,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 7,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x50146d0acba,
+                    next: 0x293939391,
+                    steps: 771 + 2831,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 16,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x6bc3592a5d3,
+                    next: 0x94491894941,
+                    steps: 9940295402168,
+                    state: HASH_STATE_USED,
+                    predecessors: 17,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x7e05689bca1,
+                    next: 0x94491894941,
+                    steps: 11058562066515 + 9940295402168,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 18,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xed0a90551bc,
+                    next: 0x55690a11a,
+                    steps: 76711 + 1928921,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 27,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x14dc0a0452e,
+                    next: 0xabcdefaaa,
+                    steps: 6829 + 826611,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 24,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xe6730bc0114,
+                    next: 0x0123494411a,
+                    steps: 2415,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 20,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xc2a9588207b,
+                    next: 0x293939391,
+                    steps: 2831,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 6,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xa52065bc0a0,
+                    next: 0xabcdefaaa,
+                    steps: 826611,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 23,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xd0a9551b05d,
+                    next: 0x55690a11a,
+                    steps: 1928921,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 15,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x26d0a46141c,
+                    next: 0x93102144323,
+                    steps: 76792 + 385491,
+                    state: HASH_STATE_USED,
+                    predecessors: 4,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xc562019a014,
+                    next: 0x93102144323,
+                    steps: 385491,
+                    state: HASH_STATE_USED,
+                    predecessors: 15,
+                },
+            );
+            // not joined
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x4a0589502a1,
+                    next: 0x70489302935,
+                    steps: 556111,
+                    state: HASH_STATE_USED,
+                    predecessors: 11,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x6d0a942961a, // this same hidx but not same current
+                    next: 0x1043aabbcc7,
+                    steps: 88211,
+                    state: HASH_STATE_USED,
+                    predecessors: 16,
+                },
+            );
+            hashmap
+        };
+        for (i, he) in out_hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}", i);
         }
     }
 }
