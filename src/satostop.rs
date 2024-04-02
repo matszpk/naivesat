@@ -359,6 +359,7 @@ fn join_hashmap_itself_cpu(
                 }
             }
         });
+    // finally add predecessors updates to output hashmap
     for (he, pred_update) in out_hashmap.iter_mut().zip(preds_update.iter()) {
         he.predecessors += pred_update.load(atomic::Ordering::SeqCst);
     }
