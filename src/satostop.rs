@@ -343,7 +343,7 @@ fn join_hashmap_itself_cpu(
                 if inhe.state == HASH_STATE_USED {
                     let next_hash = hash_function_64(state_len, inhe.next);
                     let nexthe = &in_hashmap[next_hash >> hashentry_shift];
-                    if nexthe.current == inhe.next {
+                    if nexthe.state != HASH_STATE_UNUSED && nexthe.current == inhe.next {
                         // if next found in hashmap entry
                         outhe.current = inhe.current;
                         outhe.next = nexthe.next;
