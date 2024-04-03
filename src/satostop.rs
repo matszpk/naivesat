@@ -370,7 +370,7 @@ fn create_vec_of_atomic_u32(len: usize) -> Arc<Vec<AtomicU32>> {
     )
 }
 
-fn join_hashmap_itself_cpu(
+fn join_hashmap_itself_and_check_solution_cpu(
     state_len: usize,
     preds_update: Arc<Vec<AtomicU32>>,
     in_hashmap: &[HashEntry],
@@ -459,7 +459,7 @@ fn join_hashmap_itself_cpu(
         });
 }
 
-const JOIN_HASHMAP_ITSELF_OPENCL_CODE: &str = r##"
+const JOIN_HASHMAP_ITSELF_AND_CHECK_SOLUTION_OPENCL_CODE: &str = r##"
 kernel void join_hashmap_itself_zero_pred(global HashEntry* out_hashmap) {
     const size_t idx = get_global_id(0);
     if (idx >= HASHMAP_LEN)
@@ -467,7 +467,7 @@ kernel void join_hashmap_itself_zero_pred(global HashEntry* out_hashmap) {
     out_hashmap[idx].predecessors = 0;
 }
 
-kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
+kernel void join_hashmap_itself_and_check_solution(const global HashEntry* in_hashmap,
         global HashEntry* out_hashmap) {
     const size_t idx = get_global_id(0);
     uint do_copy = 1;
@@ -512,7 +512,7 @@ kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
 }
 "##;
 
-struct OpenCLJoinHashMapItself {
+struct OpenCLJoinHashMapItselfAndCheckSolution {
     hashmap_len: usize,
     cmd_queue: Arc<CommandQueue>,
     group_len: usize,
@@ -520,7 +520,7 @@ struct OpenCLJoinHashMapItself {
     kernel: Kernel,
 }
 
-impl OpenCLJoinHashMapItself {
+impl OpenCLJoinHashMapItselfAndCheckSolution {
     fn new(
         state_len: usize,
         hashmap_len: usize,
@@ -537,14 +537,14 @@ impl OpenCLJoinHashMapItself {
         );
         let source = HASH_ENTRY_OPENCL_DEF.to_string()
             + HASH_FUNC_OPENCL_DEF
-            + JOIN_HASHMAP_ITSELF_OPENCL_CODE;
+            + JOIN_HASHMAP_ITSELF_AND_CHECK_SOLUTION_OPENCL_CODE;
         let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
-        OpenCLJoinHashMapItself {
+        OpenCLJoinHashMapItselfAndCheckSolution {
             hashmap_len,
             cmd_queue,
             group_len,
             kernel_zero: Kernel::create(&program, "join_hashmap_itself_zero_pred").unwrap(),
-            kernel: Kernel::create(&program, "join_hashmap_itself").unwrap(),
+            kernel: Kernel::create(&program, "join_hashmap_itself_and_check_solution").unwrap(),
         }
     }
 
@@ -1763,7 +1763,7 @@ mod tests {
         hashmap[idx] = e;
     }
 
-    struct JoinHashMapItselfData {
+    struct JoinHashMapItselfAndCheckSolutionData {
         state_len: usize,
         hbits: usize,
         hashmap: Vec<HashEntry>,
@@ -1778,7 +1778,7 @@ mod tests {
         expected_solution: Option<Solution>,
     }
 
-    fn join_hashmap_itself_data() -> JoinHashMapItselfData {
+    fn join_hashmap_itself_and_check_solution_data() -> JoinHashMapItselfAndCheckSolutionData {
         let state_len = 44;
         let hbits = 15;
         let unknown_bits = 20;
@@ -2205,7 +2205,7 @@ mod tests {
         };
         let expected_resolved_unknowns = resolved_unknowns.clone().load(atomic::Ordering::SeqCst);
         let expected_solution = None;
-        JoinHashMapItselfData {
+        JoinHashMapItselfAndCheckSolutionData {
             state_len,
             hbits,
             hashmap,
@@ -2222,8 +2222,8 @@ mod tests {
     }
 
     #[test]
-    fn test_join_hashmap_itself_cpu() {
-        let JoinHashMapItselfData {
+    fn test_join_hashmap_itself_and_check_solution_cpu() {
+        let JoinHashMapItselfAndCheckSolutionData {
             state_len,
             hbits,
             hashmap,
@@ -2236,7 +2236,7 @@ mod tests {
             expected_unknown_fills,
             expected_resolved_unknowns,
             expected_solution,
-        } = join_hashmap_itself_data();
+        } = join_hashmap_itself_and_check_solution_data();
         let preds_update = create_vec_of_atomic_u32(hashmap.len());
         let mut out_hashmap = vec![
             HashEntry {
@@ -2248,7 +2248,7 @@ mod tests {
             };
             hashmap.len()
         ];
-        join_hashmap_itself_cpu(
+        join_hashmap_itself_and_check_solution_cpu(
             state_len,
             preds_update.clone(),
             &hashmap,
@@ -2278,13 +2278,13 @@ mod tests {
     }
 
     #[test]
-    fn test_join_hashmap_itself_opencl() {
+    fn test_join_hashmap_itself_and_check_solution_opencl() {
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
         let context = Arc::new(Context::from_device(&device).unwrap());
         #[allow(deprecated)]
         let cmd_queue =
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
-        let JoinHashMapItselfData {
+        let JoinHashMapItselfAndCheckSolutionData {
             state_len,
             hbits,
             hashmap,
@@ -2297,7 +2297,7 @@ mod tests {
             expected_unknown_fills,
             expected_resolved_unknowns,
             expected_solution,
-        } = join_hashmap_itself_data();
+        } = join_hashmap_itself_and_check_solution_data();
         let mut in_hashmap_buffer = unsafe {
             Buffer::<HashEntry>::create(
                 &context,
@@ -2337,7 +2337,7 @@ mod tests {
                 .unwrap();
         }
         cmd_queue.finish().unwrap();
-        let join_itself = OpenCLJoinHashMapItself::new(
+        let join_itself = OpenCLJoinHashMapItselfAndCheckSolution::new(
             state_len,
             hashmap.len(),
             context.clone(),
