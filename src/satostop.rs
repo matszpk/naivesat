@@ -166,11 +166,11 @@ const HASH_STATE_RESERVED_BY_OTHER_FLAG: u32 = 4;
 // TODO: add checking solution to join_to_hashmap and join_hashmap_itself and to add....
 
 //
-// join_to_hashmap - join outputs to hashmap
+// join_to_hashmap - join outputs to hashmap entries
 //
 
 fn join_to_hashmap_cpu(
-    output_len: usize,
+    state_len: usize,
     arg_bit_place: usize,
     arg: u64,
     outputs: &[u32],
@@ -182,8 +182,8 @@ fn join_to_hashmap_cpu(
     let arg_start = arg << arg_bit_place;
     let arg_end = arg_start + (1u64 << arg_bit_place);
     // word_per_elem - elem length in outputs in words (can be 1 or 2).
-    let word_per_elem = (output_len + 31) >> 5;
-    let state_mask = (1u64 << (output_len - 1)) - 1;
+    let word_per_elem = (state_len + 1 + 31) >> 5;
+    let state_mask = (1u64 << state_len) - 1;
     hashmap
         .chunks_mut(chunk_len)
         .par_bridge()
@@ -202,7 +202,7 @@ fn join_to_hashmap_cpu(
                     };
                     let old_next = he.next;
                     he.next = output & state_mask;
-                    he.state = if ((output >> (output_len - 1)) & 1) != 0 {
+                    he.state = if ((output >> state_len) & 1) != 0 {
                         // if stop enabled from output
                         HASH_STATE_STOPPED
                     } else if state_mask <= he.steps || he.next == he.current || he.next == old_next
@@ -229,7 +229,7 @@ kernel void join_to_hashmap(ulong arg, const global uint* outputs, global HashEn
     const ulong arg_end = arg_start + (1UL << ARG_BIT_PLACE);
     global HashEntry* he = hashmap + idx;
     if (he->state == HASH_STATE_USED && arg_start <= he->next && he->next < arg_end) {
-        const ulong state_mask = (1UL << (OUTPUT_LEN - 1)) - 1UL;
+        const ulong state_mask = (1UL << STATE_LEN) - 1UL;
 #if WORD_PER_ELEM == 2
         const size_t output_entry_start = (he->next - arg_start) << 1;
         const ulong output = ((ulong)outputs[output_entry_start]) |
@@ -239,7 +239,7 @@ kernel void join_to_hashmap(ulong arg, const global uint* outputs, global HashEn
 #endif
         const ulong old_next = he->next;
         he->next = output & state_mask;
-        if (((output >> (OUTPUT_LEN - 1)) & 1) != 0) {
+        if (((output >> STATE_LEN) & 1) != 0) {
             he->state = HASH_STATE_STOPPED;
         } else if (state_mask <= he->steps || he->next == he->current || he->next == old_next) {
             he->state = HASH_STATE_LOOPED;
@@ -260,7 +260,7 @@ struct OpenCLJoinToHashMap {
 
 impl OpenCLJoinToHashMap {
     fn new(
-        output_len: usize,
+        state_len: usize,
         arg_bit_place: usize,
         hashmap_len: usize,
         context: Arc<Context>,
@@ -268,10 +268,10 @@ impl OpenCLJoinToHashMap {
     ) -> Self {
         let device = Device::new(context.devices()[0]);
         let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
-        let word_per_elem = (output_len + 31) >> 5;
+        let word_per_elem = (state_len + 1 + 31) >> 5;
         let defs = format!(
-            "-DOUTPUT_LEN=({}) -DARG_BIT_PLACE=({}) -DWORD_PER_ELEM=({}) -DHASHMAP_LEN=({})",
-            output_len, arg_bit_place, word_per_elem, hashmap_len,
+            "-DSTATE_LEN=({}) -DARG_BIT_PLACE=({}) -DWORD_PER_ELEM=({}) -DHASHMAP_LEN=({})",
+            state_len, arg_bit_place, word_per_elem, hashmap_len,
         );
         let source = HASH_ENTRY_OPENCL_DEF.to_string() + JOIN_TO_HASHMAP_OPENCL_CODE;
         let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
@@ -667,6 +667,23 @@ impl OpenCLJoinHashMapItselfAndCheckSolution {
 }
 
 //
+// add_to_hashmap - add outputs to hashmap as new entries
+//
+
+fn add_to_hashmap_and_check_solution_cpu(
+    state_len: usize,
+    outputs: &[u32],
+    hashmap: &mut [HashEntry],
+    unknown_bits: usize,
+    unknown_fill_bits: usize,
+    unknown_fills: Arc<Vec<AtomicU32>>,
+    resolved_unknowns: Arc<AtomicU64>,
+    solution: &Mutex<Option<Solution>>,
+) {
+    assert_eq!(hashmap.len().count_ones(), 1);
+}
+
+//
 // main solver code
 //
 
@@ -1004,7 +1021,7 @@ mod tests {
 
     fn join_to_hashmap_cpu_testcase_data_1(
     ) -> (usize, usize, u64, Vec<u32>, Vec<HashEntry>, Vec<HashEntry>) {
-        let output_len = 24 + 1;
+        let state_len = 24;
         let arg_bit_place = 16;
         let arg: u64 = 173;
         let outputs = {
@@ -1080,7 +1097,7 @@ mod tests {
             hashmap[14072] = HashEntry {
                 current: 0x2589fa,
                 next: (arg << arg_bit_place) | 59021,
-                steps: (1 << (output_len - 1)) - 1,
+                steps: (1 << state_len) - 1,
                 predecessors: 5,
                 state: HASH_STATE_USED,
             };
@@ -1096,7 +1113,7 @@ mod tests {
             hashmap[14456] = HashEntry {
                 current: 0xfa2ca5,
                 next: (arg << arg_bit_place) | 59045,
-                steps: (1 << (output_len - 1)) - 1,
+                steps: (1 << state_len) - 1,
                 predecessors: 5,
                 state: HASH_STATE_USED,
             };
@@ -1178,7 +1195,7 @@ mod tests {
             hashmap[14072] = HashEntry {
                 current: 0x2589fa,
                 next: 0x11aa22,
-                steps: 1 << (output_len - 1),
+                steps: 1 << state_len,
                 predecessors: 5,
                 state: HASH_STATE_LOOPED,
             };
@@ -1194,7 +1211,7 @@ mod tests {
             hashmap[14456] = HashEntry {
                 current: 0xfa2ca5,
                 next: 0x77da1b,
-                steps: 1 << (output_len - 1),
+                steps: 1 << state_len,
                 predecessors: 5,
                 state: HASH_STATE_STOPPED,
             };
@@ -1217,7 +1234,7 @@ mod tests {
             hashmap
         };
         (
-            output_len,
+            state_len,
             arg_bit_place,
             arg,
             outputs,
@@ -1228,7 +1245,7 @@ mod tests {
 
     fn join_to_hashmap_cpu_testcase_data_2(
     ) -> (usize, usize, u64, Vec<u32>, Vec<HashEntry>, Vec<HashEntry>) {
-        let output_len = 32 + 1;
+        let state_len = 32;
         let arg_bit_place = 24;
         let arg: u64 = 119;
         let outputs = {
@@ -1313,7 +1330,7 @@ mod tests {
             hashmap[14072] = HashEntry {
                 current: 0x2589fa11,
                 next: (arg << arg_bit_place) | 5902199,
-                steps: (1 << (output_len - 1)) - 1,
+                steps: (1 << state_len) - 1,
                 predecessors: 5,
                 state: HASH_STATE_USED,
             };
@@ -1329,7 +1346,7 @@ mod tests {
             hashmap[14456] = HashEntry {
                 current: 0xfa2ca5d4,
                 next: (arg << arg_bit_place) | 5904531,
-                steps: (1 << (output_len - 1)) - 1,
+                steps: (1 << state_len) - 1,
                 predecessors: 5,
                 state: HASH_STATE_USED,
             };
@@ -1411,7 +1428,7 @@ mod tests {
             hashmap[14072] = HashEntry {
                 current: 0x2589fa11,
                 next: 0x11aa2233,
-                steps: 1 << (output_len - 1),
+                steps: 1 << state_len,
                 predecessors: 5,
                 state: HASH_STATE_LOOPED,
             };
@@ -1427,7 +1444,7 @@ mod tests {
             hashmap[14456] = HashEntry {
                 current: 0xfa2ca5d4,
                 next: 0x77da1b1c,
-                steps: 1 << (output_len - 1),
+                steps: 1 << state_len,
                 predecessors: 5,
                 state: HASH_STATE_STOPPED,
             };
@@ -1450,7 +1467,7 @@ mod tests {
             hashmap
         };
         (
-            output_len,
+            state_len,
             arg_bit_place,
             arg,
             outputs,
@@ -1461,7 +1478,7 @@ mod tests {
 
     fn join_to_hashmap_cpu_testcase_data_3(
     ) -> (usize, usize, u64, Vec<u32>, Vec<HashEntry>, Vec<HashEntry>) {
-        let output_len = 40 + 1;
+        let state_len = 40;
         let arg_bit_place = 24;
         let arg: u64 = 43051;
         let outputs = {
@@ -1546,7 +1563,7 @@ mod tests {
             hashmap[14072] = HashEntry {
                 current: 0x2589fa114a,
                 next: (arg << arg_bit_place) | 5902199,
-                steps: (1 << (output_len - 1)) - 1,
+                steps: (1 << state_len) - 1,
                 predecessors: 5,
                 state: HASH_STATE_USED,
             };
@@ -1562,7 +1579,7 @@ mod tests {
             hashmap[14456] = HashEntry {
                 current: 0xfa218ca5d4,
                 next: (arg << arg_bit_place) | 5904531,
-                steps: (1 << (output_len - 1)) - 1,
+                steps: (1 << state_len) - 1,
                 predecessors: 5,
                 state: HASH_STATE_USED,
             };
@@ -1644,7 +1661,7 @@ mod tests {
             hashmap[14072] = HashEntry {
                 current: 0x2589fa114a,
                 next: 0x11aa2233 | (93 << 32),
-                steps: 1 << (output_len - 1),
+                steps: 1 << state_len,
                 predecessors: 5,
                 state: HASH_STATE_LOOPED,
             };
@@ -1660,7 +1677,7 @@ mod tests {
             hashmap[14456] = HashEntry {
                 current: 0xfa218ca5d4,
                 next: 0x77da1b1c | (142 << 32),
-                steps: 1 << (output_len - 1),
+                steps: 1 << state_len,
                 predecessors: 5,
                 state: HASH_STATE_STOPPED,
             };
@@ -1683,7 +1700,7 @@ mod tests {
             hashmap
         };
         (
-            output_len,
+            state_len,
             arg_bit_place,
             arg,
             outputs,
@@ -1695,25 +1712,25 @@ mod tests {
     #[test]
     fn test_join_to_hashmap_cpu() {
         // 24-bit
-        let (output_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
+        let (state_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
             join_to_hashmap_cpu_testcase_data_1();
-        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
+        join_to_hashmap_cpu(state_len, arg_bit_place, arg, &outputs, &mut hashmap);
         for (i, he) in hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}: {}", 24, i);
         }
 
         // 32-bit
-        let (output_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
+        let (state_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
             join_to_hashmap_cpu_testcase_data_2();
-        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
+        join_to_hashmap_cpu(state_len, arg_bit_place, arg, &outputs, &mut hashmap);
         for (i, he) in hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}: {}", 32, i);
         }
 
         // 40-bit
-        let (output_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
+        let (state_len, arg_bit_place, arg, outputs, mut hashmap, expected_hashmap) =
             join_to_hashmap_cpu_testcase_data_3();
-        join_to_hashmap_cpu(output_len, arg_bit_place, arg, &outputs, &mut hashmap);
+        join_to_hashmap_cpu(state_len, arg_bit_place, arg, &outputs, &mut hashmap);
         for (i, he) in hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}: {}", 40, i);
         }
@@ -1758,12 +1775,12 @@ mod tests {
         let cmd_queue =
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
         // 24-bit
-        let (output_len, arg_bit_place, arg, outputs, hashmap, expected_hashmap) =
+        let (state_len, arg_bit_place, arg, outputs, hashmap, expected_hashmap) =
             join_to_hashmap_cpu_testcase_data_1();
         let (outputs_buffer, mut hashmap_buffer, hashmap_len) =
             join_to_hashmap_opencl_buffers(context.clone(), cmd_queue.clone(), &outputs, &hashmap);
         let exec = OpenCLJoinToHashMap::new(
-            output_len,
+            state_len,
             arg_bit_place,
             hashmap_len,
             context.clone(),
