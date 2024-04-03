@@ -459,6 +459,67 @@ fn join_hashmap_itself_and_check_solution_cpu(
         });
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+struct SolutionAndResUnknowns {
+    resolved_unknowns: u64,
+    sol_start: u64,
+    sol_end: u64,
+    sol_steps: u64,
+    sol_defined: u32,
+}
+
+const RESOLVE_UNKNOWNS_OPENCL_CODE: &str = r##"
+#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
+
+typedef struct _SolutionAndResUnknowns {
+    ulong resolved_unknowns;
+    ulong sol_start;
+    ulong sol_end;
+    ulong sol_steps;
+    uint sol_defined;
+} SolutionAndResUnknowns;
+
+// state_len: usize,
+// unknown_bits: usize,
+// unknown_fill_bits: usize,
+void resolve_unknowns(
+    ulong current,
+    ulong next,
+    ulong steps,
+    uint entry_state,
+    global uint* unknown_fills,
+    global SolutionAndResUnknowns* sol_and_res_unk
+) {
+    // unknown fill mapping to state:
+    //     [unknown_fill_entry_idx][unknown_fill_value][00000000000....]
+    // only for unknown paths: state bits: 0..(state_len-unknown_bits) = 0b000...000
+    if ((current & ((1ULL << (STATE_LEN - UNKNOWN_BITS)) - 1ULL)) == 0
+        && (entry_state == HASH_STATE_LOOPED || entry_state == HASH_STATE_STOPPED))
+    {
+        if (entry_state == HASH_STATE_STOPPED) {
+            // just set solution
+            if (atomic_or(&(sol_and_res_unk->sol_defined), 1) == 0) {
+                sol_and_res_unk->sol_start = current;
+                sol_and_res_unk->sol_end = next;
+                sol_and_res_unk->sol_steps = steps;
+            }
+        }
+        const size_t unknown_fill_idx = current >> (STATE_LEN - UNKNOWN_BITS + UNKNOWN_FILL_BITS);
+        const uint unknown_fill_mask = (1 << UNKNOWN_FILL_BITS) - 1;
+        const uint unknown_fill_value =
+            (current >> (STATE_LEN - UNKNOWN_BITS)) & unknown_fill_mask;
+        // if match to unknown fill field then increase this field
+        if ((atomic_cmpxchg(unknown_fills + unknown_fill_idx, unknown_fill_value,
+                            unknown_fill_value + 1) == unknown_fill_value)
+            && (unknown_fill_value == unknown_fill_mask)) {
+            // increase resolved unknowns if it last unknown in this unknown fill
+            atom_inc(&(sol_and_res_unk->resolved_unknowns));
+        }
+    }
+}
+"##;
+
 const JOIN_HASHMAP_ITSELF_AND_CHECK_SOLUTION_OPENCL_CODE: &str = r##"
 kernel void join_hashmap_itself_zero_pred(global HashEntry* out_hashmap) {
     const size_t idx = get_global_id(0);
@@ -468,7 +529,8 @@ kernel void join_hashmap_itself_zero_pred(global HashEntry* out_hashmap) {
 }
 
 kernel void join_hashmap_itself_and_check_solution(const global HashEntry* in_hashmap,
-        global HashEntry* out_hashmap) {
+        global HashEntry* out_hashmap, global uint* unknown_fills,
+        global SolutionAndResUnknowns* sol_and_res_unk) {
     const size_t idx = get_global_id(0);
     uint do_copy = 1;
     if (idx >= HASHMAP_LEN)
@@ -509,6 +571,8 @@ kernel void join_hashmap_itself_and_check_solution(const global HashEntry* in_ha
         outhe->state = inhe->state;
     }
     atomic_add(&outhe->predecessors, inhe->predecessors);
+    resolve_unknowns( outhe->current, outhe->next, outhe->steps, outhe->state,
+        unknown_fills, sol_and_res_unk);
 }
 "##;
 
@@ -524,18 +588,26 @@ impl OpenCLJoinHashMapItselfAndCheckSolution {
     fn new(
         state_len: usize,
         hashmap_len: usize,
+        unknown_bits: usize,
+        unknown_fill_bits: usize,
         context: Arc<Context>,
         cmd_queue: Arc<CommandQueue>,
     ) -> Self {
         let device = Device::new(context.devices()[0]);
         let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
         let defs = format!(
-            "-DSTATE_LEN=({}) -DHASHMAP_LEN=({}) -DHASHMAP_LEN_BITS=({})",
+            concat!(
+                "-DSTATE_LEN=({}) -DHASHMAP_LEN=({}) -DHASHMAP_LEN_BITS=({}) ",
+                "-DUNKNOWN_BITS=({}) -DUNKNOWN_FILL_BITS=({})"
+            ),
             state_len,
             hashmap_len,
-            usize::BITS - hashmap_len.leading_zeros() - 1
+            usize::BITS - hashmap_len.leading_zeros() - 1,
+            unknown_bits,
+            unknown_fill_bits,
         );
         let source = HASH_ENTRY_OPENCL_DEF.to_string()
+            + RESOLVE_UNKNOWNS_OPENCL_CODE
             + HASH_FUNC_OPENCL_DEF
             + JOIN_HASHMAP_ITSELF_AND_CHECK_SOLUTION_OPENCL_CODE;
         let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
@@ -562,7 +634,13 @@ impl OpenCLJoinHashMapItselfAndCheckSolution {
         }
     }
 
-    fn execute(&self, in_hashmap: &Buffer<HashEntry>, out_hashmap: &mut Buffer<HashEntry>) {
+    fn execute(
+        &self,
+        in_hashmap: &Buffer<HashEntry>,
+        out_hashmap: &mut Buffer<HashEntry>,
+        unknown_fills: &mut Buffer<u32>,
+        sol_and_res_unk: &mut Buffer<SolutionAndResUnknowns>,
+    ) {
         unsafe {
             ExecuteKernel::new(&self.kernel_zero)
                 .set_arg(out_hashmap)
@@ -575,6 +653,8 @@ impl OpenCLJoinHashMapItselfAndCheckSolution {
             ExecuteKernel::new(&self.kernel)
                 .set_arg(in_hashmap)
                 .set_arg(out_hashmap)
+                .set_arg(unknown_fills)
+                .set_arg(sol_and_res_unk)
                 .set_local_work_size(self.group_len)
                 .set_global_work_size(
                     ((self.hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
@@ -2546,6 +2626,24 @@ mod tests {
             )
             .unwrap()
         };
+        let mut unknown_fills_buffer = unsafe {
+            Buffer::<u32>::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                unknown_fills.len(),
+                std::ptr::null_mut(),
+            )
+            .unwrap()
+        };
+        let mut sol_and_res_unk_buffer = unsafe {
+            Buffer::<SolutionAndResUnknowns>::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                1,
+                std::ptr::null_mut(),
+            )
+            .unwrap()
+        };
         unsafe {
             cmd_queue
                 .enqueue_fill_buffer(
@@ -2565,23 +2663,117 @@ mod tests {
             cmd_queue
                 .enqueue_write_buffer(&mut in_hashmap_buffer, CL_BLOCKING, 0, &hashmap, &[])
                 .unwrap();
+            let unknown_fills_data = unknown_fills
+                .iter()
+                .map(|v| v.load(atomic::Ordering::SeqCst))
+                .collect::<Vec<_>>();
+            cmd_queue
+                .enqueue_write_buffer(
+                    &mut unknown_fills_buffer,
+                    CL_BLOCKING,
+                    0,
+                    &unknown_fills_data,
+                    &[],
+                )
+                .unwrap();
+            let sol_and_res_unk = solution
+                .lock()
+                .unwrap()
+                .map(|sol| SolutionAndResUnknowns {
+                    resolved_unknowns: resolved_unknowns.load(atomic::Ordering::SeqCst),
+                    sol_start: sol.start,
+                    sol_end: sol.end,
+                    sol_steps: sol.steps,
+                    sol_defined: 1,
+                })
+                .unwrap_or(SolutionAndResUnknowns {
+                    resolved_unknowns: resolved_unknowns.load(atomic::Ordering::SeqCst),
+                    sol_start: 0,
+                    sol_end: 0,
+                    sol_steps: 0,
+                    sol_defined: 0,
+                });
+            cmd_queue
+                .enqueue_write_buffer(
+                    &mut sol_and_res_unk_buffer,
+                    CL_BLOCKING,
+                    0,
+                    &[sol_and_res_unk],
+                    &[],
+                )
+                .unwrap();
         }
         cmd_queue.finish().unwrap();
         let join_itself = OpenCLJoinHashMapItselfAndCheckSolution::new(
             state_len,
             hashmap.len(),
+            unknown_bits,
+            unknown_fill_bits,
             context.clone(),
             cmd_queue.clone(),
         );
-        join_itself.execute(&in_hashmap_buffer, &mut out_hashmap_buffer);
+        join_itself.execute(
+            &in_hashmap_buffer,
+            &mut out_hashmap_buffer,
+            &mut unknown_fills_buffer,
+            &mut sol_and_res_unk_buffer,
+        );
         let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+        let mut out_unknown_fills = vec![0; unknown_fills.len()];
+        let mut out_sol_and_res_unk = [SolutionAndResUnknowns::default()];
         unsafe {
             cmd_queue
                 .enqueue_read_buffer(&out_hashmap_buffer, CL_BLOCKING, 0, &mut out_hashmap, &[])
                 .unwrap();
+            cmd_queue
+                .enqueue_read_buffer(
+                    &unknown_fills_buffer,
+                    CL_BLOCKING,
+                    0,
+                    &mut out_unknown_fills,
+                    &[],
+                )
+                .unwrap();
+            cmd_queue
+                .enqueue_read_buffer(
+                    &sol_and_res_unk_buffer,
+                    CL_BLOCKING,
+                    0,
+                    &mut out_sol_and_res_unk,
+                    &[],
+                )
+                .unwrap();
         }
         for (i, he) in out_hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}", i);
+        }
+        for (i, uf) in out_unknown_fills.iter().enumerate() {
+            assert_eq!(
+                expected_unknown_fills[i].load(atomic::Ordering::SeqCst),
+                *uf,
+                "{}",
+                i
+            );
+        }
+        let out_sol_and_res_unk = out_sol_and_res_unk[0];
+        //println!("sol_and_res: {:?}", out_sol_and_res_unk);
+        assert_eq!(
+            expected_resolved_unknowns,
+            out_sol_and_res_unk.resolved_unknowns
+        );
+        assert_eq!(
+            expected_solution.is_some(),
+            out_sol_and_res_unk.sol_defined != 0
+        );
+        if let Some(sol) = expected_solution {
+            assert_eq!(
+                sol,
+                Solution {
+                    start: out_sol_and_res_unk.sol_start,
+                    end: out_sol_and_res_unk.sol_end,
+                    steps: out_sol_and_res_unk.sol_steps,
+                }
+            );
         }
     }
 }
