@@ -1978,6 +1978,70 @@ mod tests {
                     predecessors: 31,
                 },
             );
+            // resolved 1
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: ((49201 << 4) | 15) << (state_len - unknown_bits),
+                    next: 0x3c0d3441167,
+                    steps: 35421,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 31,
+                },
+            );
+            // resolved 2
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: ((25901 << 4) | 15) << (state_len - unknown_bits),
+                    next: 0xccd14859211,
+                    steps: 585691,
+                    state: HASH_STATE_USED,
+                    predecessors: 10,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xccd14859211,
+                    next: 0x14859211,
+                    steps: 18901,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 17,
+                },
+            );
+            // resolved 3
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: ((3058 << 4) | 12) << (state_len - unknown_bits),
+                    next: 0xdaba053a14,
+                    steps: 11055,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 3,
+                },
+            );
+            // unresolved 3 - because doesn't match unknown
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: (((3058 << 4) | 12) << (state_len - unknown_bits)) | 21,
+                    next: 0xdaba0831,
+                    steps: 7073,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 3,
+                },
+            );
             // for i in 0..10000000 {
             //     let state = 0x6d0a9405157 + i;
             //     let hidx = hash_function_64(state_len, state) >> (state_len - hbits);
@@ -1996,8 +2060,13 @@ mod tests {
             hashmap
         };
         let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
-        let expected_unknown_fills =
-            create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        unknown_fills[117].store(16, atomic::Ordering::SeqCst);
+        unknown_fills[6692].store(16, atomic::Ordering::SeqCst);
+        unknown_fills[17982].store(16, atomic::Ordering::SeqCst);
+        unknown_fills[52069].store(16, atomic::Ordering::SeqCst);
+        unknown_fills[3058].store(12, atomic::Ordering::SeqCst);
+        unknown_fills[49201].store(15, atomic::Ordering::SeqCst);
+        unknown_fills[25901].store(15, atomic::Ordering::SeqCst);
         let resolved_unknowns = Arc::new(AtomicU64::new(
             unknown_fills
                 .iter()
@@ -2201,9 +2270,87 @@ mod tests {
                     predecessors: 32,
                 },
             );
+            // resolved 1
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: ((49201 << 4) | 15) << (state_len - unknown_bits),
+                    next: 0x3c0d3441167,
+                    steps: 35421,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 31,
+                },
+            );
+            // resolved 2
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: ((25901 << 4) | 15) << (state_len - unknown_bits),
+                    next: 0x14859211,
+                    steps: 585691 + 18901,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 10,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xccd14859211,
+                    next: 0x14859211,
+                    steps: 18901,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 18,
+                },
+            );
+            // resolved 3
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: ((3058 << 4) | 12) << (state_len - unknown_bits),
+                    next: 0xdaba053a14,
+                    steps: 11055,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 3,
+                },
+            );
+            // unresolved 3 - because doesn't match unknown
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: (((3058 << 4) | 12) << (state_len - unknown_bits)) | 21,
+                    next: 0xdaba0831,
+                    steps: 7073,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 3,
+                },
+            );
             hashmap
         };
-        let expected_resolved_unknowns = resolved_unknowns.clone().load(atomic::Ordering::SeqCst);
+        let expected_unknown_fills =
+            create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        for i in 0..1 << 16 {
+            expected_unknown_fills[i].store(
+                unknown_fills[i].load(atomic::Ordering::SeqCst),
+                atomic::Ordering::SeqCst,
+            );
+        }
+        expected_unknown_fills[49201].store(16, atomic::Ordering::SeqCst);
+        expected_unknown_fills[25901].store(16, atomic::Ordering::SeqCst);
+        expected_unknown_fills[3058].store(13, atomic::Ordering::SeqCst);
+        let expected_resolved_unknowns = expected_unknown_fills
+            .iter()
+            .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
+            .count() as u64;
         let expected_solution = None;
         JoinHashMapItselfAndCheckSolutionData {
             state_len,
