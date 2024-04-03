@@ -769,12 +769,12 @@ fn add_to_hashmap_and_check_solution_cpu(
                         && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
                     {
                         // do update
-                        std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                        std::sync::atomic::compiler_fence(atomic::Ordering::SeqCst);
                         curhe.current = current;
                         curhe.next = next;
                         curhe.steps = 1;
                         curhe.predecessors = 0;
-                        std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                        std::sync::atomic::compiler_fence(atomic::Ordering::SeqCst);
                         // update state
                         curhe_state_atomic.store(state, atomic::Ordering::SeqCst);
                     }
