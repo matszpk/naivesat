@@ -307,8 +307,6 @@ impl OpenCLJoinToHashMap {
 // join_hashmap_itself - join hash entries with other hash entries in hashmap
 //
 
-// TODO: Add resolving loop by comparing nexts to current
-
 fn create_vec_of_atomic_u32(len: usize) -> Arc<Vec<AtomicU32>> {
     Arc::new(
         std::iter::repeat_with(|| AtomicU32::new(0))
@@ -353,12 +351,13 @@ fn join_hashmap_itself_cpu(
                     if nexthe.state != HASH_STATE_UNUSED && nexthe.current == inhe.next {
                         // if next found in hashmap entry
                         outhe.current = inhe.current;
+                        let old_next = inhe.next;
                         outhe.next = nexthe.next;
                         let (res, ov) = inhe.steps.overflowing_add(nexthe.steps);
                         outhe.steps = res;
                         outhe.state = nexthe.state;
                         if outhe.state == HASH_STATE_USED {
-                            if ov || res > state_mask {
+                            if inhe.current == nexthe.next || ov || res > state_mask {
                                 // if overflow of steps or steps greater than max step number.
                                 // then loop
                                 outhe.state = HASH_STATE_LOOPED;
@@ -412,14 +411,16 @@ kernel void join_hashmap_itself(const global HashEntry* in_hashmap,
         const global HashEntry* nexthe = in_hashmap + next_idx;
         if (nexthe->state != HASH_STATE_UNUSED && nexthe->current == inhe->next) {
             // if next found in hashmap entry
+            const ulong next_next = nexthe->next;
+            const ulong current = inhe->current;
             const ulong insteps = inhe->steps;
             const ulong steps_sum = insteps + nexthe->steps;
-            outhe->current = inhe->current;
-            outhe->next = nexthe->next;
+            outhe->current = current;
+            outhe->next = next_next;
             outhe->steps = steps_sum;
             outhe->state = nexthe->state;
             if (outhe->state == HASH_STATE_USED) {
-                if (steps_sum < insteps || steps_sum > state_mask) {
+                if (current == next_next || steps_sum < insteps || steps_sum > state_mask) {
                     // if overflow of steps or steps greater than max step number.
                     // then loop
                     outhe->state = HASH_STATE_LOOPED;
@@ -1864,6 +1865,31 @@ mod tests {
                     predecessors: 16,
                 },
             );
+            // loop resolving 2
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x3c0da054677,
+                    next: 0xdca03afa1fa,
+                    steps: 23891,
+                    state: HASH_STATE_USED,
+                    predecessors: 26,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xdca03afa1fa,
+                    next: 0x3c0da054677,
+                    steps: 35421,
+                    state: HASH_STATE_USED,
+                    predecessors: 31,
+                },
+            );
             // for i in 0..10000000 {
             //     let state = 0x6d0a9405157 + i;
             //     let hidx = hash_function_64(state_len, state) >> (state_len - hbits);
@@ -2050,6 +2076,31 @@ mod tests {
                     steps: 88211,
                     state: HASH_STATE_USED,
                     predecessors: 16,
+                },
+            );
+            // loop resolving 2
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0x3c0da054677,
+                    next: 0x3c0da054677,
+                    steps: 35421 + 23891,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 27,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xdca03afa1fa,
+                    next: 0xdca03afa1fa,
+                    steps: 35421 + 23891,
+                    state: HASH_STATE_LOOPED,
+                    predecessors: 32,
                 },
             );
             hashmap
