@@ -322,7 +322,7 @@ fn resolve_unknowns(
     steps: u64,
     entry_state: u32,
     unknown_fills: Arc<Vec<AtomicU32>>,
-    unknowns_resolved: Arc<AtomicU64>,
+    resolved_unknowns: Arc<AtomicU64>,
     solution: &Mutex<Option<Solution>>,
 ) {
     // unknown fill mapping to state:
@@ -357,7 +357,7 @@ fn resolve_unknowns(
             && unknown_fill_value == unknown_fill_mask
         {
             // increase resolved unknowns if it last unknown in this unknown fill
-            unknowns_resolved.fetch_add(1, atomic::Ordering::SeqCst);
+            resolved_unknowns.fetch_add(1, atomic::Ordering::SeqCst);
         }
     }
 }
@@ -378,7 +378,7 @@ fn join_hashmap_itself_cpu(
     unknown_bits: usize,
     unknown_fill_bits: usize,
     unknown_fills: Arc<Vec<AtomicU32>>,
-    unknowns_resolved: Arc<AtomicU64>,
+    resolved_unknowns: Arc<AtomicU64>,
     solution: &Mutex<Option<Solution>>,
 ) {
     assert_eq!(in_hashmap.len(), out_hashmap.len());
