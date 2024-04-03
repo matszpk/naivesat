@@ -122,12 +122,12 @@ fn hash_function_64(bits: usize, value: u64) -> usize {
 const HASH_FUNC_OPENCL_DEF: &str = r##"
 ulong hash_function_64(ulong value) {
     const uint bits = STATE_LEN;
-    const ulong mask = (1ULL << STATE_LEN) - 1ULL;
+    const ulong mask = (1UL << STATE_LEN) - 1UL;
     const uint half_bits = STATE_LEN >> 1;
-    const ulong temp = (value * 9615409803190489167ULL);
-    return ((value * 6171710485021949031ULL) ^
+    const ulong temp = (value * 9615409803190489167UL);
+    return ((value * 6171710485021949031UL) ^
         ((temp << half_bits) | (temp >> (STATE_LEN - half_bits))) ^
-        0xb89d2ecda078ca1fULL) & mask;
+        0xb89d2ecda078ca1fUL) & mask;
 }
 "##;
 
@@ -226,10 +226,10 @@ kernel void join_to_hashmap(ulong arg, const global uint* outputs, global HashEn
     if (idx >= HASHMAP_LEN)
         return;
     const ulong arg_start = arg << ARG_BIT_PLACE;
-    const ulong arg_end = arg_start + (1ULL << ARG_BIT_PLACE);
+    const ulong arg_end = arg_start + (1UL << ARG_BIT_PLACE);
     global HashEntry* he = hashmap + idx;
     if (he->state == HASH_STATE_USED && arg_start <= he->next && he->next < arg_end) {
-        const ulong state_mask = (1ULL << (OUTPUT_LEN - 1)) - 1ULL;
+        const ulong state_mask = (1UL << (OUTPUT_LEN - 1)) - 1UL;
 #if WORD_PER_ELEM == 2
         const size_t output_entry_start = (he->next - arg_start) << 1;
         const ulong output = ((ulong)outputs[output_entry_start]) |
@@ -494,7 +494,7 @@ void resolve_unknowns(
     // unknown fill mapping to state:
     //     [unknown_fill_entry_idx][unknown_fill_value][00000000000....]
     // only for unknown paths: state bits: 0..(state_len-unknown_bits) = 0b000...000
-    if ((current & ((1ULL << (STATE_LEN - UNKNOWN_BITS)) - 1ULL)) == 0
+    if ((current & ((1UL << (STATE_LEN - UNKNOWN_BITS)) - 1UL)) == 0
         && (entry_state == HASH_STATE_LOOPED || entry_state == HASH_STATE_STOPPED))
     {
         if (entry_state == HASH_STATE_STOPPED) {
@@ -538,7 +538,7 @@ kernel void join_hashmap_itself_and_check_solution(const global HashEntry* in_ha
     const global HashEntry* inhe = in_hashmap + idx;
     global HashEntry* outhe = out_hashmap + idx;
     const size_t hashentry_shift = STATE_LEN - HASHMAP_LEN_BITS;
-    const ulong state_mask = (1ULL << STATE_LEN) - 1ULL;
+    const ulong state_mask = (1UL << STATE_LEN) - 1UL;
     if (inhe->state == HASH_STATE_USED) {
         const ulong next_hash = hash_function_64(inhe->next);
         const size_t next_idx = (next_hash >> hashentry_shift);
