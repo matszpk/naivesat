@@ -671,11 +671,8 @@ impl OpenCLJoinHashMapItselfAndCheckSolution {
 // add_to_hashmap - add outputs to hashmap as new entries
 //
 
-unsafe fn get_shared<T>(ptr: &mut [T]) -> &[UnsafeCell<T>] {
-    let t = ptr as *mut [T] as *const [UnsafeCell<T>];
-    unsafe { &*t }
-}
-
+// special workaround for implement synchronization for HashMap.
+// implement unsafe slice with get_mut method.
 struct UnsafeSlice<'a, T> {
     slice: &'a [UnsafeCell<T>],
 }
