@@ -305,6 +305,7 @@ impl OpenCLJoinToHashMap {
 // join_hashmap_itself - join hash entries with other hash entries in hashmap
 //
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Solution {
     start: u64,
     end: u64,
@@ -374,11 +375,11 @@ fn join_hashmap_itself_cpu(
     preds_update: Arc<Vec<AtomicU32>>,
     in_hashmap: &[HashEntry],
     out_hashmap: &mut [HashEntry],
-    // unknown_bits: usize,
-    // unknown_fill_bits: usize,
-    // unknown_fills: Arc<Vec<AtomicU32>>,
-    // unknowns_resolved: Arc<AtomicU64>,
-    // solution: &Mutex<Option<Solution>>,
+    unknown_bits: usize,
+    unknown_fill_bits: usize,
+    unknown_fills: Arc<Vec<AtomicU32>>,
+    unknowns_resolved: Arc<AtomicU64>,
+    solution: &Mutex<Option<Solution>>,
 ) {
     assert_eq!(in_hashmap.len(), out_hashmap.len());
     assert_eq!(in_hashmap.len().count_ones(), 1);
@@ -440,8 +441,8 @@ fn join_hashmap_itself_cpu(
                 //     outhe.next,
                 //     outhe.steps,
                 //     outhe.state,
-                //     unknown_fills,
-                //     unknowns_resolved,
+                //     unknown_fills.clone(),
+                //     unknowns_resolved.clone(),
                 //     solution,
                 // );
             }
@@ -1762,9 +1763,26 @@ mod tests {
         hashmap[idx] = e;
     }
 
-    fn join_hashmap_itself_data() -> (usize, usize, Vec<HashEntry>, Vec<HashEntry>) {
+    struct JoinHashMapItselfData {
+        state_len: usize,
+        hbits: usize,
+        hashmap: Vec<HashEntry>,
+        expected_hashmap: Vec<HashEntry>,
+        unknown_bits: usize,
+        unknown_fill_bits: usize,
+        unknown_fills: Arc<Vec<AtomicU32>>,
+        resolved_unknowns: Arc<AtomicU64>,
+        solution: Mutex<Option<Solution>>,
+        expected_unknown_fills: Arc<Vec<AtomicU32>>,
+        expected_resolved_unknowns: u64,
+        expected_solution: Option<Solution>,
+    }
+
+    fn join_hashmap_itself_data() -> JoinHashMapItselfData {
         let state_len = 44;
         let hbits = 15;
+        let unknown_bits = 20;
+        let unknown_fill_bits = 4;
         let hashmap = {
             let mut hashmap = vec![HashEntry::default(); 1 << hbits];
             hashmap_insert(
@@ -1977,6 +1995,16 @@ mod tests {
             // );
             hashmap
         };
+        let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        let expected_unknown_fills =
+            create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        let resolved_unknowns = Arc::new(AtomicU64::new(
+            unknown_fills
+                .iter()
+                .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
+                .count() as u64,
+        ));
+        let solution = Mutex::new(None);
         let expected_hashmap = {
             let mut hashmap = vec![HashEntry::default(); 1 << hbits];
             hashmap_insert(
@@ -2175,12 +2203,40 @@ mod tests {
             );
             hashmap
         };
-        (state_len, hbits, hashmap, expected_hashmap)
+        let expected_resolved_unknowns = resolved_unknowns.clone().load(atomic::Ordering::SeqCst);
+        let expected_solution = None;
+        JoinHashMapItselfData {
+            state_len,
+            hbits,
+            hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        }
     }
 
     #[test]
     fn test_join_hashmap_itself_cpu() {
-        let (state_len, hbits, hashmap, expected_hashmap) = join_hashmap_itself_data();
+        let JoinHashMapItselfData {
+            state_len,
+            hbits,
+            hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        } = join_hashmap_itself_data();
         let preds_update = create_vec_of_atomic_u32(hashmap.len());
         let mut out_hashmap = vec![
             HashEntry {
@@ -2192,10 +2248,33 @@ mod tests {
             };
             hashmap.len()
         ];
-        join_hashmap_itself_cpu(state_len, preds_update.clone(), &hashmap, &mut out_hashmap);
+        join_hashmap_itself_cpu(
+            state_len,
+            preds_update.clone(),
+            &hashmap,
+            &mut out_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills.clone(),
+            resolved_unknowns.clone(),
+            &solution,
+        );
         for (i, he) in out_hashmap.into_iter().enumerate() {
             assert_eq!(expected_hashmap[i], he, "{}", i);
         }
+        for (i, uf) in unknown_fills.iter().enumerate() {
+            assert_eq!(
+                expected_unknown_fills[i].load(atomic::Ordering::SeqCst),
+                uf.load(atomic::Ordering::SeqCst),
+                "{}",
+                i
+            );
+        }
+        assert_eq!(
+            expected_resolved_unknowns,
+            resolved_unknowns.load(atomic::Ordering::SeqCst)
+        );
+        assert_eq!(expected_solution, *solution.lock().unwrap());
     }
 
     #[test]
@@ -2205,7 +2284,20 @@ mod tests {
         #[allow(deprecated)]
         let cmd_queue =
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
-        let (state_len, hbits, hashmap, expected_hashmap) = join_hashmap_itself_data();
+        let JoinHashMapItselfData {
+            state_len,
+            hbits,
+            hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        } = join_hashmap_itself_data();
         let mut in_hashmap_buffer = unsafe {
             Buffer::<HashEntry>::create(
                 &context,
