@@ -720,6 +720,7 @@ fn add_to_hashmap_and_check_solution_cpu(
     let hashlen_bits = usize::BITS - hashmap.len().leading_zeros() - 1;
     let hashentry_shift = state_len - hashlen_bits as usize;
     let shared_hashmap = UnsafeSlice::new(hashmap);
+    let unknown_fill_mask = (1u32 << unknown_fill_bits) - 1;
     outputs
         .chunks(chunk_len * word_per_elem)
         .enumerate()
@@ -760,13 +761,26 @@ fn add_to_hashmap_and_check_solution_cpu(
                 unsafe {
                     let curhe = shared_hashmap.get_mut(cur_hash >> hashentry_shift);
                     let curhe_state_atomic = AtomicU32::from_ptr(curhe.state as *mut u32);
+                    // if not currently solved unknown (state).
                     // if predecessors is less and state is not have
                     // HASH_STATE_RESERVED_BY_OTHER_FLAG
                     // update to HASH_STATE_RESERVED_BY_OTHER_FLAG and retrieve old value.
                     let old_state = curhe_state_atomic
                         .fetch_or(HASH_STATE_RESERVED_BY_OTHER_FLAG, atomic::Ordering::SeqCst);
                     std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                    if (curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) != 0
+
+                    let unknown_fill_idx = usize::try_from(
+                        curhe.current >> (state_len - unknown_bits + unknown_fill_bits),
+                    )
+                    .unwrap();
+                    let unknown_fill_value = u32::try_from(
+                        (curhe.current >> (state_len - unknown_bits)) & (unknown_fill_mask as u64),
+                    )
+                    .unwrap();
+
+                    if ((curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) != 0
+                        || unknown_fills[unknown_fill_idx].load(atomic::Ordering::SeqCst)
+                            != unknown_fill_value)
                         && curhe.predecessors <= max_predecessors
                         && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
                     {
