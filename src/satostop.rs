@@ -17,6 +17,7 @@ use opencl3::types::{cl_mem, cl_mem_flags, cl_uint, cl_ulong, CL_BLOCKING};
 
 use rayon::prelude::*;
 
+use std::cell::UnsafeCell;
 use std::fs;
 use std::ops::Range;
 use std::str::FromStr;
@@ -670,6 +671,32 @@ impl OpenCLJoinHashMapItselfAndCheckSolution {
 // add_to_hashmap - add outputs to hashmap as new entries
 //
 
+unsafe fn get_shared<T>(ptr: &mut [T]) -> &[UnsafeCell<T>] {
+    let t = ptr as *mut [T] as *const [UnsafeCell<T>];
+    unsafe { &*t }
+}
+
+struct UnsafeSlice<'a, T> {
+    slice: &'a [UnsafeCell<T>],
+}
+
+unsafe impl<'a, T: Send + Sync> Send for UnsafeSlice<'a, T> {}
+unsafe impl<'a, T: Send + Sync> Sync for UnsafeSlice<'a, T> {}
+
+impl<'a, T> UnsafeSlice<'a, T> {
+    fn new(slice: &'a mut [T]) -> Self {
+        let ptr = slice as *mut [T] as *const [UnsafeCell<T>];
+        Self {
+            slice: unsafe { &*ptr },
+        }
+    }
+
+    unsafe fn get_mut(&self, i: usize) -> &mut T {
+        let ptr = self.slice[i].get();
+        ptr.as_mut().unwrap()
+    }
+}
+
 fn add_to_hashmap_and_check_solution_cpu(
     state_len: usize,
     arg_bit_place: usize,
@@ -681,6 +708,7 @@ fn add_to_hashmap_and_check_solution_cpu(
     unknown_fills: Arc<Vec<AtomicU32>>,
     resolved_unknowns: Arc<AtomicU64>,
     solution: &Mutex<Option<Solution>>,
+    max_predecessors: u32,
 ) {
     assert_eq!(hashmap.len().count_ones(), 1);
     let cpu_num = rayon::current_num_threads();
@@ -692,6 +720,9 @@ fn add_to_hashmap_and_check_solution_cpu(
     let arg_start = arg << arg_bit_place;
     let arg_end = arg_start + (1u64 << arg_bit_place);
     let state_mask = (1u64 << state_len) - 1;
+    let hashlen_bits = usize::BITS - hashmap.len().leading_zeros() - 1;
+    let hashentry_shift = state_len - hashlen_bits as usize;
+    let shared_hashmap = UnsafeSlice::new(hashmap);
     outputs
         .chunks(chunk_len * word_per_elem)
         .enumerate()
@@ -726,6 +757,29 @@ fn add_to_hashmap_and_check_solution_cpu(
                     resolved_unknowns.clone(),
                     solution,
                 );
+                let cur_hash = hash_function_64(state_len, current);
+                // update hash map entry - use unsafe code implement
+                // atomic synchronized updating mechanism
+                unsafe {
+                    let curhe = shared_hashmap.get_mut(cur_hash >> hashentry_shift);
+                    let curhe_state_atomic = AtomicU32::from_ptr(curhe.state as *mut u32);
+                    // if predecessors is less and state is not have
+                    // HASH_STATE_RESERVED_BY_OTHER_FLAG
+                    // update to HASH_STATE_RESERVED_BY_OTHER_FLAG and retrieve old value.
+                    let old_state = curhe_state_atomic
+                        .fetch_or(HASH_STATE_RESERVED_BY_OTHER_FLAG, atomic::Ordering::SeqCst);
+                    if curhe.predecessors < max_predecessors
+                        && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
+                    {
+                        // do update
+                        curhe.current = current;
+                        curhe.next = next;
+                        curhe.steps = 1;
+                        curhe.predecessors = 0;
+                        // update state
+                        curhe_state_atomic.store(state, atomic::Ordering::SeqCst);
+                    }
+                }
             }
         });
 }
