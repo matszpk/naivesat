@@ -26,6 +26,8 @@ use std::sync::{
 };
 use std::time::SystemTime;
 
+// TODO: Add handling partial handling of outputs while joining
+
 // HashMap entry structure
 // current: State - current state
 // next: State - next state
@@ -302,6 +304,8 @@ impl OpenCLJoinToHashMap {
 //
 // join_hashmap_itself - join hash entries with other hash entries in hashmap
 //
+
+// TODO: Add resolving loop by comparing nexts to current
 
 fn create_vec_of_atomic_u32(len: usize) -> Arc<Vec<AtomicU32>> {
     Arc::new(
