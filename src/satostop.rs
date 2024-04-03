@@ -308,7 +308,7 @@ impl OpenCLJoinToHashMap {
 struct Solution {
     start: u64,
     end: u64,
-    steps: u64
+    steps: u64,
 }
 
 #[inline]
@@ -332,10 +332,10 @@ fn resolve_unknowns(
     {
         if entry_state == HASH_STATE_STOPPED {
             // just set solution
-            *solution.lock().unwrap() = Some(Solution{
+            *solution.lock().unwrap() = Some(Solution {
                 start: current,
                 end: next,
-                steps
+                steps,
             });
         }
         let unknown_fill_idx =
