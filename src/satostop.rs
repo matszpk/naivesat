@@ -433,18 +433,18 @@ fn join_hashmap_itself_and_check_solution_cpu(
                 } else {
                     *outhe = *inhe;
                 }
-                // resolve_unknowns(
-                //     state_len,
-                //     unknown_bits,
-                //     unknown_fill_bits,
-                //     outhe.current,
-                //     outhe.next,
-                //     outhe.steps,
-                //     outhe.state,
-                //     unknown_fills.clone(),
-                //     unknowns_resolved.clone(),
-                //     solution,
-                // );
+                resolve_unknowns(
+                    state_len,
+                    unknown_bits,
+                    unknown_fill_bits,
+                    outhe.current,
+                    outhe.next,
+                    outhe.steps,
+                    outhe.state,
+                    unknown_fills.clone(),
+                    resolved_unknowns.clone(),
+                    solution,
+                );
             }
         });
     // finally add predecessors updates to output hashmap
