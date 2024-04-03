@@ -21,7 +21,7 @@ use std::fs;
 use std::ops::Range;
 use std::str::FromStr;
 use std::sync::atomic::{self, AtomicU32, AtomicU64};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 // TODO: Add handling partial handling of outputs while joining
@@ -305,15 +305,24 @@ impl OpenCLJoinToHashMap {
 // join_hashmap_itself - join hash entries with other hash entries in hashmap
 //
 
+struct Solution {
+    start: u64,
+    end: u64,
+    steps: u64
+}
+
 #[inline]
 fn resolve_unknowns(
     state_len: usize,
     unknown_bits: usize,
     unknown_fill_bits: usize,
     current: u64,
+    next: u64,
+    steps: u64,
     entry_state: u32,
     unknown_fills: Arc<Vec<AtomicU32>>,
     unknowns_resolved: Arc<AtomicU64>,
+    solution: &Mutex<Option<Solution>>,
 ) {
     // unknown fill mapping to state:
     //     [unknown_fill_entry_idx][unknown_fill_value][00000000000....]
@@ -321,6 +330,14 @@ fn resolve_unknowns(
     if (current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
         && (entry_state == HASH_STATE_LOOPED || entry_state == HASH_STATE_STOPPED)
     {
+        if entry_state == HASH_STATE_STOPPED {
+            // just set solution
+            *solution.lock().unwrap() = Some(Solution{
+                start: current,
+                end: next,
+                steps
+            });
+        }
         let unknown_fill_idx =
             usize::try_from(current >> (state_len - unknown_bits + unknown_fill_bits)).unwrap();
         let unknown_fill_mask = (1u32 << unknown_fill_bits) - 1;
