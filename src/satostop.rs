@@ -20,10 +20,8 @@ use rayon::prelude::*;
 use std::fs;
 use std::ops::Range;
 use std::str::FromStr;
-use std::sync::{
-    atomic::{self, AtomicU32},
-    Arc,
-};
+use std::sync::atomic::{self, AtomicU32, AtomicU64};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 // TODO: Add handling partial handling of outputs while joining
@@ -306,6 +304,45 @@ impl OpenCLJoinToHashMap {
 //
 // join_hashmap_itself - join hash entries with other hash entries in hashmap
 //
+
+#[inline]
+fn resolve_unknowns(
+    state_len: usize,
+    unknown_bits: usize,
+    unknown_fill_bits: usize,
+    current: u64,
+    entry_state: u32,
+    unknown_fills: Arc<Vec<AtomicU32>>,
+    unknowns_resolved: Arc<AtomicU64>,
+) {
+    // unknown fill mapping to state:
+    //     [unknown_fill_entry_idx][unknown_fill_value][00000000000....]
+    // only for unknown paths: state bits: 0..(state_len-unknown_bits) = 0b000...000
+    if (current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
+        && (entry_state == HASH_STATE_LOOPED || entry_state == HASH_STATE_STOPPED)
+    {
+        let unknown_fill_idx =
+            usize::try_from(current >> (state_len - unknown_bits + unknown_fill_bits)).unwrap();
+        let unknown_fill_mask = (1u32 << unknown_fill_bits) - 1;
+        let unknown_fill_value =
+            u32::try_from((current >> (state_len - unknown_bits)) & (unknown_fill_mask as u64))
+                .unwrap();
+        // if match to unknown fill field then increase this field
+        if unknown_fills[unknown_fill_idx]
+            .compare_exchange(
+                unknown_fill_value,
+                unknown_fill_value + 1,
+                atomic::Ordering::SeqCst,
+                atomic::Ordering::SeqCst,
+            )
+            .is_ok()
+            && unknown_fill_value == unknown_fill_mask
+        {
+            // increase resolved unknowns if it last unknown in this unknown fill
+            unknowns_resolved.fetch_add(1, atomic::Ordering::SeqCst);
+        }
+    }
+}
 
 fn create_vec_of_atomic_u32(len: usize) -> Arc<Vec<AtomicU32>> {
     Arc::new(
