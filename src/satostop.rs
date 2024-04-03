@@ -2042,6 +2042,44 @@ mod tests {
                     predecessors: 3,
                 },
             );
+            // unresolved 3 - because doesn't match unknown
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: (((60710 << 4) | 15) << (state_len - unknown_bits)),
+                    next: 0xdabaddaa,
+                    steps: 77721,
+                    state: HASH_STATE_USED,
+                    predecessors: 3,
+                },
+            );
+            // solution
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: (((20791 << 4) | 5) << (state_len - unknown_bits)),
+                    next: 0xd0a95051905,
+                    steps: 7611,
+                    state: HASH_STATE_USED,
+                    predecessors: 8,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xd0a95051905,
+                    next: 0x44066aa0bc1,
+                    steps: 1765,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 9,
+                },
+            );
             // for i in 0..10000000 {
             //     let state = 0x6d0a9405157 + i;
             //     let hidx = hash_function_64(state_len, state) >> (state_len - hbits);
@@ -2067,6 +2105,8 @@ mod tests {
         unknown_fills[3058].store(12, atomic::Ordering::SeqCst);
         unknown_fills[49201].store(15, atomic::Ordering::SeqCst);
         unknown_fills[25901].store(15, atomic::Ordering::SeqCst);
+        unknown_fills[60710].store(11, atomic::Ordering::SeqCst);
+        unknown_fills[20791].store(5, atomic::Ordering::SeqCst);
         let resolved_unknowns = Arc::new(AtomicU64::new(
             unknown_fills
                 .iter()
@@ -2334,6 +2374,44 @@ mod tests {
                     predecessors: 3,
                 },
             );
+            // unresolved 3 - because doesn't match unknown
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: (((60710 << 4) | 15) << (state_len - unknown_bits)),
+                    next: 0xdabaddaa,
+                    steps: 77721,
+                    state: HASH_STATE_USED,
+                    predecessors: 3,
+                },
+            );
+            // solution
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: (((20791 << 4) | 5) << (state_len - unknown_bits)),
+                    next: 0x44066aa0bc1,
+                    steps: 7611 + 1765,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 8,
+                },
+            );
+            hashmap_insert(
+                state_len,
+                hbits,
+                &mut hashmap,
+                HashEntry {
+                    current: 0xd0a95051905,
+                    next: 0x44066aa0bc1,
+                    steps: 1765,
+                    state: HASH_STATE_STOPPED,
+                    predecessors: 10,
+                },
+            );
             hashmap
         };
         let expected_unknown_fills =
@@ -2347,11 +2425,16 @@ mod tests {
         expected_unknown_fills[49201].store(16, atomic::Ordering::SeqCst);
         expected_unknown_fills[25901].store(16, atomic::Ordering::SeqCst);
         expected_unknown_fills[3058].store(13, atomic::Ordering::SeqCst);
+        expected_unknown_fills[20791].store(6, atomic::Ordering::SeqCst);
         let expected_resolved_unknowns = expected_unknown_fills
             .iter()
             .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
             .count() as u64;
-        let expected_solution = None;
+        let expected_solution = Some(Solution {
+            start: (((20791 << 4) | 5) << (state_len - unknown_bits)),
+            end: 0x44066aa0bc1,
+            steps: 7611 + 1765,
+        });
         JoinHashMapItselfAndCheckSolutionData {
             state_len,
             hbits,
