@@ -768,7 +768,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                     // update to HASH_STATE_RESERVED_BY_OTHER_FLAG and retrieve old value.
                     let old_state = curhe_state_atomic
                         .fetch_or(HASH_STATE_RESERVED_BY_OTHER_FLAG, atomic::Ordering::SeqCst);
-                    if curhe.predecessors < max_predecessors
+                    if curhe.predecessors <= max_predecessors
                         && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
                     {
                         // do update
