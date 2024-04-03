@@ -672,6 +672,8 @@ impl OpenCLJoinHashMapItselfAndCheckSolution {
 
 fn add_to_hashmap_and_check_solution_cpu(
     state_len: usize,
+    arg_bit_place: usize,
+    arg: u64,
     outputs: &[u32],
     hashmap: &mut [HashEntry],
     unknown_bits: usize,
@@ -681,6 +683,51 @@ fn add_to_hashmap_and_check_solution_cpu(
     solution: &Mutex<Option<Solution>>,
 ) {
     assert_eq!(hashmap.len().count_ones(), 1);
+    let cpu_num = rayon::current_num_threads();
+    // word_per_elem - elem length in outputs in words (can be 1 or 2).
+    let word_per_elem = (state_len + 1 + 31) >> 5;
+    let elem_num = outputs.len() / word_per_elem;
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), elem_num >> 6);
+    let chunk_len = elem_num / chunk_num;
+    let arg_start = arg << arg_bit_place;
+    let arg_end = arg_start + (1u64 << arg_bit_place);
+    let state_mask = (1u64 << state_len) - 1;
+    outputs
+        .chunks(chunk_len * word_per_elem)
+        .enumerate()
+        .par_bridge()
+        .for_each(|(ch_idx, chunk)| {
+            let istart = chunk_len * ch_idx;
+            for ie in 0..chunk.len() / word_per_elem {
+                let i = istart + ie;
+                let output = if word_per_elem == 2 {
+                    (outputs[2 * i] as u64) | ((outputs[2 * i + 1] as u64) << 32)
+                } else {
+                    outputs[i] as u64
+                };
+                let current = (i as u64) + arg_start;
+                let next = output & state_mask;
+                let state = if (next >> state_len) & 1 != 0 {
+                    HASH_STATE_STOPPED
+                } else if next == current {
+                    HASH_STATE_LOOPED
+                } else {
+                    HASH_STATE_USED
+                };
+                resolve_unknowns(
+                    state_len,
+                    unknown_bits,
+                    unknown_fill_bits,
+                    current,
+                    next,
+                    1,
+                    state,
+                    unknown_fills.clone(),
+                    resolved_unknowns.clone(),
+                    solution,
+                );
+            }
+        });
 }
 
 //
