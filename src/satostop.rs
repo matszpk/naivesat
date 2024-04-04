@@ -3667,36 +3667,36 @@ mod tests {
         #[allow(deprecated)]
         let cmd_queue =
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
-        let AddToHashMapAndCheckSolutionData {
-            state_len,
-            arg_bit_place,
-            arg,
-            outputs,
-            mut hashmap,
-            expected_hashmap,
-            unknown_bits,
-            unknown_fill_bits,
-            unknown_fills,
-            resolved_unknowns,
-            solution,
-            expected_unknown_fills,
-            expected_resolved_unknowns,
-            expected_solution,
-        } = add_to_hashmap_and_check_solution_data_1();
-        let max_predecessors = 1;
-        let add_to_hashmap = OpenCLAddToHashMapAndCheckSolution::new(
-            state_len,
-            arg_bit_place,
-            hashmap.len(),
-            unknown_bits,
-            unknown_fill_bits,
-            max_predecessors,
-            true,
-            context.clone(),
-            cmd_queue.clone(),
-        );
 
         {
+            let AddToHashMapAndCheckSolutionData {
+                state_len,
+                arg_bit_place,
+                arg,
+                outputs,
+                mut hashmap,
+                expected_hashmap,
+                unknown_bits,
+                unknown_fill_bits,
+                unknown_fills,
+                resolved_unknowns,
+                solution,
+                expected_unknown_fills,
+                expected_resolved_unknowns,
+                expected_solution,
+            } = add_to_hashmap_and_check_solution_data_1();
+            let max_predecessors = 1;
+            let add_to_hashmap = OpenCLAddToHashMapAndCheckSolution::new(
+                state_len,
+                arg_bit_place,
+                hashmap.len(),
+                unknown_bits,
+                unknown_fill_bits,
+                max_predecessors,
+                true,
+                context.clone(),
+                cmd_queue.clone(),
+            );
             let mut outputs_buffer = unsafe {
                 Buffer::<u32>::create(
                     &context,
@@ -3781,14 +3781,72 @@ mod tests {
                     .unwrap();
             }
             cmd_queue.finish().unwrap();
+            add_to_hashmap.execute(
+                arg,
+                &outputs_buffer,
+                &mut hashmap_buffer,
+                &mut unknown_fills_buffer,
+                &mut sol_and_res_unk_buffer,
+            );
+
+            let mut out_hashmap = vec![HashEntry::default(); hashmap.len()];
+            let mut out_unknown_fills = vec![0; unknown_fills.len()];
+            let mut out_sol_and_res_unk = [SolutionAndResUnknowns::default()];
+            unsafe {
+                cmd_queue
+                    .enqueue_read_buffer(&hashmap_buffer, CL_BLOCKING, 0, &mut out_hashmap, &[])
+                    .unwrap();
+                cmd_queue
+                    .enqueue_read_buffer(
+                        &unknown_fills_buffer,
+                        CL_BLOCKING,
+                        0,
+                        &mut out_unknown_fills,
+                        &[],
+                    )
+                    .unwrap();
+                cmd_queue
+                    .enqueue_read_buffer(
+                        &sol_and_res_unk_buffer,
+                        CL_BLOCKING,
+                        0,
+                        &mut out_sol_and_res_unk,
+                        &[],
+                    )
+                    .unwrap();
+            }
+            for (i, he) in out_hashmap.into_iter().enumerate() {
+                assert_eq!(expected_hashmap[i], he, "{}", i);
+            }
+            for (i, uf) in out_unknown_fills.iter().enumerate() {
+                assert_eq!(
+                    expected_unknown_fills[i].load(atomic::Ordering::SeqCst),
+                    *uf,
+                    "{}",
+                    i
+                );
+            }
+            let out_sol_and_res_unk = out_sol_and_res_unk[0];
+            //println!("sol_and_res: {:?}", out_sol_and_res_unk);
+            assert_eq!(
+                expected_resolved_unknowns,
+                out_sol_and_res_unk.resolved_unknowns
+            );
+            assert_eq!(
+                expected_solution.is_some(),
+                out_sol_and_res_unk.sol_defined != 0
+            );
+            if let Some(sol) = expected_solution {
+                assert_eq!(
+                    sol,
+                    Solution {
+                        start: out_sol_and_res_unk.sol_start,
+                        end: out_sol_and_res_unk.sol_end,
+                        steps: out_sol_and_res_unk.sol_steps,
+                    }
+                );
+            }
         }
-        add_to_hashmap.execute(
-            arg,
-            outputs_buffer,
-            &mut hashmap,
-            &mut unknown_fills,
-            &mut sol_and_res_unk,
-        );
     }
 }
 
