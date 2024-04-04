@@ -781,6 +781,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                 unsafe {
                     let curhe = shared_hashmap.get_mut(cur_hash >> hashentry_shift);
                     let curhe_state_atomic = AtomicU32::from_ptr(&mut curhe.state as *mut u32);
+                    // if previous entry have:
                     // if not currently solved unknown (state).
                     // if predecessors is less and state is not have
                     // HASH_STATE_RESERVED_BY_OTHER_FLAG
@@ -816,7 +817,8 @@ fn add_to_hashmap_and_check_solution_cpu(
                     //              current_currently_solved);
                     // }
 
-                    if (current_currently_solved
+                    //
+                    if ((current_currently_solved && !old_current_currently_solved)
                         || (!old_current_currently_solved
                             && curhe.predecessors <= max_predecessors))
                         && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
@@ -3104,7 +3106,7 @@ mod tests {
         let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
         unknown_fills[((arg as usize) << 2) | 1].store(8, atomic::Ordering::SeqCst);
         unknown_fills[((arg as usize) << 2) | 2].store(6, atomic::Ordering::SeqCst);
-        unknown_fills[((arg as usize) << 2) | 3].store(11, atomic::Ordering::SeqCst);
+        unknown_fills[((arg as usize) << 2) | 3].store(10, atomic::Ordering::SeqCst);
         unknown_fills[0x357c00 >> (state_len - unknown_bits + unknown_fill_bits)].store(
             (0x357c00 >> (state_len - unknown_bits)) & ((1u32 << (unknown_fill_bits)) - 1),
             atomic::Ordering::SeqCst,
