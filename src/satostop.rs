@@ -977,7 +977,7 @@ impl OpenCLAddToHashMapAndCheckSolution {
         unknown_fills: &mut Buffer<u32>,
         sol_and_res_unk: &mut Buffer<SolutionAndResUnknowns>,
     ) {
-        let cl_arg = cl_ulong::from(arg);
+        let cl_arg = cl_ulong::try_from(arg).unwrap();
         unsafe {
             ExecuteKernel::new(&self.kernel)
                 .set_arg(&cl_arg)
