@@ -861,7 +861,7 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
     uint state;
     if (((output >> STATE_LEN) & 1) != 0) {
         state = HASH_STATE_STOPPED;
-    } else if next == current {
+    } else if (next == current) {
         state = HASH_STATE_LOOPED;
     } else {
         state = HASH_STATE_USED;
@@ -915,7 +915,7 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
             atomic_xchg(&(curhe->state), old_state);
         }
     }
-    resolve_unknowns(current, next, steps, state, unknown_fills, sol_and_res_unk);
+    resolve_unknowns(current, next, 1, state, unknown_fills, sol_and_res_unk);
 }
 "##;
 
@@ -3658,6 +3658,43 @@ mod tests {
             resolved_unknowns.load(atomic::Ordering::SeqCst)
         );
         assert_eq!(expected_solution, *solution.lock().unwrap());
+    }
+
+    #[test]
+    fn test_add_to_hashmap_and_check_solution_opencl() {
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        let context = Arc::new(Context::from_device(&device).unwrap());
+        #[allow(deprecated)]
+        let cmd_queue =
+            Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
+        let AddToHashMapAndCheckSolutionData {
+            state_len,
+            arg_bit_place,
+            arg,
+            outputs,
+            mut hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        } = add_to_hashmap_and_check_solution_data_1();
+        let max_predecessors = 1;
+        let add_to_hashmap = OpenCLAddToHashMapAndCheckSolution::new(
+            state_len,
+            arg_bit_place,
+            hashmap.len(),
+            unknown_bits,
+            unknown_fill_bits,
+            max_predecessors,
+            true,
+            context.clone(),
+            cmd_queue.clone(),
+        );
     }
 }
 
