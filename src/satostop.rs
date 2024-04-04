@@ -3695,6 +3695,100 @@ mod tests {
             context.clone(),
             cmd_queue.clone(),
         );
+
+        {
+            let mut outputs_buffer = unsafe {
+                Buffer::<u32>::create(
+                    &context,
+                    CL_MEM_READ_WRITE,
+                    outputs.len(),
+                    std::ptr::null_mut(),
+                )
+                .unwrap()
+            };
+            let mut hashmap_buffer = unsafe {
+                Buffer::<HashEntry>::create(
+                    &context,
+                    CL_MEM_READ_WRITE,
+                    hashmap.len(),
+                    std::ptr::null_mut(),
+                )
+                .unwrap()
+            };
+            let mut unknown_fills_buffer = unsafe {
+                Buffer::<u32>::create(
+                    &context,
+                    CL_MEM_READ_WRITE,
+                    unknown_fills.len(),
+                    std::ptr::null_mut(),
+                )
+                .unwrap()
+            };
+            let mut sol_and_res_unk_buffer = unsafe {
+                Buffer::<SolutionAndResUnknowns>::create(
+                    &context,
+                    CL_MEM_READ_WRITE,
+                    1,
+                    std::ptr::null_mut(),
+                )
+                .unwrap()
+            };
+            unsafe {
+                cmd_queue
+                    .enqueue_write_buffer(&mut outputs_buffer, CL_BLOCKING, 0, &outputs, &[])
+                    .unwrap();
+                cmd_queue
+                    .enqueue_write_buffer(&mut hashmap_buffer, CL_BLOCKING, 0, &hashmap, &[])
+                    .unwrap();
+                let unknown_fills_data = unknown_fills
+                    .iter()
+                    .map(|v| v.load(atomic::Ordering::SeqCst))
+                    .collect::<Vec<_>>();
+                cmd_queue
+                    .enqueue_write_buffer(
+                        &mut unknown_fills_buffer,
+                        CL_BLOCKING,
+                        0,
+                        &unknown_fills_data,
+                        &[],
+                    )
+                    .unwrap();
+                let sol_and_res_unk = solution
+                    .lock()
+                    .unwrap()
+                    .map(|sol| SolutionAndResUnknowns {
+                        resolved_unknowns: resolved_unknowns.load(atomic::Ordering::SeqCst),
+                        sol_start: sol.start,
+                        sol_end: sol.end,
+                        sol_steps: sol.steps,
+                        sol_defined: 1,
+                    })
+                    .unwrap_or(SolutionAndResUnknowns {
+                        resolved_unknowns: resolved_unknowns.load(atomic::Ordering::SeqCst),
+                        sol_start: 0,
+                        sol_end: 0,
+                        sol_steps: 0,
+                        sol_defined: 0,
+                    });
+                cmd_queue
+                    .enqueue_write_buffer(
+                        &mut sol_and_res_unk_buffer,
+                        CL_BLOCKING,
+                        0,
+                        &[sol_and_res_unk],
+                        &[],
+                    )
+                    .unwrap();
+            }
+            cmd_queue.finish().unwrap();
+        }
+        add_to_hashmap.execute(
+            arg,
+            outputs_buffer,
+            &mut hashmap,
+            &mut unknown_fills,
+            &mut sol_and_res_unk,
+        );
     }
 }
 
