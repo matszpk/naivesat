@@ -866,7 +866,7 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
     } else {
         state = HASH_STATE_USED;
     }
-#ifdef TEST_ROUTINE
+#if TEST_ROUTINE==1
     if (next == 0)
         return;
 #endif
@@ -918,6 +918,83 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
     resolve_unknowns(current, next, steps, state, unknown_fills, sol_and_res_unk);
 }
 "##;
+
+struct OpenCLAddToHashMapAndCheckSolution {
+    outputs_len: usize,
+    cmd_queue: Arc<CommandQueue>,
+    group_len: usize,
+    kernel: Kernel,
+}
+
+impl OpenCLAddToHashMapAndCheckSolution {
+    fn new(
+        state_len: usize,
+        arg_bit_place: usize,
+        hashmap_len: usize,
+        unknown_bits: usize,
+        unknown_fill_bits: usize,
+        max_predecessors: u32,
+        test: bool,
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+    ) -> Self {
+        let device = Device::new(context.devices()[0]);
+        let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
+        let words_per_elem = (state_len + 1 + 31) >> 5;
+        let defs = format!(
+            concat!(
+                "-DWORDS_PER_ELEM=({}) -DSTATE_LEN=({}) -DARG_BIT_PLACE=({}) ",
+                "-DHASHMAP_LEN_BITS=({}) -DUNKNOWN_BITS=({}) -DUNKNOWN_FILL_BITS=({}) ",
+                "-DMAX_PREDECESSORS=({}) -DTEST_ROUTINE=({})"
+            ),
+            words_per_elem,
+            state_len,
+            arg_bit_place,
+            usize::BITS - hashmap_len.leading_zeros() - 1,
+            unknown_bits,
+            unknown_fill_bits,
+            max_predecessors,
+            u32::from(test),
+        );
+        let source = HASH_ENTRY_OPENCL_DEF.to_string()
+            + RESOLVE_UNKNOWNS_OPENCL_CODE
+            + HASH_FUNC_OPENCL_DEF
+            + ADD_TO_HASHMAP_AND_CHECK_SOLUTION_OPENCL_CODE;
+        let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
+        Self {
+            outputs_len: 1 << arg_bit_place,
+            cmd_queue,
+            group_len,
+            kernel: Kernel::create(&program, "add_to_hashmap_and_check_solution").unwrap(),
+        }
+    }
+
+    fn execute(
+        &self,
+        arg: u64,
+        outputs: &Buffer<u32>,
+        hashmap: &mut Buffer<HashEntry>,
+        unknown_fills: &mut Buffer<u32>,
+        sol_and_res_unk: &mut Buffer<SolutionAndResUnknowns>,
+    ) {
+        let cl_arg = cl_ulong::from(arg);
+        unsafe {
+            ExecuteKernel::new(&self.kernel)
+                .set_arg(&cl_arg)
+                .set_arg(outputs)
+                .set_arg(hashmap)
+                .set_arg(unknown_fills)
+                .set_arg(sol_and_res_unk)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    ((self.outputs_len + self.group_len - 1) / self.group_len) * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)
+                .unwrap();
+            self.cmd_queue.finish().unwrap();
+        }
+    }
+}
 
 //
 // main solver code
