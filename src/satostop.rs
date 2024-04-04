@@ -816,6 +816,8 @@ fn add_to_hashmap_and_check_solution_cpu(
                         std::sync::atomic::fence(atomic::Ordering::SeqCst);
                         // update state
                         curhe_state_atomic.store(state, atomic::Ordering::SeqCst);
+                    } else {
+                        curhe_state_atomic.store(old_state, atomic::Ordering::SeqCst);
                     }
                 }
             }
@@ -3171,6 +3173,22 @@ mod tests {
             max_predecessors,
             true,
         );
+        for (i, he) in hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}", i);
+        }
+        for (i, uf) in unknown_fills.iter().enumerate() {
+            assert_eq!(
+                expected_unknown_fills[i].load(atomic::Ordering::SeqCst),
+                uf.load(atomic::Ordering::SeqCst),
+                "{}",
+                i
+            );
+        }
+        assert_eq!(
+            expected_resolved_unknowns,
+            resolved_unknowns.load(atomic::Ordering::SeqCst)
+        );
+        assert_eq!(expected_solution, *solution.lock().unwrap());
     }
 }
 
