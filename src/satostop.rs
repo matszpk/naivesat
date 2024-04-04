@@ -761,6 +761,19 @@ fn add_to_hashmap_and_check_solution_cpu(
                 let cur_hash = hash_function_64(state_len, current);
                 // update hash map entry - use unsafe code implement
                 // atomic synchronized updating mechanism
+
+                let current_unknown_fill_idx =
+                    usize::try_from(current >> (state_len - unknown_bits + unknown_fill_bits))
+                        .unwrap();
+                let current_unknown_fill_value = u32::try_from(
+                    (current >> (state_len - unknown_bits)) & (unknown_fill_mask as u64),
+                )
+                .unwrap();
+                let current_currently_solved =
+                    (current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
+                        && unknown_fills[current_unknown_fill_idx].load(atomic::Ordering::SeqCst)
+                            == current_unknown_fill_value;
+
                 unsafe {
                     let curhe = shared_hashmap.get_mut(cur_hash >> hashentry_shift);
                     let curhe_state_atomic = AtomicU32::from_ptr(curhe.state as *mut u32);
@@ -772,19 +785,23 @@ fn add_to_hashmap_and_check_solution_cpu(
                         .fetch_or(HASH_STATE_RESERVED_BY_OTHER_FLAG, atomic::Ordering::SeqCst);
                     std::sync::atomic::fence(atomic::Ordering::SeqCst);
 
-                    let unknown_fill_idx = usize::try_from(
+                    let old_current_unknown_fill_idx = usize::try_from(
                         curhe.current >> (state_len - unknown_bits + unknown_fill_bits),
                     )
                     .unwrap();
-                    let unknown_fill_value = u32::try_from(
+                    let old_current_unknown_fill_value = u32::try_from(
                         (curhe.current >> (state_len - unknown_bits)) & (unknown_fill_mask as u64),
                     )
                     .unwrap();
+                    let old_current_currently_solved =
+                        (curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
+                            && unknown_fills[old_current_unknown_fill_idx]
+                                .load(atomic::Ordering::SeqCst)
+                                == old_current_unknown_fill_value;
 
-                    if ((curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) != 0
-                        || unknown_fills[unknown_fill_idx].load(atomic::Ordering::SeqCst)
-                            != unknown_fill_value)
-                        && curhe.predecessors <= max_predecessors
+                    if (current_currently_solved
+                        || (!old_current_currently_solved
+                            && curhe.predecessors <= max_predecessors))
                         && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
                     {
                         // do update
