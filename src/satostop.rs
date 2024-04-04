@@ -751,18 +751,6 @@ fn add_to_hashmap_and_check_solution_cpu(
                     // special testcase for testing!!!
                     continue;
                 }
-                resolve_unknowns(
-                    state_len,
-                    unknown_bits,
-                    unknown_fill_bits,
-                    current,
-                    next,
-                    1,
-                    state,
-                    unknown_fills.clone(),
-                    resolved_unknowns.clone(),
-                    solution,
-                );
                 let cur_hash = hash_function_64(state_len, current);
 
                 let current_unknown_fill_idx =
@@ -775,7 +763,6 @@ fn add_to_hashmap_and_check_solution_cpu(
                     (current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
                         && unknown_fills[current_unknown_fill_idx].load(atomic::Ordering::SeqCst)
                             == current_unknown_fill_value;
-
                 // update hash map entry - use unsafe code implement
                 // atomic synchronized updating mechanism
                 unsafe {
@@ -835,6 +822,18 @@ fn add_to_hashmap_and_check_solution_cpu(
                         }
                     }
                 }
+                resolve_unknowns(
+                    state_len,
+                    unknown_bits,
+                    unknown_fill_bits,
+                    current,
+                    next,
+                    1,
+                    state,
+                    unknown_fills.clone(),
+                    resolved_unknowns.clone(),
+                    solution,
+                );
             }
         });
 }
@@ -3195,7 +3194,7 @@ mod tests {
                 current: (((1 << 4) + 8) << 10) | ((arg as u64) << arg_bit_place),
                 next: 0x1ac7d3,
                 steps: 1,
-                state: HASH_STATE_USED,
+                state: HASH_STATE_STOPPED,
                 predecessors: 0,
             },
         );
