@@ -723,7 +723,7 @@ fn add_to_hashmap_and_check_solution_cpu(
     let hashlen_bits = usize::BITS - hashmap.len().leading_zeros() - 1;
     let hashentry_shift = state_len - hashlen_bits as usize;
     let shared_hashmap = UnsafeSlice::new(hashmap);
-    let unknown_fill_mask = (1u32 << unknown_fill_bits) - 1;
+    let unknown_fill_mask = (1u64 << unknown_fill_bits) - 1;
     outputs
         .chunks(chunk_len * word_per_elem)
         .enumerate()
@@ -763,10 +763,9 @@ fn add_to_hashmap_and_check_solution_cpu(
                 let current_unknown_fill_idx =
                     usize::try_from(current >> (state_len - unknown_bits + unknown_fill_bits))
                         .unwrap();
-                let current_unknown_fill_value = u32::try_from(
-                    (current >> (state_len - unknown_bits)) & (unknown_fill_mask as u64),
-                )
-                .unwrap();
+                let current_unknown_fill_value =
+                    u32::try_from((current >> (state_len - unknown_bits)) & unknown_fill_mask)
+                        .unwrap();
                 let current_currently_solved =
                     (current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
                         && unknown_fills[current_unknown_fill_idx].load(atomic::Ordering::SeqCst)
@@ -790,7 +789,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                     )
                     .unwrap();
                     let old_current_unknown_fill_value = u32::try_from(
-                        (curhe.current >> (state_len - unknown_bits)) & (unknown_fill_mask as u64),
+                        (curhe.current >> (state_len - unknown_bits)) & unknown_fill_mask,
                     )
                     .unwrap();
                     let old_current_currently_solved =
