@@ -2017,7 +2017,6 @@ mod tests {
 
     struct JoinHashMapItselfAndCheckSolutionData {
         state_len: usize,
-        hbits: usize,
         hashmap: Vec<HashEntry>,
         expected_hashmap: Vec<HashEntry>,
         unknown_bits: usize,
@@ -2689,7 +2688,6 @@ mod tests {
         });
         JoinHashMapItselfAndCheckSolutionData {
             state_len,
-            hbits,
             hashmap,
             expected_hashmap,
             unknown_bits,
@@ -2707,7 +2705,6 @@ mod tests {
     fn test_join_hashmap_itself_and_check_solution_cpu() {
         let JoinHashMapItselfAndCheckSolutionData {
             state_len,
-            hbits,
             hashmap,
             expected_hashmap,
             unknown_bits,
@@ -2768,7 +2765,6 @@ mod tests {
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
         let JoinHashMapItselfAndCheckSolutionData {
             state_len,
-            hbits,
             hashmap,
             expected_hashmap,
             unknown_bits,
@@ -3080,7 +3076,7 @@ mod tests {
             &mut hashmap,
             HashEntry {
                 // this same hash index as:
-                // (((3 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
+                // (((3 << 4) + 10) << 10) | ((arg as u64) << arg_bit_place): conflict
                 current: 0x357c00,
                 next: 0xda10da,
                 steps: 66581,
@@ -3242,7 +3238,7 @@ mod tests {
             &mut expected_hashmap,
             HashEntry {
                 // this same hash index as:
-                // (((3 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
+                // (((3 << 4) + 10) << 10) | ((arg as u64) << arg_bit_place): conflict
                 current: 0x357c00,
                 next: 0xda10da,
                 steps: 66581,
