@@ -3129,6 +3129,42 @@ mod tests {
             hbits,
             &mut expected_hashmap,
             HashEntry {
+                current: 4321 | ((arg as u64) << arg_bit_place),
+                next: 0x23d5b2,
+                steps: 1,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 15720 | ((arg as u64) << arg_bit_place),
+                next: 15720 | ((arg as u64) << arg_bit_place),
+                steps: 1,
+                state: HASH_STATE_STOPPED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 32994 | ((arg as u64) << arg_bit_place),
+                next: 0xffaa4c,
+                steps: 1,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
                 // this same hash index as: 18056 | ((arg as u64) << arg_bit_place): conflict
                 current: 0x39f5b,
                 next: 0x1a0bc1,
