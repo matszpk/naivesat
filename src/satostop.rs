@@ -182,8 +182,8 @@ fn join_to_hashmap_cpu(
     let chunk_len = hashmap.len() / chunk_num;
     let arg_start = arg << arg_bit_place;
     let arg_end = arg_start + (1u64 << arg_bit_place);
-    // word_per_elem - elem length in outputs in words (can be 1 or 2).
-    let word_per_elem = (state_len + 1 + 31) >> 5;
+    // words_per_elem - elem length in outputs in words (can be 1 or 2).
+    let words_per_elem = (state_len + 1 + 31) >> 5;
     let state_mask = (1u64 << state_len) - 1;
     hashmap
         .chunks_mut(chunk_len)
@@ -193,9 +193,9 @@ fn join_to_hashmap_cpu(
                 if he.state == HASH_STATE_USED && arg_start <= he.next && he.next < arg_end {
                     // update hash entry next field.
                     let output_entry_start =
-                        word_per_elem * usize::try_from(he.next - arg_start).unwrap();
+                        words_per_elem * usize::try_from(he.next - arg_start).unwrap();
                     // get output state
-                    let output = if word_per_elem == 2 {
+                    let output = if words_per_elem == 2 {
                         (outputs[output_entry_start] as u64)
                             | ((outputs[output_entry_start + 1] as u64) << 32)
                     } else {
@@ -231,7 +231,7 @@ kernel void join_to_hashmap(ulong arg, const global uint* outputs, global HashEn
     global HashEntry* he = hashmap + idx;
     if (he->state == HASH_STATE_USED && arg_start <= he->next && he->next < arg_end) {
         const ulong state_mask = (1UL << STATE_LEN) - 1UL;
-#if WORD_PER_ELEM == 2
+#if WORDS_PER_ELEM == 2
         const size_t output_entry_start = (he->next - arg_start) << 1;
         const ulong output = ((ulong)outputs[output_entry_start]) |
             (((ulong)outputs[output_entry_start + 1]) << 32);
@@ -269,10 +269,10 @@ impl OpenCLJoinToHashMap {
     ) -> Self {
         let device = Device::new(context.devices()[0]);
         let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
-        let word_per_elem = (state_len + 1 + 31) >> 5;
+        let words_per_elem = (state_len + 1 + 31) >> 5;
         let defs = format!(
-            "-DSTATE_LEN=({}) -DARG_BIT_PLACE=({}) -DWORD_PER_ELEM=({}) -DHASHMAP_LEN=({})",
-            state_len, arg_bit_place, word_per_elem, hashmap_len,
+            "-DSTATE_LEN=({}) -DARG_BIT_PLACE=({}) -DWORDS_PER_ELEM=({}) -DHASHMAP_LEN=({})",
+            state_len, arg_bit_place, words_per_elem, hashmap_len,
         );
         let source = HASH_ENTRY_OPENCL_DEF.to_string() + JOIN_TO_HASHMAP_OPENCL_CODE;
         let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
@@ -712,9 +712,9 @@ fn add_to_hashmap_and_check_solution_cpu(
 ) {
     assert_eq!(hashmap.len().count_ones(), 1);
     let cpu_num = rayon::current_num_threads();
-    // word_per_elem - elem length in outputs in words (can be 1 or 2).
-    let word_per_elem = (state_len + 1 + 31) >> 5;
-    let elem_num = outputs.len() / word_per_elem;
+    // words_per_elem - elem length in outputs in words (can be 1 or 2).
+    let words_per_elem = (state_len + 1 + 31) >> 5;
+    let elem_num = outputs.len() / words_per_elem;
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), elem_num >> 6);
     let chunk_len = elem_num / chunk_num;
     let arg_start = arg << arg_bit_place;
@@ -725,14 +725,14 @@ fn add_to_hashmap_and_check_solution_cpu(
     let shared_hashmap = UnsafeSlice::new(hashmap);
     let unknown_fill_mask = (1u64 << unknown_fill_bits) - 1;
     outputs
-        .chunks(chunk_len * word_per_elem)
+        .chunks(chunk_len * words_per_elem)
         .enumerate()
         .par_bridge()
         .for_each(|(ch_idx, chunk)| {
             let istart = chunk_len * ch_idx;
-            for ie in 0..chunk.len() / word_per_elem {
+            for ie in 0..chunk.len() / words_per_elem {
                 let i = istart + ie;
-                let output = if word_per_elem == 2 {
+                let output = if words_per_elem == 2 {
                     (outputs[2 * i] as u64) | ((outputs[2 * i + 1] as u64) << 32)
                 } else {
                     outputs[i] as u64
@@ -850,7 +850,7 @@ fn do_solve_with_cpu_mapper<'a>(
     mapper.transform_helpers();
     mapper.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
     mapper.user_defs(&gen_output_transform_code(output_len));
-    let word_per_elem = (output_len + 31) >> 5;
+    let words_per_elem = (output_len + 31) >> 5;
     mapper.add_with_config(
         "formula",
         circuit,
@@ -858,7 +858,7 @@ fn do_solve_with_cpu_mapper<'a>(
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
             .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-            .aggr_output_len(Some(word_per_elem * (1 << elem_inputs)))
+            .aggr_output_len(Some(words_per_elem * (1 << elem_inputs)))
             .dont_clear_outputs(true),
     );
     let type_len = mapper.type_len();
@@ -908,7 +908,7 @@ fn do_solve_with_opencl_mapper<'a>(
     mapper.transform_helpers();
     mapper.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
     mapper.user_defs(&gen_output_transform_code(output_len));
-    let word_per_elem = (output_len + 31) >> 5;
+    let words_per_elem = (output_len + 31) >> 5;
     mapper.add_with_config(
         "formula",
         circuit,
@@ -916,7 +916,7 @@ fn do_solve_with_opencl_mapper<'a>(
             .elem_inputs(Some(&(0..elem_inputs).collect::<Vec<usize>>()))
             .arg_inputs(Some(&(elem_inputs..input_len).collect::<Vec<usize>>()))
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-            .aggr_output_len(Some(word_per_elem * (1 << elem_inputs)))
+            .aggr_output_len(Some(words_per_elem * (1 << elem_inputs)))
             .dont_clear_outputs(true),
     );
     let type_len = mapper.type_len();
@@ -1027,7 +1027,7 @@ mod tests {
     #[test]
     fn test_aggr_output_code_cpu() {
         for output_len in [24, 32, 33, 44] {
-            let word_per_elem = (output_len + 31) >> 5;
+            let words_per_elem = (output_len + 31) >> 5;
             let circuit =
                 Circuit::new(output_len, [], (0..output_len).map(|i| (i, false))).unwrap();
             let mut builder = CPUBuilder::new(None);
@@ -1041,7 +1041,7 @@ mod tests {
                     .elem_inputs(Some(&(0..20).collect::<Vec<usize>>()))
                     .arg_inputs(Some(&(20..output_len).collect::<Vec<usize>>()))
                     .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-                    .aggr_output_len(Some(word_per_elem * (1 << 20))),
+                    .aggr_output_len(Some(words_per_elem * (1 << 20))),
             );
             builder.add_with_config(
                 "formula2",
@@ -1050,7 +1050,7 @@ mod tests {
                     .elem_inputs(Some(&(output_len - 20..output_len).collect::<Vec<usize>>()))
                     .arg_inputs(Some(&(0..output_len - 20).collect::<Vec<usize>>()))
                     .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-                    .aggr_output_len(Some(word_per_elem * (1 << 20))),
+                    .aggr_output_len(Some(words_per_elem * (1 << 20))),
             );
             let mut execs = builder.build().unwrap();
             let arg_mask = (1u64 << (output_len - 20)) - 1;
@@ -1058,9 +1058,9 @@ mod tests {
             println!("Arg: {}", arg);
             let input = execs[0].new_data(16);
             let output = execs[0].execute(&input, arg).unwrap().release();
-            assert_eq!(output.len(), word_per_elem * (1 << 20));
+            assert_eq!(output.len(), words_per_elem * (1 << 20));
             for i in 0..1 << 20 {
-                let out = if word_per_elem == 2 {
+                let out = if words_per_elem == 2 {
                     (output[2 * i] as u64) | ((output[2 * i + 1] as u64) << 32)
                 } else {
                     output[i] as u64
@@ -1070,9 +1070,9 @@ mod tests {
 
             let input = execs[1].new_data(16);
             let output = execs[1].execute(&input, arg).unwrap().release();
-            assert_eq!(output.len(), word_per_elem * (1 << 20));
+            assert_eq!(output.len(), words_per_elem * (1 << 20));
             for i in 0..1 << 20 {
-                let out = if word_per_elem == 2 {
+                let out = if words_per_elem == 2 {
                     (output[2 * i] as u64) | ((output[2 * i + 1] as u64) << 32)
                 } else {
                     output[i] as u64
@@ -1092,7 +1092,7 @@ mod tests {
     fn test_aggr_output_code_opencl() {
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
         for output_len in [24, 32, 33, 44] {
-            let word_per_elem = (output_len + 31) >> 5;
+            let words_per_elem = (output_len + 31) >> 5;
             let circuit =
                 Circuit::new(output_len, [], (0..output_len).map(|i| (i, false))).unwrap();
             let mut builder = OpenCLBuilder::new(&device, None);
@@ -1106,7 +1106,7 @@ mod tests {
                     .elem_inputs(Some(&(0..20).collect::<Vec<usize>>()))
                     .arg_inputs(Some(&(20..output_len).collect::<Vec<usize>>()))
                     .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-                    .aggr_output_len(Some(word_per_elem * (1 << 20))),
+                    .aggr_output_len(Some(words_per_elem * (1 << 20))),
             );
             builder.add_with_config(
                 "formula2",
@@ -1115,7 +1115,7 @@ mod tests {
                     .elem_inputs(Some(&(output_len - 20..output_len).collect::<Vec<usize>>()))
                     .arg_inputs(Some(&(0..output_len - 20).collect::<Vec<usize>>()))
                     .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-                    .aggr_output_len(Some(word_per_elem * (1 << 20))),
+                    .aggr_output_len(Some(words_per_elem * (1 << 20))),
             );
             let mut execs = builder.build().unwrap();
             let arg_mask = (1u64 << (output_len - 20)) - 1;
@@ -1123,9 +1123,9 @@ mod tests {
             println!("Arg: {}", arg);
             let input = execs[0].new_data(16);
             let output = execs[0].execute(&input, arg).unwrap().release();
-            assert_eq!(output.len(), word_per_elem * (1 << 20));
+            assert_eq!(output.len(), words_per_elem * (1 << 20));
             for i in 0..1 << 20 {
-                let out = if word_per_elem == 2 {
+                let out = if words_per_elem == 2 {
                     (output[2 * i] as u64) | ((output[2 * i + 1] as u64) << 32)
                 } else {
                     output[i] as u64
@@ -1135,9 +1135,9 @@ mod tests {
 
             let input = execs[1].new_data(16);
             let output = execs[1].execute(&input, arg).unwrap().release();
-            assert_eq!(output.len(), word_per_elem * (1 << 20));
+            assert_eq!(output.len(), words_per_elem * (1 << 20));
             for i in 0..1 << 20 {
-                let out = if word_per_elem == 2 {
+                let out = if words_per_elem == 2 {
                     (output[2 * i] as u64) | ((output[2 * i + 1] as u64) << 32)
                 } else {
                     output[i] as u64
@@ -2926,6 +2926,76 @@ mod tests {
                 }
             );
         }
+    }
+
+    struct AddToHashMapAndCheckSolutionData {
+        state_len: usize,
+        arg_bit_place: usize,
+        arg: u64,
+        outputs: Vec<u32>,
+        hashmap: Vec<HashEntry>,
+        expected_hashmap: Vec<HashEntry>,
+        unknown_bits: usize,
+        unknown_fill_bits: usize,
+        unknown_fills: Arc<Vec<AtomicU32>>,
+        resolved_unknowns: Arc<AtomicU64>,
+        solution: Mutex<Option<Solution>>,
+        expected_unknown_fills: Arc<Vec<AtomicU32>>,
+        expected_resolved_unknowns: u64,
+        expected_solution: Option<Solution>,
+    }
+
+    fn add_to_hashmap_and_check_solution_data_1() -> AddToHashMapAndCheckSolutionData {
+        let state_len = 24;
+        let arg_bit_place = 16;
+        let arg = 142;
+        let unknown_bits = 12;
+        let unknown_fill_bits = 4;
+        let mut outputs = vec![0; 1 << (state_len - arg_bit_place)];
+        let mut hashmap = vec![HashEntry::default(); 1 << 14];
+        let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        let resolved_unknowns = Arc::new(AtomicU64::new(0));
+        let solution = Mutex::new(None);
+
+        let mut expected_hashmap = vec![HashEntry::default(); 1 << 14];
+        let expected_unknown_fills =
+            create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        let expected_resolved_unknowns = 0;
+        let expected_solution = None;
+
+        AddToHashMapAndCheckSolutionData {
+            state_len,
+            arg_bit_place,
+            arg,
+            outputs,
+            hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        }
+    }
+
+    #[test]
+    fn test_add_to_hashmap_and_check_solution_cpu() {
+        // fn add_to_hashmap_and_check_solution_cpu(
+        //     state_len: usize,
+        //     arg_bit_place: usize,
+        //     arg: u64,
+        //     outputs: &[u32],
+        //     hashmap: &mut [HashEntry],
+        //     unknown_bits: usize,
+        //     unknown_fill_bits: usize,
+        //     unknown_fills: Arc<Vec<AtomicU32>>,
+        //     resolved_unknowns: Arc<AtomicU64>,
+        //     solution: &Mutex<Option<Solution>>,
+        //     max_predecessors: u32,
+        // )
     }
 }
 
