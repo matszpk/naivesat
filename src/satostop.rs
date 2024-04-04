@@ -164,8 +164,6 @@ const HASH_STATE_STOPPED: u32 = 2;
 const HASH_STATE_LOOPED: u32 = 3;
 const HASH_STATE_RESERVED_BY_OTHER_FLAG: u32 = 4;
 
-// TODO: add checking solution to join_to_hashmap and join_hashmap_itself and to add....
-
 //
 // join_to_hashmap - join outputs to hashmap entries
 //
