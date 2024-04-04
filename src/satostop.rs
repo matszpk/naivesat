@@ -836,7 +836,9 @@ fn add_to_hashmap_and_check_solution_cpu(
                             curhe_state_atomic.store(state, atomic::Ordering::SeqCst);
                             try_again = false;
                         } else {
-                            try_again = (current_currently_solved && !old_current_currently_solved);
+                            try_again = (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) != 0
+                                || (current_currently_solved && !old_current_currently_solved);
+                            std::sync::atomic::fence(atomic::Ordering::SeqCst);
                             curhe_state_atomic.store(old_state, atomic::Ordering::SeqCst);
                         }
                     }
