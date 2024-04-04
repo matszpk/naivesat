@@ -725,6 +725,7 @@ fn add_to_hashmap_and_check_solution_cpu(
     let hashentry_shift = state_len - hashlen_bits as usize;
     let shared_hashmap = UnsafeSlice::new(hashmap);
     let unknown_fill_mask = (1u64 << unknown_fill_bits) - 1;
+    let before_unknowns_mask = (1u64 << (state_len - unknown_bits)) - 1;
     outputs
         .chunks(chunk_len * words_per_elem)
         .enumerate()
@@ -759,10 +760,9 @@ fn add_to_hashmap_and_check_solution_cpu(
                 let current_unknown_fill_value =
                     u32::try_from((current >> (state_len - unknown_bits)) & unknown_fill_mask)
                         .unwrap();
-                let current_currently_solved =
-                    (current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
-                        && unknown_fills[current_unknown_fill_idx].load(atomic::Ordering::SeqCst)
-                            == current_unknown_fill_value;
+                let current_currently_solved = (current & before_unknowns_mask) == 0
+                    && unknown_fills[current_unknown_fill_idx].load(atomic::Ordering::SeqCst)
+                        == current_unknown_fill_value;
                 // update hash map entry - use unsafe code implement
                 // atomic synchronized updating mechanism
                 unsafe {
@@ -792,7 +792,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                                 (curhe.current >> (state_len - unknown_bits)) & unknown_fill_mask,
                             )
                             .unwrap();
-                            (curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
+                            (curhe.current & before_unknowns_mask) == 0
                                 && unknown_fills[old_current_unknown_fill_idx]
                                     .load(atomic::Ordering::SeqCst)
                                     == old_current_unknown_fill_value
