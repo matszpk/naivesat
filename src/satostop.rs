@@ -857,7 +857,7 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
     const ulong output = outputs[idx];
 #endif
     const ulong current = arg_start + idx;
-    const next = output & state_mask;
+    const ulong next = output & state_mask;
     uint state;
     if (((output >> STATE_LEN) & 1) != 0) {
         state = HASH_STATE_STOPPED;
@@ -3668,7 +3668,14 @@ mod tests {
         let cmd_queue =
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
 
+        for (data_idx, data) in [
+            add_to_hashmap_and_check_solution_data_1(),
+            add_to_hashmap_and_check_solution_data_2(),
+        ]
+        .into_iter()
+        .enumerate()
         {
+            println!("Data idx: {}", data_idx);
             let AddToHashMapAndCheckSolutionData {
                 state_len,
                 arg_bit_place,
@@ -3684,7 +3691,7 @@ mod tests {
                 expected_unknown_fills,
                 expected_resolved_unknowns,
                 expected_solution,
-            } = add_to_hashmap_and_check_solution_data_1();
+            } = data;
             let max_predecessors = 1;
             let add_to_hashmap = OpenCLAddToHashMapAndCheckSolution::new(
                 state_len,
