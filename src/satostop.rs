@@ -575,7 +575,7 @@ kernel void join_hashmap_itself_and_check_solution(const global HashEntry* in_ha
         outhe->state = inhe->state;
     }
     atomic_add(&outhe->predecessors, inhe->predecessors);
-    resolve_unknowns( outhe->current, outhe->next, outhe->steps, outhe->state,
+    resolve_unknowns(outhe->current, outhe->next, outhe->steps, outhe->state,
         unknown_fills, sol_and_res_unk);
 }
 "##;
@@ -837,6 +837,87 @@ fn add_to_hashmap_and_check_solution_cpu(
             }
         });
 }
+
+const ADD_TO_HASHMAP_AND_CHECK_SOLUTION_OPENCL_CODE: &str = r##"
+kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outputs,
+        global HashEntry* hashmap, global uint* unknown_fills,
+        global SolutionAndResUnknowns* sol_and_res_unk) {
+    const size_t idx = get_global_id(0);
+    if (idx >= (1UL << ARG_BIT_PLACE))
+        return;
+    const ulong arg_start = arg << ARG_BIT_PLACE;
+    const ulong arg_end = arg_start + (1UL << ARG_BIT_PLACE);
+    const ulong state_mask = (1UL << STATE_LEN) - 1UL;
+    const uint hashentry_shift = STATE_LEN - HASHMAP_LEN_BITS;
+    const ulong unknown_fill_mask = (1UL << UNKNOWN_FILL_BITS) - 1UL;
+    const ulong before_unknowns_mask = (1UL << (STATE_LEN - UNKNOWN_BITS)) - 1UL;
+#if WORDS_PER_ELEM == 2
+    const ulong output = ((ulong)outputs[2*idx]) | (((ulong)outputs[2*idx + 1]) << 32);
+#else
+    const ulong output = outputs[idx];
+#endif
+    const ulong current = arg_start + idx;
+    const next = output & state_mask;
+    uint state;
+    if (((output >> STATE_LEN) & 1) != 0) {
+        state = HASH_STATE_STOPPED;
+    } else if next == current {
+        state = HASH_STATE_LOOPED;
+    } else {
+        state = HASH_STATE_USED;
+    }
+#ifdef TEST_ROUTINE
+    if (next == 0)
+        return;
+#endif
+    const ulong cur_hash = hash_function_64(current);
+    const size_t current_unknown_fill_idx =
+        (current >> (STATE_LEN - UNKNOWN_BITS + UNKNOWN_FILL_BITS));
+    const uint current_unknown_fill_value =
+        (current >> (STATE_LEN - UNKNOWN_BITS)) & unknown_fill_mask;
+    const bool current_currently_solved = (current & before_unknowns_mask) == 0
+        && atomic_add(unknown_fills + current_unknown_fill_idx, 0)
+                        == current_unknown_fill_value;
+    global HashEntry* curhe = hashmap + (cur_hash >> hashentry_shift);
+    bool try_again = true;
+    uint trials;
+    for (trials = 0; trials < 10 && try_again; trials++) {
+        const uint old_state = atomic_or(&(curhe->state), HASH_STATE_RESERVED_BY_OTHER_FLAG);
+        mem_fence(CLK_GLOBAL_MEM_FENCE);
+        bool old_current_currently_solved = false;
+        const ulong old_current = curhe->current;
+        if (old_state != HASH_STATE_UNUSED
+            && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0) {
+            const size_t old_current_unknown_fill_idx =
+                (old_current >> (STATE_LEN - UNKNOWN_BITS + UNKNOWN_FILL_BITS));
+            const uint old_current_unknown_fill_value =
+                (old_current >> (STATE_LEN - UNKNOWN_BITS)) & unknown_fill_mask;
+            old_current_currently_solved = (old_current & before_unknowns_mask) == 0
+                && atomic_add(unknown_fills + old_current_unknown_fill_idx, 0)
+                                == old_current_unknown_fill_value;
+        }
+        
+        if ((old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
+            && ((current_currently_solved && !old_current_currently_solved)
+                || (!old_current_currently_solved
+                    && curhe->predecessors <= MAX_PREDECESSORS))) {
+            curhe->current = current;
+            curhe->next = next;
+            curhe->steps = 1;
+            curhe->predecessors = 0;
+            mem_fence(CLK_GLOBAL_MEM_FENCE);
+            atomic_xchg(&(curhe->state), state);
+            try_again = false;
+        } else {
+            try_again = (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) != 0
+                && (current_currently_solved && !old_current_currently_solved);
+            mem_fence(CLK_GLOBAL_MEM_FENCE);
+            atomic_xchg(&(curhe->state), old_state);
+        }
+    }
+    resolve_unknowns(current, next, steps, state, unknown_fills, sol_and_res_unk);
+}
+"##;
 
 //
 // main solver code
