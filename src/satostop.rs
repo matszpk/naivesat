@@ -780,59 +780,66 @@ fn add_to_hashmap_and_check_solution_cpu(
                 // atomic synchronized updating mechanism
                 unsafe {
                     let curhe = shared_hashmap.get_mut(cur_hash >> hashentry_shift);
-                    let curhe_state_atomic = AtomicU32::from_ptr(&mut curhe.state as *mut u32);
-                    // if previous entry have:
-                    // if not currently solved unknown (state).
-                    // if predecessors is less and state is not have
-                    // HASH_STATE_RESERVED_BY_OTHER_FLAG
-                    // update to HASH_STATE_RESERVED_BY_OTHER_FLAG and retrieve old value.
-                    let old_state = curhe_state_atomic
-                        .fetch_or(HASH_STATE_RESERVED_BY_OTHER_FLAG, atomic::Ordering::SeqCst);
-                    std::sync::atomic::fence(atomic::Ordering::SeqCst);
-
-                    let old_current_unknown_fill_idx = usize::try_from(
-                        curhe.current >> (state_len - unknown_bits + unknown_fill_bits),
-                    )
-                    .unwrap();
-                    let old_current_unknown_fill_value = u32::try_from(
-                        (curhe.current >> (state_len - unknown_bits)) & unknown_fill_mask,
-                    )
-                    .unwrap();
-                    let old_current_currently_solved =
-                        (curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
-                            && unknown_fills[old_current_unknown_fill_idx]
-                                .load(atomic::Ordering::SeqCst)
-                                == old_current_unknown_fill_value;
-                    // if cur_hash >> hashentry_shift == 2285 {
-                    //     println!("unknown_fills[old_current_unknown_fill_idx]={} ?? {}: {} {}",
-                    //              unknown_fills[old_current_unknown_fill_idx]
-                    //              .load(atomic::Ordering::SeqCst),
-                    //              old_current_unknown_fill_value,
-                    //              old_current_currently_solved,
-                    //              current_currently_solved);
-                    //     println!("unknown_fills[current_unknown_fill_idx]={} ?? {}: {}",
-                    //              unknown_fills[current_unknown_fill_idx]
-                    //              .load(atomic::Ordering::SeqCst),
-                    //              current_unknown_fill_value,
-                    //              current_currently_solved);
-                    // }
-
-                    //
-                    if ((current_currently_solved && !old_current_currently_solved)
-                        || (!old_current_currently_solved
-                            && curhe.predecessors <= max_predecessors))
-                        && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
-                    {
-                        // do update
-                        curhe.current = current;
-                        curhe.next = next;
-                        curhe.steps = 1;
-                        curhe.predecessors = 0;
+                    let mut try_again = true;
+                    // try again until if current is currently solved and
+                    // old current is not solved.
+                    while try_again {
+                        let curhe_state_atomic = AtomicU32::from_ptr(&mut curhe.state as *mut u32);
+                        // if previous entry have:
+                        // if not currently solved unknown (state).
+                        // if predecessors is less and state is not have
+                        // HASH_STATE_RESERVED_BY_OTHER_FLAG
+                        // update to HASH_STATE_RESERVED_BY_OTHER_FLAG and retrieve old value.
+                        let old_state = curhe_state_atomic
+                            .fetch_or(HASH_STATE_RESERVED_BY_OTHER_FLAG, atomic::Ordering::SeqCst);
                         std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                        // update state
-                        curhe_state_atomic.store(state, atomic::Ordering::SeqCst);
-                    } else {
-                        curhe_state_atomic.store(old_state, atomic::Ordering::SeqCst);
+
+                        let old_current_unknown_fill_idx = usize::try_from(
+                            curhe.current >> (state_len - unknown_bits + unknown_fill_bits),
+                        )
+                        .unwrap();
+                        let old_current_unknown_fill_value = u32::try_from(
+                            (curhe.current >> (state_len - unknown_bits)) & unknown_fill_mask,
+                        )
+                        .unwrap();
+                        let old_current_currently_solved =
+                            (curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
+                                && unknown_fills[old_current_unknown_fill_idx]
+                                    .load(atomic::Ordering::SeqCst)
+                                    == old_current_unknown_fill_value;
+                        // if cur_hash >> hashentry_shift == 2285 {
+                        //     println!("unknown_fills[old_current_unknown_fill_idx]={} ?? {}: {} {}",
+                        //              unknown_fills[old_current_unknown_fill_idx]
+                        //              .load(atomic::Ordering::SeqCst),
+                        //              old_current_unknown_fill_value,
+                        //              old_current_currently_solved,
+                        //              current_currently_solved);
+                        //     println!("unknown_fills[current_unknown_fill_idx]={} ?? {}: {}",
+                        //              unknown_fills[current_unknown_fill_idx]
+                        //              .load(atomic::Ordering::SeqCst),
+                        //              current_unknown_fill_value,
+                        //              current_currently_solved);
+                        // }
+
+                        //
+                        if ((current_currently_solved && !old_current_currently_solved)
+                            || (!old_current_currently_solved
+                                && curhe.predecessors <= max_predecessors))
+                            && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
+                        {
+                            // do update
+                            curhe.current = current;
+                            curhe.next = next;
+                            curhe.steps = 1;
+                            curhe.predecessors = 0;
+                            std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                            // update state
+                            curhe_state_atomic.store(state, atomic::Ordering::SeqCst);
+                            try_again = false;
+                        } else {
+                            try_again = (current_currently_solved && !old_current_currently_solved);
+                            curhe_state_atomic.store(old_state, atomic::Ordering::SeqCst);
+                        }
                     }
                 }
             }
