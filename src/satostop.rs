@@ -740,7 +740,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                 };
                 let current = (i as u64) + arg_start;
                 let next = output & state_mask;
-                let state = if (next >> state_len) & 1 != 0 {
+                let state = if (output >> state_len) & 1 != 0 {
                     HASH_STATE_STOPPED
                 } else if next == current {
                     HASH_STATE_LOOPED
@@ -794,32 +794,24 @@ fn add_to_hashmap_and_check_solution_cpu(
                             .fetch_or(HASH_STATE_RESERVED_BY_OTHER_FLAG, atomic::Ordering::SeqCst);
                         std::sync::atomic::fence(atomic::Ordering::SeqCst);
 
-                        let old_current_unknown_fill_idx = usize::try_from(
-                            curhe.current >> (state_len - unknown_bits + unknown_fill_bits),
-                        )
-                        .unwrap();
-                        let old_current_unknown_fill_value = u32::try_from(
-                            (curhe.current >> (state_len - unknown_bits)) & unknown_fill_mask,
-                        )
-                        .unwrap();
-                        let old_current_currently_solved =
+                        let old_current_currently_solved = if old_state != HASH_STATE_UNUSED
+                            && (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0
+                        {
+                            let old_current_unknown_fill_idx = usize::try_from(
+                                curhe.current >> (state_len - unknown_bits + unknown_fill_bits),
+                            )
+                            .unwrap();
+                            let old_current_unknown_fill_value = u32::try_from(
+                                (curhe.current >> (state_len - unknown_bits)) & unknown_fill_mask,
+                            )
+                            .unwrap();
                             (curhe.current & ((1u64 << (state_len - unknown_bits)) - 1)) == 0
                                 && unknown_fills[old_current_unknown_fill_idx]
                                     .load(atomic::Ordering::SeqCst)
-                                    == old_current_unknown_fill_value;
-                        // if cur_hash >> hashentry_shift == 2285 {
-                        //     println!("unknown_fills[old_current_unknown_fill_idx]={} ?? {}: {} {}",
-                        //              unknown_fills[old_current_unknown_fill_idx]
-                        //              .load(atomic::Ordering::SeqCst),
-                        //              old_current_unknown_fill_value,
-                        //              old_current_currently_solved,
-                        //              current_currently_solved);
-                        //     println!("unknown_fills[current_unknown_fill_idx]={} ?? {}: {}",
-                        //              unknown_fills[current_unknown_fill_idx]
-                        //              .load(atomic::Ordering::SeqCst),
-                        //              current_unknown_fill_value,
-                        //              current_currently_solved);
-                        // }
+                                    == old_current_unknown_fill_value
+                        } else {
+                            false
+                        };
 
                         if ((current_currently_solved && !old_current_currently_solved)
                             || (!old_current_currently_solved
@@ -3210,6 +3202,18 @@ mod tests {
                 next: 0x60ca54,
                 steps: 40471,
                 state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 40691 | ((arg as u64) << arg_bit_place),
+                next: 0x1956e3,
+                steps: 1,
+                state: HASH_STATE_STOPPED,
                 predecessors: 0,
             },
         );
