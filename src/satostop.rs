@@ -821,7 +821,6 @@ fn add_to_hashmap_and_check_solution_cpu(
                         //              current_currently_solved);
                         // }
 
-                        //
                         if ((current_currently_solved && !old_current_currently_solved)
                             || (!old_current_currently_solved
                                 && curhe.predecessors <= max_predecessors))
