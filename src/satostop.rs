@@ -747,7 +747,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                 } else {
                     HASH_STATE_USED
                 };
-                if test && current == 0 {
+                if test && next == 0 {
                     // special testcase for testing!!!
                     continue;
                 }
@@ -802,6 +802,19 @@ fn add_to_hashmap_and_check_solution_cpu(
                             && unknown_fills[old_current_unknown_fill_idx]
                                 .load(atomic::Ordering::SeqCst)
                                 == old_current_unknown_fill_value;
+                    // if cur_hash >> hashentry_shift == 2285 {
+                    //     println!("unknown_fills[old_current_unknown_fill_idx]={} ?? {}: {} {}",
+                    //              unknown_fills[old_current_unknown_fill_idx]
+                    //              .load(atomic::Ordering::SeqCst),
+                    //              old_current_unknown_fill_value,
+                    //              old_current_currently_solved,
+                    //              current_currently_solved);
+                    //     println!("unknown_fills[current_unknown_fill_idx]={} ?? {}: {}",
+                    //              unknown_fills[current_unknown_fill_idx]
+                    //              .load(atomic::Ordering::SeqCst),
+                    //              current_unknown_fill_value,
+                    //              current_currently_solved);
+                    // }
 
                     if (current_currently_solved
                         || (!old_current_currently_solved
@@ -2985,7 +2998,7 @@ mod tests {
         outputs[40691] = 0x1956e3 | (1 << state_len);
         outputs[58727] = 0x50c1a3; // not filled
         let mut hashmap = vec![HashEntry::default(); 1 << hbits];
-        // let output_idx = 58727;
+        // let output_idx = ((3 << 4) + 10) << 10;
         // let needed_hidx = hash_function_64(state_len, output_idx | ((arg as u64) << arg_bit_place))
         //     >> (state_len - hbits);
         // println!(
@@ -2994,6 +3007,7 @@ mod tests {
         //     needed_hidx,
         //     state_len - hbits
         // );
+        // println!("Hash2: {}", hash_function_64(state_len, 0x357c00) >> (state_len - hbits));
         // for i in 0..16000000 {
         //     let state = 0x321a1 + i;
         //     let hidx = hash_function_64(state_len, state) >> (state_len - hbits);
@@ -3065,7 +3079,7 @@ mod tests {
             &mut hashmap,
             HashEntry {
                 // this same hash index as:
-                // (((2 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
+                // (((3 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
                 current: 0x357c00,
                 next: 0xda10da,
                 steps: 66581,
@@ -3090,7 +3104,7 @@ mod tests {
         let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
         unknown_fills[((arg as usize) << 2) | 1].store(8, atomic::Ordering::SeqCst);
         unknown_fills[((arg as usize) << 2) | 2].store(6, atomic::Ordering::SeqCst);
-        unknown_fills[((arg as usize) << 2) | 3].store(10, atomic::Ordering::SeqCst);
+        unknown_fills[((arg as usize) << 2) | 3].store(11, atomic::Ordering::SeqCst);
         unknown_fills[0x357c00 >> (state_len - unknown_bits + unknown_fill_bits)].store(
             (0x357c00 >> (state_len - unknown_bits)) & ((1u32 << (unknown_fill_bits)) - 1),
             atomic::Ordering::SeqCst,
@@ -3108,6 +3122,20 @@ mod tests {
         let solution = Mutex::new(None);
 
         let mut expected_hashmap = vec![HashEntry::default(); 1 << 14];
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                // this same hash index as:
+                // (((3 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
+                current: 0x357c00,
+                next: 0xda10da,
+                steps: 66581,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
         let expected_unknown_fills =
             create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
         for i in 0..1 << (unknown_bits - unknown_fill_bits) {
