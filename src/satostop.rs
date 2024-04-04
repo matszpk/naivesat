@@ -759,8 +759,6 @@ fn add_to_hashmap_and_check_solution_cpu(
                     solution,
                 );
                 let cur_hash = hash_function_64(state_len, current);
-                // update hash map entry - use unsafe code implement
-                // atomic synchronized updating mechanism
 
                 let current_unknown_fill_idx =
                     usize::try_from(current >> (state_len - unknown_bits + unknown_fill_bits))
@@ -774,6 +772,8 @@ fn add_to_hashmap_and_check_solution_cpu(
                         && unknown_fills[current_unknown_fill_idx].load(atomic::Ordering::SeqCst)
                             == current_unknown_fill_value;
 
+                // update hash map entry - use unsafe code implement
+                // atomic synchronized updating mechanism
                 unsafe {
                     let curhe = shared_hashmap.get_mut(cur_hash >> hashentry_shift);
                     let curhe_state_atomic = AtomicU32::from_ptr(curhe.state as *mut u32);
