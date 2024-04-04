@@ -3309,6 +3309,99 @@ mod tests {
         }
     }
 
+    fn add_to_hashmap_and_check_solution_data_2() -> AddToHashMapAndCheckSolutionData {
+        let state_len = 44;
+        let arg_bit_place = 16;
+        let arg = 41428392;
+        let unknown_bits = 18;
+        let unknown_fill_bits = 4;
+        let hbits = 15;
+        let mut outputs = vec![0u32; 2 << arg_bit_place];
+        outputs[2 * 4321] = 0x849401d1;
+        outputs[2 * 4321 + 1] = 0x1e7;
+        outputs[2 * 8950] = 0x104a0c4f;
+        outputs[2 * 8950 + 1] = 0x61a;
+        outputs[2 * 50591] = 0xaabbc33e;
+        outputs[2 * 50591 + 1] = 0x114 | (1 << (state_len - 32));
+        let mut hashmap = vec![HashEntry::default(); 1 << hbits];
+        let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        let resolved_unknowns = Arc::new(AtomicU64::new(
+            unknown_fills
+                .iter()
+                .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
+                .count() as u64,
+        ));
+        let solution = Mutex::new(None);
+
+        let mut expected_hashmap = vec![HashEntry::default(); 1 << hbits];
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 4321 | ((arg as u64) << arg_bit_place),
+                next: 0x1e7849401d1,
+                steps: 1,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 8950 | ((arg as u64) << arg_bit_place),
+                next: 0x61a104a0c4f,
+                steps: 1,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 50591 | ((arg as u64) << arg_bit_place),
+                next: 0x114aabbc33e,
+                steps: 1,
+                state: HASH_STATE_STOPPED,
+                predecessors: 0,
+            },
+        );
+        let expected_unknown_fills =
+            create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        for i in 0..1 << (unknown_bits - unknown_fill_bits) {
+            expected_unknown_fills[i].store(
+                unknown_fills[i].load(atomic::Ordering::SeqCst),
+                atomic::Ordering::SeqCst,
+            );
+        }
+        let expected_resolved_unknowns = expected_unknown_fills
+            .iter()
+            .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
+            .count() as u64;
+        let expected_solution = None;
+
+        AddToHashMapAndCheckSolutionData {
+            state_len,
+            arg_bit_place,
+            arg: arg as u64,
+            outputs,
+            hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        }
+    }
+
     #[test]
     fn test_add_to_hashmap_and_check_solution_cpu() {
         let AddToHashMapAndCheckSolutionData {
@@ -3327,6 +3420,55 @@ mod tests {
             expected_resolved_unknowns,
             expected_solution,
         } = add_to_hashmap_and_check_solution_data_1();
+        let max_predecessors = 1;
+        add_to_hashmap_and_check_solution_cpu(
+            state_len,
+            arg_bit_place,
+            arg,
+            &outputs,
+            &mut hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills.clone(),
+            resolved_unknowns.clone(),
+            &solution,
+            max_predecessors,
+            true,
+        );
+        for (i, he) in hashmap.into_iter().enumerate() {
+            assert_eq!(expected_hashmap[i], he, "{}", i);
+        }
+        for (i, uf) in unknown_fills.iter().enumerate() {
+            assert_eq!(
+                expected_unknown_fills[i].load(atomic::Ordering::SeqCst),
+                uf.load(atomic::Ordering::SeqCst),
+                "{}",
+                i
+            );
+        }
+        assert_eq!(
+            expected_resolved_unknowns,
+            resolved_unknowns.load(atomic::Ordering::SeqCst)
+        );
+        assert_eq!(expected_solution, *solution.lock().unwrap());
+
+        // second test: 44 bit state
+        let AddToHashMapAndCheckSolutionData {
+            state_len,
+            arg_bit_place,
+            arg,
+            outputs,
+            mut hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        } = add_to_hashmap_and_check_solution_data_2();
         let max_predecessors = 1;
         add_to_hashmap_and_check_solution_cpu(
             state_len,
