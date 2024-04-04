@@ -3113,7 +3113,7 @@ mod tests {
         );
         let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
         unknown_fills[((arg as usize) << 2) | 1].store(8, atomic::Ordering::SeqCst);
-        unknown_fills[((arg as usize) << 2) | 2].store(6, atomic::Ordering::SeqCst);
+        unknown_fills[((arg as usize) << 2) | 2].store(2, atomic::Ordering::SeqCst);
         unknown_fills[((arg as usize) << 2) | 3].store(10, atomic::Ordering::SeqCst);
         unknown_fills[0x357c00 >> (state_len - unknown_bits + unknown_fill_bits)].store(
             (0x357c00 >> (state_len - unknown_bits)) & ((1u32 << (unknown_fill_bits)) - 1),
@@ -3131,7 +3131,60 @@ mod tests {
         ));
         let solution = Mutex::new(None);
 
-        let mut expected_hashmap = vec![HashEntry::default(); 1 << 14];
+        let mut expected_hashmap = vec![HashEntry::default(); 1 << hbits];
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                // this same hash index as: 18056 | ((arg as u64) << arg_bit_place): conflict
+                current: 0x39f5b,
+                next: 0x1a0bc1,
+                steps: 15,
+                state: HASH_STATE_USED,
+                predecessors: 10,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 21953 | ((arg as u64) << arg_bit_place),
+                next: 0xd493a,
+                steps: 1,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                // this same hash index as:
+                // (((1 << 4) + 8) << 10) | ((arg as u64) << arg_bit_place): conflict
+                current: (((1 << 4) + 8) << 10) | ((arg as u64) << arg_bit_place),
+                next: 0x1ac7d3,
+                steps: 1,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                // this same hash index as:
+                // (((2 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
+                current: (((2 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place),
+                next: (((2 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place),
+                steps: 1,
+                state: HASH_STATE_LOOPED,
+                predecessors: 0,
+            },
+        );
         hashmap_insert(
             state_len,
             hbits,
@@ -3142,6 +3195,20 @@ mod tests {
                 current: 0x357c00,
                 next: 0xda10da,
                 steps: 66581,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                // this same hash index as:
+                // 58727 | ((arg as u64) << arg_bit_place): conflict
+                current: 0xb98800,
+                next: 0x60ca54,
+                steps: 40471,
                 state: HASH_STATE_USED,
                 predecessors: 0,
             },
