@@ -866,7 +866,7 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
     } else {
         state = HASH_STATE_USED;
     }
-#if TEST_ROUTINE==1
+#if TEST_ROUTINE!=0
     if (next == 0)
         return;
 #endif
