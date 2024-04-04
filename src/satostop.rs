@@ -334,11 +334,14 @@ fn resolve_unknowns(
     {
         if entry_state == HASH_STATE_STOPPED {
             // just set solution
-            *solution.lock().unwrap() = Some(Solution {
-                start: current,
-                end: next,
-                steps,
-            });
+            let mut sol = solution.lock().unwrap();
+            if sol.is_none() {
+                *sol = Some(Solution {
+                    start: current,
+                    end: next,
+                    steps,
+                });
+            }
         }
         let unknown_fill_idx =
             usize::try_from(current >> (state_len - unknown_bits + unknown_fill_bits)).unwrap();
