@@ -3140,6 +3140,30 @@ mod tests {
             hbits,
             &mut expected_hashmap,
             HashEntry {
+                current: 7934 | ((arg as u64) << arg_bit_place),
+                next: 7934 | ((arg as u64) << arg_bit_place),
+                steps: 1,
+                state: HASH_STATE_LOOPED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
+                current: 14723 | ((arg as u64) << arg_bit_place),
+                next: 0xda61c4,
+                steps: 1,
+                state: HASH_STATE_STOPPED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut expected_hashmap,
+            HashEntry {
                 current: 15720 | ((arg as u64) << arg_bit_place),
                 next: 15720 | ((arg as u64) << arg_bit_place),
                 steps: 1,
@@ -3260,11 +3284,16 @@ mod tests {
                 atomic::Ordering::SeqCst,
             );
         }
+        expected_unknown_fills[((arg as usize) << 2) | 1].store(9, atomic::Ordering::SeqCst);
         let expected_resolved_unknowns = expected_unknown_fills
             .iter()
             .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
             .count() as u64;
-        let expected_solution = None;
+        let expected_solution = Some(Solution {
+            start: (((1 << 4) + 8) << 10) | ((arg as u64) << arg_bit_place),
+            end: 0x1ac7d3,
+            steps: 1,
+        });
 
         AddToHashMapAndCheckSolutionData {
             state_len,
