@@ -2949,24 +2949,98 @@ mod tests {
         let state_len = 24;
         let arg_bit_place = 16;
         let arg = 142;
-        let unknown_bits = 12;
+        let unknown_bits = 14;
         let unknown_fill_bits = 4;
-        let mut outputs = vec![0; 1 << (state_len - arg_bit_place)];
-        let mut hashmap = vec![HashEntry::default(); 1 << 14];
+        let hbits = 18;
+        let mut outputs = vec![0u32; 1 << arg_bit_place];
+        // let mut vh = vec![false; 1 << hbits];
+        for i in 0..1 << arg_bit_place {
+            outputs[i] = (i as u32)*9;
+            let idx = hash_function_64(state_len,
+                (i as u64) | ((arg as u64) << arg_bit_place)) >> (state_len - hbits);
+            // if vh[idx] {
+            //     println!("We have conflicts! {}", i);
+            // }
+            // vh[idx] = true;
+        }
+        outputs[4321] = 0x23d5b2;
+        outputs[7934] = 7934 | (arg << arg_bit_place);
+        outputs[14723] = 0xda61c4 | (1 << state_len);
+        outputs[15720] = 15720 | (arg << arg_bit_place) | (1 << state_len);
+        outputs[((1 << 4) + 8) << 10] = 0x1ac7d3 | (1 << state_len); // solution
+        outputs[18056] = 0xd09f42; // not filled
+        outputs[21953] = 0xd493a;
+        outputs[32994] = 0xffaa4c;
+        outputs[((2 << 4) + 6) << 10] = (((2 << 4) + 6) << 10) | (arg << arg_bit_place);
+        outputs[((3 << 4) + 10) << 10] = 0x140ca2;
+        outputs[40691] = 0x1956e3 | (1 << state_len);
+        let mut hashmap = vec![HashEntry::default(); 1 << hbits];
+        // println!("Hash for {}: {} {}", 21953 | ((arg as u64) << arg_bit_place),
+        //         hash_function_64(state_len,
+        //                 21953 | ((arg as u64) << arg_bit_place)) >> (state_len - hbits),
+        //             state_len - hbits);
+        // for i in 0..1000000 {
+        //     let state = 0x321a1 + i;
+        //     let hidx = hash_function_64(state_len, state) >> (state_len - hbits);
+        //     if i % 1000 == 0 {
+        //         println!("Hidx: {} {}", i, hidx);
+        //     }
+        //     if hidx == 216854 {
+        //         println!("State: 0x{:016x}", state);
+        //         break;
+        //     }
+        // }
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut hashmap,
+            HashEntry {
+                // this same hash index as: 18056 | ((arg as u64) << arg_bit_place): conflict
+                current: 0x582a2,
+                next: 0x1a0bc1,
+                steps: 15,
+                state: HASH_STATE_USED,
+                predecessors: 10,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut hashmap,
+            HashEntry {
+                // this same hash index as: 21953 | ((arg as u64) << arg_bit_place): conflict
+                current: 0x3693c,
+                next: 0x24b0a5,
+                steps: 77,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
         let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
-        let resolved_unknowns = Arc::new(AtomicU64::new(0));
+        unknown_fills[((arg as usize) << 2) | 1].store(8, atomic::Ordering::SeqCst);
+        unknown_fills[((arg as usize) << 2) | 2].store(6, atomic::Ordering::SeqCst);
+        unknown_fills[((arg as usize) << 2) | 3].store(10, atomic::Ordering::SeqCst);
+        let resolved_unknowns = Arc::new(AtomicU64::new(
+            unknown_fills
+                .iter()
+                .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
+                .count() as u64,
+        ));
         let solution = Mutex::new(None);
 
         let mut expected_hashmap = vec![HashEntry::default(); 1 << 14];
         let expected_unknown_fills =
             create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
-        let expected_resolved_unknowns = 0;
+        let expected_resolved_unknowns = expected_unknown_fills
+            .iter()
+            .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
+            .count() as u64;
         let expected_solution = None;
 
         AddToHashMapAndCheckSolutionData {
             state_len,
             arg_bit_place,
-            arg,
+            arg: arg as u64,
             outputs,
             hashmap,
             expected_hashmap,
@@ -2983,6 +3057,22 @@ mod tests {
 
     #[test]
     fn test_add_to_hashmap_and_check_solution_cpu() {
+        let AddToHashMapAndCheckSolutionData {
+            state_len,
+            arg_bit_place,
+            arg,
+            outputs,
+            hashmap,
+            expected_hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills,
+            resolved_unknowns,
+            solution,
+            expected_unknown_fills,
+            expected_resolved_unknowns,
+            expected_solution,
+        } = add_to_hashmap_and_check_solution_data_1();
         // fn add_to_hashmap_and_check_solution_cpu(
         //     state_len: usize,
         //     arg_bit_place: usize,
