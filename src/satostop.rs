@@ -709,6 +709,7 @@ fn add_to_hashmap_and_check_solution_cpu(
     resolved_unknowns: Arc<AtomicU64>,
     solution: &Mutex<Option<Solution>>,
     max_predecessors: u32,
+    test: bool,
 ) {
     assert_eq!(hashmap.len().count_ones(), 1);
     let cpu_num = rayon::current_num_threads();
@@ -746,6 +747,10 @@ fn add_to_hashmap_and_check_solution_cpu(
                 } else {
                     HASH_STATE_USED
                 };
+                if test && current == 0 {
+                    // special testcase for testing!!!
+                    continue;
+                }
                 resolve_unknowns(
                     state_len,
                     unknown_bits,
@@ -775,7 +780,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                 // atomic synchronized updating mechanism
                 unsafe {
                     let curhe = shared_hashmap.get_mut(cur_hash >> hashentry_shift);
-                    let curhe_state_atomic = AtomicU32::from_ptr(curhe.state as *mut u32);
+                    let curhe_state_atomic = AtomicU32::from_ptr(&mut curhe.state as *mut u32);
                     // if not currently solved unknown (state).
                     // if predecessors is less and state is not have
                     // HASH_STATE_RESERVED_BY_OTHER_FLAG
@@ -2951,18 +2956,20 @@ mod tests {
         let arg = 142;
         let unknown_bits = 14;
         let unknown_fill_bits = 4;
-        let hbits = 18;
+        let hbits = 15;
         let mut outputs = vec![0u32; 1 << arg_bit_place];
         // let mut vh = vec![false; 1 << hbits];
-        for i in 0..1 << arg_bit_place {
-            outputs[i] = (i as u32)*9;
-            let idx = hash_function_64(state_len,
-                (i as u64) | ((arg as u64) << arg_bit_place)) >> (state_len - hbits);
-            // if vh[idx] {
-            //     println!("We have conflicts! {}", i);
-            // }
-            // vh[idx] = true;
-        }
+        // for i in 0..1 << arg_bit_place {
+        // for i in [4321, 7934, 14723, 15720, ((1 << 4) + 8) << 10, 18056, 21953, 32994,
+        //         ((2 << 4) + 6) << 10, ((3 << 4) + 10) << 10, 40691] {
+        //     outputs[i] = (i as u32)*9;
+        //     let idx = hash_function_64(state_len,
+        //         (i as u64) | ((arg as u64) << arg_bit_place)) >> (state_len - hbits);
+        //     if vh[idx] {
+        //         println!("We have conflicts! {}", i);
+        //     }
+        //     vh[idx] = true;
+        // }
         outputs[4321] = 0x23d5b2;
         outputs[7934] = 7934 | (arg << arg_bit_place);
         outputs[14723] = 0xda61c4 | (1 << state_len);
@@ -2972,20 +2979,26 @@ mod tests {
         outputs[21953] = 0xd493a;
         outputs[32994] = 0xffaa4c;
         outputs[((2 << 4) + 6) << 10] = (((2 << 4) + 6) << 10) | (arg << arg_bit_place);
-        outputs[((3 << 4) + 10) << 10] = 0x140ca2;
+        outputs[((3 << 4) + 10) << 10] = 0x140ca2; // not filled
         outputs[40691] = 0x1956e3 | (1 << state_len);
+        outputs[58727] = 0x50c1a3; // not filled
         let mut hashmap = vec![HashEntry::default(); 1 << hbits];
-        // println!("Hash for {}: {} {}", 21953 | ((arg as u64) << arg_bit_place),
-        //         hash_function_64(state_len,
-        //                 21953 | ((arg as u64) << arg_bit_place)) >> (state_len - hbits),
-        //             state_len - hbits);
-        // for i in 0..1000000 {
+        // let output_idx = 58727;
+        // let needed_hidx = hash_function_64(state_len, output_idx | ((arg as u64) << arg_bit_place))
+        //     >> (state_len - hbits);
+        // println!(
+        //     "Hash for {}: {} {}",
+        //     output_idx | ((arg as u64) << arg_bit_place),
+        //     needed_hidx,
+        //     state_len - hbits
+        // );
+        // for i in 0..16000000 {
         //     let state = 0x321a1 + i;
         //     let hidx = hash_function_64(state_len, state) >> (state_len - hbits);
         //     if i % 1000 == 0 {
         //         println!("Hidx: {} {}", i, hidx);
         //     }
-        //     if hidx == 216854 {
+        //     if hidx == needed_hidx && (state & ((1u64 << (state_len - unknown_bits)) - 1)) == 0 {
         //         println!("State: 0x{:016x}", state);
         //         break;
         //     }
@@ -2996,7 +3009,7 @@ mod tests {
             &mut hashmap,
             HashEntry {
                 // this same hash index as: 18056 | ((arg as u64) << arg_bit_place): conflict
-                current: 0x582a2,
+                current: 0x39f5b,
                 next: 0x1a0bc1,
                 steps: 15,
                 state: HASH_STATE_USED,
@@ -3016,10 +3029,74 @@ mod tests {
                 predecessors: 0,
             },
         );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut hashmap,
+            HashEntry {
+                // this same hash index as:
+                // (((1 << 4) + 8) << 10) | ((arg as u64) << arg_bit_place): conflict
+                current: 0x3d2c00,
+                next: 0x481da,
+                steps: 2700,
+                state: HASH_STATE_USED,
+                predecessors: 67,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut hashmap,
+            HashEntry {
+                // this same hash index as:
+                // (((2 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
+                current: 0x34fe7,
+                next: 0x481da,
+                steps: 1612,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut hashmap,
+            HashEntry {
+                // this same hash index as:
+                // (((2 << 4) + 6) << 10) | ((arg as u64) << arg_bit_place): conflict
+                current: 0x357c00,
+                next: 0xda10da,
+                steps: 66581,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
+        hashmap_insert(
+            state_len,
+            hbits,
+            &mut hashmap,
+            HashEntry {
+                // this same hash index as:
+                // 58727 | ((arg as u64) << arg_bit_place): conflict
+                current: 0xb98800,
+                next: 0x60ca54,
+                steps: 40471,
+                state: HASH_STATE_USED,
+                predecessors: 0,
+            },
+        );
         let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
         unknown_fills[((arg as usize) << 2) | 1].store(8, atomic::Ordering::SeqCst);
         unknown_fills[((arg as usize) << 2) | 2].store(6, atomic::Ordering::SeqCst);
         unknown_fills[((arg as usize) << 2) | 3].store(10, atomic::Ordering::SeqCst);
+        unknown_fills[0x357c00 >> (state_len - unknown_bits + unknown_fill_bits)].store(
+            (0x357c00 >> (state_len - unknown_bits)) & ((1u32 << (unknown_fill_bits)) - 1),
+            atomic::Ordering::SeqCst,
+        );
+        unknown_fills[0xb98800 >> (state_len - unknown_bits + unknown_fill_bits)].store(
+            (0xb98800 >> (state_len - unknown_bits)) & ((1u32 << (unknown_fill_bits)) - 1),
+            atomic::Ordering::SeqCst,
+        );
         let resolved_unknowns = Arc::new(AtomicU64::new(
             unknown_fills
                 .iter()
@@ -3031,6 +3108,12 @@ mod tests {
         let mut expected_hashmap = vec![HashEntry::default(); 1 << 14];
         let expected_unknown_fills =
             create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
+        for i in 0..1 << (unknown_bits - unknown_fill_bits) {
+            expected_unknown_fills[i].store(
+                unknown_fills[i].load(atomic::Ordering::SeqCst),
+                atomic::Ordering::SeqCst,
+            );
+        }
         let expected_resolved_unknowns = expected_unknown_fills
             .iter()
             .filter(|v| (v.load(atomic::Ordering::SeqCst) >> unknown_fill_bits) != 0)
@@ -3062,7 +3145,7 @@ mod tests {
             arg_bit_place,
             arg,
             outputs,
-            hashmap,
+            mut hashmap,
             expected_hashmap,
             unknown_bits,
             unknown_fill_bits,
@@ -3073,19 +3156,21 @@ mod tests {
             expected_resolved_unknowns,
             expected_solution,
         } = add_to_hashmap_and_check_solution_data_1();
-        // fn add_to_hashmap_and_check_solution_cpu(
-        //     state_len: usize,
-        //     arg_bit_place: usize,
-        //     arg: u64,
-        //     outputs: &[u32],
-        //     hashmap: &mut [HashEntry],
-        //     unknown_bits: usize,
-        //     unknown_fill_bits: usize,
-        //     unknown_fills: Arc<Vec<AtomicU32>>,
-        //     resolved_unknowns: Arc<AtomicU64>,
-        //     solution: &Mutex<Option<Solution>>,
-        //     max_predecessors: u32,
-        // )
+        let max_predecessors = 1;
+        add_to_hashmap_and_check_solution_cpu(
+            state_len,
+            arg_bit_place,
+            arg,
+            &outputs,
+            &mut hashmap,
+            unknown_bits,
+            unknown_fill_bits,
+            unknown_fills.clone(),
+            resolved_unknowns.clone(),
+            &solution,
+            max_predecessors,
+            true,
+        );
     }
 }
 
