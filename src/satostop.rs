@@ -82,9 +82,18 @@ impl FromStr for ExecType {
 struct CommandArgs {
     circuit: String,
     unknowns: usize,
+    #[arg(short = 'S', long)]
     simple: bool,
     #[arg(short = 'e', long, default_value_t = 24)]
     elem_inputs: usize,
+    #[arg(short = 'h', long, default_value_t = 24)]
+    hashmap_len_bits: usize,
+    #[arg(short = 'U', long)]
+    unknown_fill_bits: Option<usize>,
+    #[arg(short = 'P', long, default_value_t = 0)]
+    max_predecessors: u32,
+    #[arg(short = 'C', long, default_value_t = 20)]
+    clear_predecessors_per_iter: u32,
     #[arg(short = 't', long)]
     exec_type: ExecType,
     #[arg(short = 'G', long)]
@@ -4166,13 +4175,13 @@ mod tests {
 }
 
 fn main() {
-    for i in 0..1000000 {
-        println!(
-            "Hashfunction: {:016x} = {:016x}",
-            i,
-            hash_function_64(48, i)
-        )
-    }
+    // for i in 0..1000000 {
+    //     println!(
+    //         "Hashfunction: {:016x} = {:016x}",
+    //         i,
+    //         hash_function_64(48, i)
+    //     )
+    // }
     for x in get_all_devices(CL_DEVICE_TYPE_GPU).unwrap() {
         println!("OpenCLDevice: {:?}", x);
     }
