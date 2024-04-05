@@ -1112,6 +1112,176 @@ impl CPUHashMapHandler {
     }
 }
 
+struct OpenCLHashMapHandler {
+    unknown_bits: usize,
+    unknown_fill_bits: usize,
+    join_to_hashmap: OpenCLJoinToHashMap,
+    join_hashmap_itself: OpenCLJoinHashMapItselfAndCheckSolution,
+    add_to_hashmap: OpenCLAddToHashMapAndCheckSolution,
+    hashmap_1: Buffer<HashEntry>,
+    hashmap_2: Buffer<HashEntry>,
+    unknown_fills: Buffer<u32>,
+    sol_and_res_unk: Buffer<SolutionAndResUnknowns>,
+    clear_predecessors_per_iter: u32,
+    iter: u32,
+}
+
+impl OpenCLHashMapHandler {
+    fn new(
+        state_len: usize,
+        arg_bit_place: usize,
+        hashmap_len_bits: usize,
+        unknown_bits: usize,
+        unknown_fill_bits: usize,
+        max_predecessors: u32,
+        clear_predecessors_per_iter: u32,
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+    ) -> Self {
+        assert!(arg_bit_place < state_len);
+        assert_ne!(hashmap_len_bits, 0);
+        assert!(unknown_bits <= state_len);
+        assert!(unknown_fill_bits < unknown_bits);
+        assert_ne!(clear_predecessors_per_iter, 0);
+        let mut hashmap_1 = unsafe {
+            Buffer::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                1 << hashmap_len_bits,
+                std::ptr::null_mut(),
+            )
+            .unwrap()
+        };
+        let mut hashmap_2 = unsafe {
+            Buffer::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                1 << hashmap_len_bits,
+                std::ptr::null_mut(),
+            )
+            .unwrap()
+        };
+        let mut unknown_fills = unsafe {
+            Buffer::<u32>::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                1 << (unknown_bits - unknown_fill_bits),
+                std::ptr::null_mut(),
+            )
+            .unwrap()
+        };
+        let mut sol_and_res_unk = unsafe {
+            Buffer::<SolutionAndResUnknowns>::create(
+                &context,
+                CL_MEM_READ_WRITE,
+                1,
+                std::ptr::null_mut(),
+            )
+            .unwrap()
+        };
+        unsafe {
+            cmd_queue
+                .enqueue_fill_buffer(
+                    &mut hashmap_1,
+                    &[HashEntry::default()],
+                    0,
+                    std::mem::size_of::<HashEntry>() * (1 << hashmap_len_bits),
+                    &[],
+                )
+                .unwrap();
+            cmd_queue
+                .enqueue_fill_buffer(
+                    &mut hashmap_2,
+                    &[HashEntry::default()],
+                    0,
+                    std::mem::size_of::<HashEntry>() * (1 << hashmap_len_bits),
+                    &[],
+                )
+                .unwrap();
+            cmd_queue
+                .enqueue_fill_buffer(
+                    &mut unknown_fills,
+                    &[0u32],
+                    0,
+                    std::mem::size_of::<u32>() * (1 << (unknown_bits - unknown_fill_bits)),
+                    &[],
+                )
+                .unwrap();
+            cmd_queue
+                .enqueue_fill_buffer(
+                    &mut sol_and_res_unk,
+                    &[SolutionAndResUnknowns::default()],
+                    0,
+                    std::mem::size_of::<SolutionAndResUnknowns>(),
+                    &[],
+                )
+                .unwrap();
+        }
+        cmd_queue.finish().unwrap();
+        Self {
+            unknown_bits,
+            unknown_fill_bits,
+            join_to_hashmap: OpenCLJoinToHashMap::new(
+                state_len,
+                arg_bit_place,
+                1 << hashmap_len_bits,
+                context.clone(),
+                cmd_queue.clone(),
+            ),
+            join_hashmap_itself: OpenCLJoinHashMapItselfAndCheckSolution::new(
+                state_len,
+                1 << hashmap_len_bits,
+                unknown_bits,
+                unknown_fill_bits,
+                context.clone(),
+                cmd_queue.clone(),
+            ),
+            add_to_hashmap: OpenCLAddToHashMapAndCheckSolution::new(
+                state_len,
+                arg_bit_place,
+                1 << hashmap_len_bits,
+                unknown_bits,
+                unknown_fill_bits,
+                max_predecessors,
+                false,
+                context.clone(),
+                cmd_queue.clone(),
+            ),
+            hashmap_1,
+            hashmap_2,
+            unknown_fills,
+            sol_and_res_unk,
+            clear_predecessors_per_iter,
+            iter: 0,
+        }
+    }
+
+    fn process(&mut self, arg: u64, outputs: &Buffer<u32>) {
+        self.join_to_hashmap
+            .execute(arg, outputs, &mut self.hashmap_1);
+        self.join_hashmap_itself.execute(
+            &self.hashmap_1,
+            &mut self.hashmap_2,
+            &mut self.unknown_fills,
+            &mut self.sol_and_res_unk,
+        );
+        self.add_to_hashmap.execute(
+            arg,
+            outputs,
+            &mut self.hashmap_2,
+            &mut self.unknown_fills,
+            &mut self.sol_and_res_unk,
+        );
+        self.iter += 1;
+        if self.iter >= self.clear_predecessors_per_iter {
+            self.join_hashmap_itself
+                .execute_reset_predecessors(&mut self.hashmap_2);
+            self.iter = 0;
+        }
+        std::mem::swap(&mut self.hashmap_1, &mut self.hashmap_2);
+    }
+}
+
 //
 // main solver code
 //
