@@ -998,6 +998,12 @@ impl OpenCLAddToHashMapAndCheckSolution {
 // HashMapHandler
 //
 
+#[derive(Clone, Copy, Debug)]
+enum FinalResult {
+    Solution(Solution),
+    NoSolution,
+}
+
 struct CPUHashMapHandler {
     state_len: usize,
     arg_bit_place: usize,
@@ -1085,8 +1091,20 @@ impl CPUHashMapHandler {
         std::mem::swap(&mut self.hashmap_1, &mut self.hashmap_2);
     }
 
-    fn get_solution(&self) -> Option<Solution> {
-        *self.solution.lock().unwrap()
+    fn get_final_result(&self) -> Option<FinalResult> {
+        if self
+            .unknown_fills
+            .iter()
+            .all(|x| x.load(atomic::Ordering::SeqCst) >= (1 << self.unknown_fill_bits))
+        {
+            Some(FinalResult::NoSolution)
+        } else {
+            if let Some(sol) = *self.solution.lock().unwrap() {
+                Some(FinalResult::Solution(sol))
+            } else {
+                None
+            }
+        }
     }
 }
 
