@@ -101,8 +101,8 @@ struct CommandArgs {
 }
 
 fn calculate_default_unknown_fill_bits(hashmap_len_bits: usize, unknown_bits: usize) -> usize {
-    if hashmap_len_bits + 2 < unknown_bits {
-        unknown_bits - (hashmap_len_bits + 2)
+    if hashmap_len_bits - 1 < unknown_bits {
+        unknown_bits - (hashmap_len_bits - 1)
     } else {
         0
     }
@@ -376,7 +376,7 @@ fn resolve_unknowns(
             && unknown_fill_value == unknown_fill_mask
         {
             // increase resolved unknowns if it last unknown in this unknown fill
-            println!("Some resolved: {}", current);
+            //println!("Some resolved: {}", current);
             resolved_unknowns.fetch_add(1, atomic::Ordering::SeqCst);
         }
     }
@@ -426,6 +426,11 @@ fn join_hashmap_itself_and_check_solution_cpu(
         .for_each(|(in_hashchunk, out_hashchunk)| {
             for (inhe, outhe) in in_hashchunk.iter().zip(out_hashchunk.iter_mut()) {
                 if inhe.state == HASH_STATE_USED {
+                    // DEBUG
+                    // if inhe.current & ((1u64 << (state_len - unknown_bits)) - 1) == 0 {
+                    //     println!("Unknown CurHE: {}: steps={}", inhe.current, inhe.steps);
+                    // }
+                    // DEBUG
                     let next_hash = hash_function_64(state_len, inhe.next);
                     let nexthe = &in_hashmap[next_hash >> hashentry_shift];
                     if nexthe.state != HASH_STATE_UNUSED && nexthe.current == inhe.next {
