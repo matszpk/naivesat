@@ -1590,6 +1590,11 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
     } else {
         panic!("Unsupported!");
     };
+    if let Some(sol) = result {
+        println!("Solution: {:?}", sol);
+    } else {
+        println!("Unsatisfiable!");
+    }
 }
 
 fn simple_solve(circuit: Circuit<usize>, unknowns: usize) {
