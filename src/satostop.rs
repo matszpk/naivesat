@@ -376,6 +376,7 @@ fn resolve_unknowns(
             && unknown_fill_value == unknown_fill_mask
         {
             // increase resolved unknowns if it last unknown in this unknown fill
+            println!("Some resolved: {}", current);
             resolved_unknowns.fetch_add(1, atomic::Ordering::SeqCst);
         }
     }
@@ -785,7 +786,10 @@ fn add_to_hashmap_and_check_solution_cpu(
                     let mut try_again = true;
                     // try again until if current is currently solved and
                     // old current is not solved.
-                    while try_again {
+                    for i in 0..10 {
+                        if !try_again {
+                            break;
+                        }
                         let curhe_state_atomic = AtomicU32::from_ptr(&mut curhe.state as *mut u32);
                         // if previous entry have:
                         // if not currently solved unknown (state).
@@ -1467,7 +1471,7 @@ fn do_solve_with_opencl_mapper<'a>(
     let start = SystemTime::now();
     let mut final_result = None;
     while final_result.is_none() {
-        execs[0]
+        final_result = execs[0]
             .execute(
                 &input,
                 None,
