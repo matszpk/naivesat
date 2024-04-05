@@ -418,6 +418,9 @@ fn join_hashmap_itself_and_check_solution_cpu(
                 v.store(0, atomic::Ordering::SeqCst);
             }
         });
+    // DEBUG
+    let total_unknown_steps = Arc::new(AtomicU64::new(0));
+    // DEBUG
     // main routine
     in_hashmap
         .chunks(chunk_len)
@@ -427,9 +430,10 @@ fn join_hashmap_itself_and_check_solution_cpu(
             for (inhe, outhe) in in_hashchunk.iter().zip(out_hashchunk.iter_mut()) {
                 if inhe.state == HASH_STATE_USED {
                     // DEBUG
-                    // if inhe.current & ((1u64 << (state_len - unknown_bits)) - 1) == 0 {
-                    //     println!("Unknown CurHE: {}: steps={}", inhe.current, inhe.steps);
-                    // }
+                    if inhe.current & ((1u64 << (state_len - unknown_bits)) - 1) == 0 {
+                        total_unknown_steps.fetch_add(inhe.steps, atomic::Ordering::SeqCst);
+                        //println!("Unknown CurHE: {}: steps={}", inhe.current, inhe.steps);
+                    }
                     // DEBUG
                     let next_hash = hash_function_64(state_len, inhe.next);
                     let nexthe = &in_hashmap[next_hash >> hashentry_shift];
@@ -482,6 +486,9 @@ fn join_hashmap_itself_and_check_solution_cpu(
                 he.predecessors += pred_update.load(atomic::Ordering::SeqCst);
             }
         });
+    // DEBUG
+    println!("Total steps in unknown: {}", total_unknown_steps.load(atomic::Ordering::SeqCst));
+    // DEBUG
 }
 
 #[repr(C)]
