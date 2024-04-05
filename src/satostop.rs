@@ -1500,6 +1500,13 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
         assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
         assert_eq!(circuit.outputs().len(), input_len + 1);
         println!("Elem inputs: {}", elem_inputs);
+        println!(
+            "HashMap length: {} bytes, bits={}",
+            (1usize << cmd_args.hashmap_len_bits) * std::mem::size_of::<HashEntry>(),
+            cmd_args.hashmap_len_bits
+        );
+        println!("Unknowns: {}", cmd_args.unknowns);
+        println!("Unknown fill bits: {}", unknown_fill_bits);
         let opencl_config = OpenCLBuilderConfig {
             optimize_negs: true,
             group_len: cmd_args.opencl_group_len,
