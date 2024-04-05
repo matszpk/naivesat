@@ -1347,7 +1347,7 @@ fn do_solve_with_cpu_mapper<'a>(
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,
-    cmd_args: CommandArgs,
+    cmd_args: &CommandArgs,
 ) -> Option<FinalResult> {
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
@@ -1428,7 +1428,8 @@ fn do_solve_with_opencl_mapper<'a>(
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,
-) {
+    cmd_args: &CommandArgs,
+) -> Option<FinalResult> {
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -1448,20 +1449,48 @@ fn do_solve_with_opencl_mapper<'a>(
     );
     let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
+    let (context, cmd_queue) = {
+        let same_exec = execs[0].executor();
+        unsafe { (same_exec.context(), same_exec.command_queue()) }
+    };
+    let unknown_fill_bits =
+        cmd_args
+            .unknown_fill_bits
+            .unwrap_or(calculate_default_unknown_fill_bits(
+                cmd_args.hashmap_len_bits,
+                cmd_args.unknowns,
+            ));
+    let mut hashmap_handler = OpenCLHashMapHandler::new(
+        input_len,
+        elem_inputs,
+        cmd_args.hashmap_len_bits,
+        cmd_args.unknowns,
+        unknown_fill_bits,
+        cmd_args.max_predecessors,
+        cmd_args.clear_predecessors_per_iter,
+        context,
+        cmd_queue,
+    );
     let input = execs[0].new_data(16);
     let start = SystemTime::now();
-    execs[0]
-        .execute(
-            &input,
-            (),
-            |result, _, output, arg| {
-                println!("Step: {} / {}", arg, arg_steps);
-            },
-            |_| false,
-        )
-        .unwrap();
+    let mut final_result = None;
+    while final_result.is_none() {
+        execs[0]
+            .execute(
+                &input,
+                None,
+                |result, _, output, arg| {
+                    println!("Step: {} / {}", arg, arg_steps);
+                    hashmap_handler.process(arg, unsafe { output.buffer() });
+                    hashmap_handler.get_final_result()
+                },
+                |a| a.is_some(),
+            )
+            .unwrap();
+    }
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
+    final_result
 }
 
 fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
@@ -1486,13 +1515,7 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
             ExecType::CPU => {
                 println!("Execute in CPU");
                 let builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(4096)));
-                do_solve_with_cpu_mapper(
-                    builder,
-                    circuit.clone(),
-                    unknowns,
-                    elem_inputs,
-                    cmd_args.clone(),
-                )
+                do_solve_with_cpu_mapper(builder, circuit.clone(), unknowns, elem_inputs, &cmd_args)
             }
             ExecType::OpenCL(didx) => {
                 println!("Execute in OpenCL device={}", didx);
@@ -1506,8 +1529,13 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
                     &device,
                     Some(opencl_config.clone()),
                 ));
-                do_solve_with_opencl_mapper(builder, circuit.clone(), unknowns, elem_inputs);
-                None
+                do_solve_with_opencl_mapper(
+                    builder,
+                    circuit.clone(),
+                    unknowns,
+                    elem_inputs,
+                    &cmd_args,
+                )
             }
             ExecType::CPUAndOpenCL
             | ExecType::CPUAndOpenCLD
