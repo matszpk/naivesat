@@ -1098,16 +1098,14 @@ impl CPUHashMapHandler {
     }
 
     fn get_final_result(&self) -> Option<FinalResult> {
-        if self.resolved_unknowns.load(atomic::Ordering::SeqCst)
+        if let Some(sol) = *self.solution.lock().unwrap() {
+            Some(FinalResult::Solution(sol))
+        } else if self.resolved_unknowns.load(atomic::Ordering::SeqCst)
             == 1 << (self.unknown_bits - self.unknown_fill_bits)
         {
             Some(FinalResult::NoSolution)
         } else {
-            if let Some(sol) = *self.solution.lock().unwrap() {
-                Some(FinalResult::Solution(sol))
-            } else {
-                None
-            }
+            None
         }
     }
 }
@@ -1124,6 +1122,7 @@ struct OpenCLHashMapHandler {
     sol_and_res_unk: Buffer<SolutionAndResUnknowns>,
     clear_predecessors_per_iter: u32,
     iter: u32,
+    cmd_queue: Arc<CommandQueue>,
 }
 
 impl OpenCLHashMapHandler {
@@ -1253,6 +1252,7 @@ impl OpenCLHashMapHandler {
             sol_and_res_unk,
             clear_predecessors_per_iter,
             iter: 0,
+            cmd_queue: cmd_queue.clone(),
         }
     }
 
@@ -1279,6 +1279,28 @@ impl OpenCLHashMapHandler {
             self.iter = 0;
         }
         std::mem::swap(&mut self.hashmap_1, &mut self.hashmap_2);
+    }
+
+    fn get_final_result(&self) -> Option<FinalResult> {
+        let mut sol_and_res = [SolutionAndResUnknowns::default()];
+        unsafe {
+            self.cmd_queue
+                .enqueue_read_buffer(&self.sol_and_res_unk, CL_BLOCKING, 0, &mut sol_and_res, &[])
+                .unwrap();
+        }
+        let sol_and_res = sol_and_res[0];
+        if sol_and_res.sol_defined != 0 {
+            Some(FinalResult::Solution(Solution {
+                start: sol_and_res.sol_start,
+                end: sol_and_res.sol_end,
+                steps: sol_and_res.sol_steps,
+            }))
+        } else if sol_and_res.resolved_unknowns == 1 << (self.unknown_bits - self.unknown_fill_bits)
+        {
+            Some(FinalResult::NoSolution)
+        } else {
+            None
+        }
     }
 }
 
