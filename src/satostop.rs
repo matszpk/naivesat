@@ -995,6 +995,98 @@ impl OpenCLAddToHashMapAndCheckSolution {
 }
 
 //
+// HashMapHandler
+//
+
+struct CPUHashMapHandler {
+    state_len: usize,
+    arg_bit_place: usize,
+    hashmap_len_bits: usize,
+    unknown_bits: usize,
+    unknown_fill_bits: usize,
+    hashmap_1: Vec<HashEntry>,
+    hashmap_2: Vec<HashEntry>,
+    preds_update: Arc<Vec<AtomicU32>>,
+    unknown_fills: Arc<Vec<AtomicU32>>,
+    resolved_unknowns: Arc<AtomicU64>,
+    solution: Mutex<Option<Solution>>,
+    max_predecessors: u32,
+    clear_predecessors_per_iter: u32,
+    iter: u32,
+}
+
+impl CPUHashMapHandler {
+    fn new(
+        state_len: usize,
+        arg_bit_place: usize,
+        hashmap_len_bits: usize,
+        unknown_bits: usize,
+        unknown_fill_bits: usize,
+        max_predecessors: u32,
+        clear_predecessors_per_iter: u32,
+    ) -> Self {
+        Self {
+            state_len,
+            arg_bit_place,
+            hashmap_len_bits,
+            unknown_bits,
+            unknown_fill_bits,
+            hashmap_1: vec![HashEntry::default(); 1 << hashmap_len_bits],
+            hashmap_2: vec![HashEntry::default(); 1 << hashmap_len_bits],
+            preds_update: create_vec_of_atomic_u32(1 << hashmap_len_bits),
+            unknown_fills: create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits)),
+            resolved_unknowns: Arc::new(AtomicU64::new(0)),
+            solution: Mutex::new(None),
+            max_predecessors,
+            clear_predecessors_per_iter,
+            iter: 0,
+        }
+    }
+
+    fn process(&mut self, arg: u64, outputs: &[u32]) {
+        join_to_hashmap_cpu(
+            self.state_len,
+            self.arg_bit_place,
+            arg,
+            outputs,
+            &mut self.hashmap_1,
+        );
+        join_hashmap_itself_and_check_solution_cpu(
+            self.state_len,
+            self.preds_update.clone(),
+            &self.hashmap_1,
+            &mut self.hashmap_2,
+            self.unknown_bits,
+            self.unknown_fill_bits,
+            self.unknown_fills.clone(),
+            self.resolved_unknowns.clone(),
+            &self.solution,
+        );
+        add_to_hashmap_and_check_solution_cpu(
+            self.state_len,
+            self.arg_bit_place,
+            arg,
+            &outputs,
+            &mut self.hashmap_2,
+            self.unknown_bits,
+            self.unknown_fill_bits,
+            self.unknown_fills.clone(),
+            self.resolved_unknowns.clone(),
+            &self.solution,
+            self.max_predecessors,
+            false,
+        );
+        if self.iter >= self.clear_predecessors_per_iter {
+            for he in self.hashmap_2.iter_mut() {
+                he.predecessors = 0;
+            }
+            self.iter = 0;
+        }
+        std::mem::swap(&mut self.hashmap_1, &mut self.hashmap_2);
+    }
+}
+
+//
 // main solver code
 //
 
