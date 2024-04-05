@@ -1084,6 +1084,10 @@ impl CPUHashMapHandler {
         }
         std::mem::swap(&mut self.hashmap_1, &mut self.hashmap_2);
     }
+
+    fn get_solution(&self) -> Option<Solution> {
+        *self.solution.lock().unwrap()
+    }
 }
 
 //
