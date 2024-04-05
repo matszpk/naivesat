@@ -1092,10 +1092,8 @@ impl CPUHashMapHandler {
     }
 
     fn get_final_result(&self) -> Option<FinalResult> {
-        if self
-            .unknown_fills
-            .iter()
-            .all(|x| x.load(atomic::Ordering::SeqCst) >= (1 << self.unknown_fill_bits))
+        if self.resolved_unknowns.load(atomic::Ordering::SeqCst)
+            == 1 << (self.unknown_bits - self.unknown_fill_bits)
         {
             Some(FinalResult::NoSolution)
         } else {
