@@ -1347,6 +1347,7 @@ fn do_solve_with_cpu_mapper<'a>(
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,
+    unknown_fill_bits: usize,
     cmd_args: &CommandArgs,
 ) -> Option<FinalResult> {
     let input_len = circuit.input_len();
@@ -1366,13 +1367,8 @@ fn do_solve_with_cpu_mapper<'a>(
             .aggr_output_len(Some(words_per_elem * (1 << elem_inputs)))
             .dont_clear_outputs(true),
     );
-    let unknown_fill_bits =
-        cmd_args
-            .unknown_fill_bits
-            .unwrap_or(calculate_default_unknown_fill_bits(
-                cmd_args.hashmap_len_bits,
-                cmd_args.unknowns,
-            ));
+    let type_len = mapper.type_len();
+    let mut execs = mapper.build().unwrap();
     let mut hashmap_handler = CPUHashMapHandler::new(
         input_len,
         elem_inputs,
@@ -1382,8 +1378,6 @@ fn do_solve_with_cpu_mapper<'a>(
         cmd_args.max_predecessors,
         cmd_args.clear_predecessors_per_iter,
     );
-    let type_len = mapper.type_len();
-    let mut execs = mapper.build().unwrap();
     let input = execs[0].new_data(16);
     let start = SystemTime::now();
     let mut final_result = None;
@@ -1428,6 +1422,7 @@ fn do_solve_with_opencl_mapper<'a>(
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,
+    unknown_fill_bits: usize,
     cmd_args: &CommandArgs,
 ) -> Option<FinalResult> {
     let input_len = circuit.input_len();
@@ -1453,13 +1448,6 @@ fn do_solve_with_opencl_mapper<'a>(
         let same_exec = execs[0].executor();
         unsafe { (same_exec.context(), same_exec.command_queue()) }
     };
-    let unknown_fill_bits =
-        cmd_args
-            .unknown_fill_bits
-            .unwrap_or(calculate_default_unknown_fill_bits(
-                cmd_args.hashmap_len_bits,
-                cmd_args.unknowns,
-            ));
     let mut hashmap_handler = OpenCLHashMapHandler::new(
         input_len,
         elem_inputs,
@@ -1501,6 +1489,13 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
         } else {
             cmd_args.elem_inputs
         };
+        let unknown_fill_bits =
+            cmd_args
+                .unknown_fill_bits
+                .unwrap_or(calculate_default_unknown_fill_bits(
+                    cmd_args.hashmap_len_bits,
+                    cmd_args.unknowns,
+                ));
         assert!(elem_inputs > 0 && elem_inputs <= 37);
         assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
         assert_eq!(circuit.outputs().len(), input_len + 1);
@@ -1515,7 +1510,14 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
             ExecType::CPU => {
                 println!("Execute in CPU");
                 let builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(4096)));
-                do_solve_with_cpu_mapper(builder, circuit.clone(), unknowns, elem_inputs, &cmd_args)
+                do_solve_with_cpu_mapper(
+                    builder,
+                    circuit.clone(),
+                    unknowns,
+                    elem_inputs,
+                    unknown_fill_bits,
+                    &cmd_args,
+                )
             }
             ExecType::OpenCL(didx) => {
                 println!("Execute in OpenCL device={}", didx);
@@ -1534,6 +1536,7 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
                     circuit.clone(),
                     unknowns,
                     elem_inputs,
+                    unknown_fill_bits,
                     &cmd_args,
                 )
             }
