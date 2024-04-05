@@ -487,7 +487,10 @@ fn join_hashmap_itself_and_check_solution_cpu(
             }
         });
     // DEBUG
-    println!("Total steps in unknown: {}", total_unknown_steps.load(atomic::Ordering::SeqCst));
+    println!(
+        "Total steps in unknown: {}",
+        total_unknown_steps.load(atomic::Ordering::SeqCst)
+    );
     // DEBUG
 }
 
@@ -849,7 +852,13 @@ fn add_to_hashmap_and_check_solution_cpu(
                             try_again = (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) != 0
                                 && (current_currently_solved && !old_current_currently_solved);
                             std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                            curhe_state_atomic.store(old_state, atomic::Ordering::SeqCst);
+                            if (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0 {
+                                // unset flag only this thread only own this flag
+                                curhe_state_atomic.fetch_and(
+                                    !HASH_STATE_RESERVED_BY_OTHER_FLAG,
+                                    atomic::Ordering::SeqCst,
+                                );
+                            }
                         }
                     }
                 }
@@ -943,7 +952,9 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
             try_again = (old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) != 0
                 && (current_currently_solved && !old_current_currently_solved);
             mem_fence(CLK_GLOBAL_MEM_FENCE);
-            atomic_xchg(&(curhe->state), old_state);
+            if ((old_state & HASH_STATE_RESERVED_BY_OTHER_FLAG) == 0) {
+                atomic_and(&(curhe->state), ~HASH_STATE_RESERVED_BY_OTHER_FLAG);
+            }
         }
     }
     resolve_unknowns(current, next, 1, state, unknown_fills, sol_and_res_unk);
