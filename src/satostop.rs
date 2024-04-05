@@ -1031,6 +1031,11 @@ impl CPUHashMapHandler {
         max_predecessors: u32,
         clear_predecessors_per_iter: u32,
     ) -> Self {
+        assert!(arg_bit_place < state_len);
+        assert_ne!(hashmap_len_bits, 0);
+        assert!(unknown_bits <= state_len);
+        assert!(unknown_fill_bits < unknown_bits);
+        assert_ne!(clear_predecessors_per_iter, 0);
         Self {
             state_len,
             arg_bit_place,
@@ -1082,6 +1087,7 @@ impl CPUHashMapHandler {
             self.max_predecessors,
             false,
         );
+        self.iter += 1;
         if self.iter >= self.clear_predecessors_per_iter {
             for he in self.hashmap_2.iter_mut() {
                 he.predecessors = 0;
