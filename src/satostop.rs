@@ -1245,11 +1245,11 @@ impl OpenCLHashMapHandler {
                 )
                 .unwrap();
             cmd_queue
-                .enqueue_fill_buffer(
+                .enqueue_write_buffer(
                     &mut sol_and_res_unk,
-                    &[SolutionAndResUnknowns::default()],
+                    CL_BLOCKING,
                     0,
-                    std::mem::size_of::<SolutionAndResUnknowns>(),
+                    &[SolutionAndResUnknowns::default()],
                     &[],
                 )
                 .unwrap();
