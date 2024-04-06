@@ -1044,6 +1044,93 @@ fn hashmap_info_cpu(state_len: usize, unknown_bits: usize, hashmap: &[HashEntry]
 
 // INFO service for OpenCL
 
+const HASHMAP_INFO_OPENCL_CODE: &str = r##"
+#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
+
+kernel void hashmap_info(const global HashEntry* hashmap, global ulong* total) {
+    const size_t idx = get_global_id(0);
+    const size_t lidx = get_local_id(0);
+    if (idx >= HASHMAP_LEN)
+        return;
+    const global HashEntry* he = hashmap + idx;
+    local ulong local_total;
+    if (lidx == 0) {
+        local_total = 0;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if (he->state == HASH_STATE_USED
+        && (he->current & ((1UL << (STATE_LEN - UNKNOWN_BITS)) - 1)) == 0) {
+        atom_add(&local_total, he->steps);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if (lidx == 0) {
+        atom_add(total, local_total);
+    }
+}
+"##;
+
+struct OpenCLHashMapInfo {
+    hashmap_len: usize,
+    cmd_queue: Arc<CommandQueue>,
+    group_len: usize,
+    kernel: Kernel,
+    total_buffer: Buffer<u64>,
+}
+
+impl OpenCLHashMapInfo {
+    fn new(
+        state_len: usize,
+        hashmap_len: usize,
+        unknown_bits: usize,
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+    ) -> Self {
+        let device = Device::new(context.devices()[0]);
+        let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
+        let defs = format!(
+            "-DSTATE_LEN=({}) -DHASHMAP_LEN=({}) -DUNKNOWN_BITS=({})",
+            state_len, hashmap_len, unknown_bits,
+        );
+        let source =
+            HASH_ENTRY_OPENCL_DEF.to_string() + HASH_FUNC_OPENCL_DEF + HASHMAP_INFO_OPENCL_CODE;
+        let program = Program::create_and_build_from_source(&context, &source, &defs).unwrap();
+        Self {
+            hashmap_len,
+            cmd_queue,
+            group_len,
+            kernel: Kernel::create(&program, "hashmap_info").unwrap(),
+            total_buffer: unsafe {
+                Buffer::create(&context, CL_MEM_READ_WRITE, 1, std::ptr::null_mut()).unwrap()
+            },
+        }
+    }
+
+    fn execute(&mut self, hashmap: &Buffer<HashEntry>) -> u64 {
+        unsafe {
+            self.cmd_queue
+                .enqueue_write_buffer(&mut self.total_buffer, CL_BLOCKING, 0, &[0u64], &[])
+                .unwrap();
+            ExecuteKernel::new(&self.kernel)
+                .set_arg(hashmap)
+                .set_arg(&mut self.total_buffer)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    ((self.hashmap_len + self.group_len - 1) / self.group_len) * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)
+                .unwrap();
+            self.cmd_queue.finish().unwrap();
+            let mut total_data = [0u64];
+            self.cmd_queue
+                .enqueue_read_buffer(&self.total_buffer, CL_BLOCKING, 0, &mut total_data, &[])
+                .unwrap();
+            total_data[0]
+        }
+    }
+}
+
+// END OF INFO service for OpenCL
+
 fn hashmap_clear_predecessors_cpu(hashmap: &mut [HashEntry]) -> u64 {
     let cpu_num = rayon::current_num_threads();
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), hashmap.len() >> 6);
@@ -1189,12 +1276,14 @@ struct OpenCLHashMapHandler {
     join_to_hashmap: OpenCLJoinToHashMap,
     join_hashmap_itself: OpenCLJoinHashMapItselfAndCheckSolution,
     add_to_hashmap: OpenCLAddToHashMapAndCheckSolution,
+    hashmap_info: OpenCLHashMapInfo,
     hashmap_1: Buffer<HashEntry>,
     hashmap_2: Buffer<HashEntry>,
     unknown_fills: Buffer<u32>,
     sol_and_res_unk: Buffer<SolutionAndResUnknowns>,
     iters_per_clear_predecessors: u32,
     iter: u32,
+    info_iter: u32,
     cmd_queue: Arc<CommandQueue>,
 }
 
@@ -1322,12 +1411,20 @@ impl OpenCLHashMapHandler {
                 context.clone(),
                 cmd_queue.clone(),
             ),
+            hashmap_info: OpenCLHashMapInfo::new(
+                state_len,
+                1 << hashmap_len_bits,
+                unknown_bits,
+                context.clone(),
+                cmd_queue.clone(),
+            ),
             hashmap_1,
             hashmap_2,
             unknown_fills,
             sol_and_res_unk,
             iters_per_clear_predecessors,
             iter: 0,
+            info_iter: 0,
             cmd_queue: cmd_queue.clone(),
         }
     }
@@ -1348,6 +1445,12 @@ impl OpenCLHashMapHandler {
             &mut self.unknown_fills,
             &mut self.sol_and_res_unk,
         );
+        self.info_iter += 1;
+        if self.info_iter >= ITERS_PER_INFO {
+            let total = self.hashmap_info.execute(&self.hashmap_2);
+            println!("Total steps in unknown states: {}", total);
+            self.info_iter = 0;
+        }
         self.iter += 1;
         if self.iter >= self.iters_per_clear_predecessors {
             println!("Clearing predecessors");
