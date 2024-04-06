@@ -1071,6 +1071,7 @@ impl CPUHashMapHandler {
         max_predecessors: u32,
         clear_predecessors_per_iter: u32,
     ) -> Self {
+        assert!(hashmap_len_bits <= state_len);
         assert!(arg_bit_place < state_len);
         assert_ne!(hashmap_len_bits, 0);
         assert!(unknown_bits <= state_len);
@@ -1175,6 +1176,7 @@ impl OpenCLHashMapHandler {
         context: Arc<Context>,
         cmd_queue: Arc<CommandQueue>,
     ) -> Self {
+        assert!(hashmap_len_bits <= state_len);
         assert!(arg_bit_place < state_len);
         assert_ne!(hashmap_len_bits, 0);
         assert!(unknown_bits <= state_len);
