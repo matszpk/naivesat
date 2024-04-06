@@ -91,7 +91,7 @@ struct CommandArgs {
     #[arg(short = 'P', long, default_value_t = 0)]
     max_predecessors: u32,
     #[arg(short = 'C', long, default_value_t = 20)]
-    clear_predecessors_per_iter: u32,
+    iters_per_clear_predecessors: u32,
     #[arg(short = 't', long)]
     exec_type: ExecType,
     #[arg(short = 'G', long)]
@@ -1020,7 +1020,7 @@ impl OpenCLAddToHashMapAndCheckSolution {
     }
 }
 
-// info per iter
+// INFO service for CPU
 
 fn hashmap_info_cpu(state_len: usize, unknown_bits: usize, hashmap: &[HashEntry]) -> u64 {
     let cpu_num = rayon::current_num_threads();
@@ -1042,6 +1042,8 @@ fn hashmap_info_cpu(state_len: usize, unknown_bits: usize, hashmap: &[HashEntry]
     total_unknown_steps.load(atomic::Ordering::SeqCst)
 }
 
+// INFO service for OpenCL
+
 fn hashmap_clear_predecessors_cpu(hashmap: &mut [HashEntry]) -> u64 {
     let cpu_num = rayon::current_num_threads();
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), hashmap.len() >> 6);
@@ -1062,7 +1064,7 @@ fn hashmap_clear_predecessors_cpu(hashmap: &mut [HashEntry]) -> u64 {
 // HashMapHandler
 //
 
-const INFO_PER_ITER: u32 = 10;
+const ITERS_PER_INFO: u32 = 10;
 
 #[derive(Clone, Copy, Debug)]
 enum FinalResult {
@@ -1082,7 +1084,7 @@ struct CPUHashMapHandler {
     resolved_unknowns: Arc<AtomicU64>,
     solution: Mutex<Option<Solution>>,
     max_predecessors: u32,
-    clear_predecessors_per_iter: u32,
+    iters_per_clear_predecessors: u32,
     iter: u32,
     info_iter: u32,
 }
@@ -1095,14 +1097,14 @@ impl CPUHashMapHandler {
         unknown_bits: usize,
         unknown_fill_bits: usize,
         max_predecessors: u32,
-        clear_predecessors_per_iter: u32,
+        iters_per_clear_predecessors: u32,
     ) -> Self {
         assert!(hashmap_len_bits <= state_len);
         assert!(arg_bit_place < state_len);
         assert_ne!(hashmap_len_bits, 0);
         assert!(unknown_bits <= state_len);
         assert!(unknown_fill_bits < unknown_bits);
-        assert_ne!(clear_predecessors_per_iter, 0);
+        assert_ne!(iters_per_clear_predecessors, 0);
         Self {
             state_len,
             arg_bit_place,
@@ -1115,7 +1117,7 @@ impl CPUHashMapHandler {
             resolved_unknowns: Arc::new(AtomicU64::new(0)),
             solution: Mutex::new(None),
             max_predecessors,
-            clear_predecessors_per_iter,
+            iters_per_clear_predecessors,
             iter: 0,
             info_iter: 0,
         }
@@ -1155,13 +1157,14 @@ impl CPUHashMapHandler {
             false,
         );
         self.info_iter += 1;
-        if self.info_iter >= INFO_PER_ITER {
+        if self.info_iter >= ITERS_PER_INFO {
             let total = hashmap_info_cpu(self.state_len, self.unknown_bits, &self.hashmap_2);
             println!("Total steps in unknown states: {}", total);
             self.info_iter = 0;
         }
         self.iter += 1;
-        if self.iter >= self.clear_predecessors_per_iter {
+        if self.iter >= self.iters_per_clear_predecessors {
+            println!("Clearing predecessors");
             hashmap_clear_predecessors_cpu(&mut self.hashmap_2);
             self.iter = 0;
         }
@@ -1190,7 +1193,7 @@ struct OpenCLHashMapHandler {
     hashmap_2: Buffer<HashEntry>,
     unknown_fills: Buffer<u32>,
     sol_and_res_unk: Buffer<SolutionAndResUnknowns>,
-    clear_predecessors_per_iter: u32,
+    iters_per_clear_predecessors: u32,
     iter: u32,
     cmd_queue: Arc<CommandQueue>,
 }
@@ -1203,7 +1206,7 @@ impl OpenCLHashMapHandler {
         unknown_bits: usize,
         unknown_fill_bits: usize,
         max_predecessors: u32,
-        clear_predecessors_per_iter: u32,
+        iters_per_clear_predecessors: u32,
         context: Arc<Context>,
         cmd_queue: Arc<CommandQueue>,
     ) -> Self {
@@ -1212,7 +1215,7 @@ impl OpenCLHashMapHandler {
         assert_ne!(hashmap_len_bits, 0);
         assert!(unknown_bits <= state_len);
         assert!(unknown_fill_bits < unknown_bits);
-        assert_ne!(clear_predecessors_per_iter, 0);
+        assert_ne!(iters_per_clear_predecessors, 0);
         let mut hashmap_1 = unsafe {
             Buffer::create(
                 &context,
@@ -1323,7 +1326,7 @@ impl OpenCLHashMapHandler {
             hashmap_2,
             unknown_fills,
             sol_and_res_unk,
-            clear_predecessors_per_iter,
+            iters_per_clear_predecessors,
             iter: 0,
             cmd_queue: cmd_queue.clone(),
         }
@@ -1346,7 +1349,8 @@ impl OpenCLHashMapHandler {
             &mut self.sol_and_res_unk,
         );
         self.iter += 1;
-        if self.iter >= self.clear_predecessors_per_iter {
+        if self.iter >= self.iters_per_clear_predecessors {
+            println!("Clearing predecessors");
             self.join_hashmap_itself
                 .execute_reset_predecessors(&mut self.hashmap_2);
             self.iter = 0;
@@ -1434,7 +1438,7 @@ fn do_solve_with_cpu_mapper<'a>(
         unknowns,
         unknown_fill_bits,
         cmd_args.max_predecessors,
-        cmd_args.clear_predecessors_per_iter,
+        cmd_args.iters_per_clear_predecessors,
     );
     let input = execs[0].new_data(16);
     let start = SystemTime::now();
@@ -1514,7 +1518,7 @@ fn do_solve_with_opencl_mapper<'a>(
         unknowns,
         unknown_fill_bits,
         cmd_args.max_predecessors,
-        cmd_args.clear_predecessors_per_iter,
+        cmd_args.iters_per_clear_predecessors,
         context,
         cmd_queue,
     );
