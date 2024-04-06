@@ -1219,6 +1219,7 @@ impl OpenCLHashMapHandler {
             .unwrap()
         };
         unsafe {
+            // warning: HashEntry must have 64 bit length
             cmd_queue
                 .enqueue_fill_buffer(
                     &mut hashmap_1,
@@ -1228,6 +1229,7 @@ impl OpenCLHashMapHandler {
                     &[],
                 )
                 .unwrap();
+            // warning: HashEntry must have 64 bit length
             cmd_queue
                 .enqueue_fill_buffer(
                     &mut hashmap_2,
@@ -3421,6 +3423,7 @@ mod tests {
             .unwrap()
         };
         unsafe {
+            // warning: HashEntry must have 64 bit length
             cmd_queue
                 .enqueue_fill_buffer(
                     &mut out_hashmap_buffer,
