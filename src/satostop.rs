@@ -418,9 +418,6 @@ fn join_hashmap_itself_and_check_solution_cpu(
                 v.store(0, atomic::Ordering::SeqCst);
             }
         });
-    // DEBUG
-    let total_unknown_steps = Arc::new(AtomicU64::new(0));
-    // DEBUG
     // main routine
     in_hashmap
         .chunks(chunk_len)
@@ -429,12 +426,6 @@ fn join_hashmap_itself_and_check_solution_cpu(
         .for_each(|(in_hashchunk, out_hashchunk)| {
             for (inhe, outhe) in in_hashchunk.iter().zip(out_hashchunk.iter_mut()) {
                 if inhe.state == HASH_STATE_USED {
-                    // DEBUG
-                    if inhe.current & ((1u64 << (state_len - unknown_bits)) - 1) == 0 {
-                        total_unknown_steps.fetch_add(inhe.steps, atomic::Ordering::SeqCst);
-                        //println!("Unknown CurHE: {}: steps={}", inhe.current, inhe.steps);
-                    }
-                    // DEBUG
                     let next_hash = hash_function_64(state_len, inhe.next);
                     let nexthe = &in_hashmap[next_hash >> hashentry_shift];
                     if nexthe.state != HASH_STATE_UNUSED && nexthe.current == inhe.next {
@@ -485,12 +476,6 @@ fn join_hashmap_itself_and_check_solution_cpu(
                 he.predecessors += pred_update.load(atomic::Ordering::SeqCst);
             }
         });
-    // DEBUG
-    println!(
-        "Total steps in unknown: {}",
-        total_unknown_steps.load(atomic::Ordering::SeqCst)
-    );
-    // DEBUG
 }
 
 #[repr(C)]
@@ -1035,9 +1020,49 @@ impl OpenCLAddToHashMapAndCheckSolution {
     }
 }
 
+// info per iter
+
+fn hashmap_info_cpu(state_len: usize, unknown_bits: usize, hashmap: &[HashEntry]) -> u64 {
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), hashmap.len() >> 6);
+    let chunk_len = hashmap.len() / chunk_num;
+    let total_unknown_steps = Arc::new(AtomicU64::new(0));
+    hashmap
+        .chunks(chunk_len)
+        .par_bridge()
+        .for_each(|hashchunk| {
+            for he in hashchunk.iter() {
+                if he.state == HASH_STATE_USED
+                    && he.current & ((1u64 << (state_len - unknown_bits)) - 1) == 0
+                {
+                    total_unknown_steps.fetch_add(he.steps, atomic::Ordering::SeqCst);
+                }
+            }
+        });
+    total_unknown_steps.load(atomic::Ordering::SeqCst)
+}
+
+fn hashmap_clear_predecessors_cpu(hashmap: &mut [HashEntry]) -> u64 {
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), hashmap.len() >> 6);
+    let chunk_len = hashmap.len() / chunk_num;
+    let total_unknown_steps = Arc::new(AtomicU64::new(0));
+    hashmap
+        .chunks_mut(chunk_len)
+        .par_bridge()
+        .for_each(|hashchunk| {
+            for he in hashchunk.iter_mut() {
+                he.predecessors = 0;
+            }
+        });
+    total_unknown_steps.load(atomic::Ordering::SeqCst)
+}
+
 //
 // HashMapHandler
 //
+
+const INFO_PER_ITER: u32 = 10;
 
 #[derive(Clone, Copy, Debug)]
 enum FinalResult {
@@ -1059,6 +1084,7 @@ struct CPUHashMapHandler {
     max_predecessors: u32,
     clear_predecessors_per_iter: u32,
     iter: u32,
+    info_iter: u32,
 }
 
 impl CPUHashMapHandler {
@@ -1091,6 +1117,7 @@ impl CPUHashMapHandler {
             max_predecessors,
             clear_predecessors_per_iter,
             iter: 0,
+            info_iter: 0,
         }
     }
 
@@ -1127,11 +1154,15 @@ impl CPUHashMapHandler {
             self.max_predecessors,
             false,
         );
+        self.info_iter += 1;
+        if self.info_iter >= INFO_PER_ITER {
+            let total = hashmap_info_cpu(self.state_len, self.unknown_bits, &self.hashmap_2);
+            println!("Total steps in unknown states: {}", total);
+            self.info_iter = 0;
+        }
         self.iter += 1;
         if self.iter >= self.clear_predecessors_per_iter {
-            for he in self.hashmap_2.iter_mut() {
-                he.predecessors = 0;
-            }
+            hashmap_clear_predecessors_cpu(&mut self.hashmap_2);
             self.iter = 0;
         }
         std::mem::swap(&mut self.hashmap_1, &mut self.hashmap_2);
