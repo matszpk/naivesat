@@ -1,7 +1,6 @@
 use gatenative::cpu_build_exec::*;
 use gatenative::mapper::*;
 use gatenative::opencl_build_exec::*;
-use gatenative::parseq_mapper::*;
 use gatenative::*;
 use gatesim::*;
 
@@ -9,11 +8,10 @@ use clap::Parser;
 use opencl3::command_queue::CommandQueue;
 use opencl3::context::Context;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
-use opencl3::error_codes::ClError;
 use opencl3::kernel::{ExecuteKernel, Kernel};
 use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
 use opencl3::program::Program;
-use opencl3::types::{cl_mem, cl_mem_flags, cl_uint, cl_ulong, CL_BLOCKING};
+use opencl3::types::{cl_ulong, CL_BLOCKING};
 
 use rayon::prelude::*;
 
@@ -442,7 +440,6 @@ fn join_hashmap_itself_and_check_solution_cpu(
                     if nexthe.state != HASH_STATE_UNUSED && nexthe.current == inhe.next {
                         // if next found in hashmap entry
                         outhe.current = inhe.current;
-                        let old_next = inhe.next;
                         outhe.next = nexthe.next;
                         let (res, ov) = inhe.steps.overflowing_add(nexthe.steps);
                         outhe.steps = res;
@@ -752,7 +749,6 @@ fn add_to_hashmap_and_check_solution_cpu(
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), elem_num >> 6);
     let chunk_len = elem_num / chunk_num;
     let arg_start = arg << arg_bit_place;
-    let arg_end = arg_start + (1u64 << arg_bit_place);
     let state_mask = (1u64 << state_len) - 1;
     let hashlen_bits = usize::BITS - hashmap.len().leading_zeros() - 1;
     let hashentry_shift = state_len - hashlen_bits as usize;
@@ -803,7 +799,7 @@ fn add_to_hashmap_and_check_solution_cpu(
                     let mut try_again = true;
                     // try again until if current is currently solved and
                     // old current is not solved.
-                    for i in 0..10 {
+                    for _ in 0..10 {
                         if !try_again {
                             break;
                         }
@@ -888,7 +884,6 @@ kernel void add_to_hashmap_and_check_solution(ulong arg, const global uint* outp
     if (idx >= (1UL << ARG_BIT_PLACE))
         return;
     const ulong arg_start = arg << ARG_BIT_PLACE;
-    const ulong arg_end = arg_start + (1UL << ARG_BIT_PLACE);
     const ulong state_mask = (1UL << STATE_LEN) - 1UL;
     const uint hashentry_shift = STATE_LEN - HASHMAP_LEN_BITS;
     const ulong unknown_fill_mask = (1UL << UNKNOWN_FILL_BITS) - 1UL;
@@ -1053,7 +1048,6 @@ enum FinalResult {
 struct CPUHashMapHandler {
     state_len: usize,
     arg_bit_place: usize,
-    hashmap_len_bits: usize,
     unknown_bits: usize,
     unknown_fill_bits: usize,
     hashmap_1: Vec<HashEntry>,
@@ -1085,7 +1079,6 @@ impl CPUHashMapHandler {
         Self {
             state_len,
             arg_bit_place,
-            hashmap_len_bits,
             unknown_bits,
             unknown_fill_bits,
             hashmap_1: vec![HashEntry::default(); 1 << hashmap_len_bits],
@@ -1398,13 +1391,12 @@ fn do_solve_with_cpu_mapper<'a>(
             .aggr_output_len(Some(words_per_elem * (1 << elem_inputs)))
             .dont_clear_outputs(true),
     );
-    let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let mut hashmap_handler = CPUHashMapHandler::new(
         input_len,
         elem_inputs,
         cmd_args.hashmap_len_bits,
-        cmd_args.unknowns,
+        unknowns,
         unknown_fill_bits,
         cmd_args.max_predecessors,
         cmd_args.clear_predecessors_per_iter,
@@ -1417,7 +1409,7 @@ fn do_solve_with_cpu_mapper<'a>(
             .execute_direct(
                 &input,
                 None,
-                |result, _, output, arg| {
+                |_, _, output, arg| {
                     println!("Step: {} / {}", arg, arg_steps);
                     hashmap_handler.process(arg, output);
                     let (res, ru) = hashmap_handler.get_final_result();
@@ -1475,7 +1467,6 @@ fn do_solve_with_opencl_mapper<'a>(
             .aggr_output_len(Some(words_per_elem * (1 << elem_inputs)))
             .dont_clear_outputs(true),
     );
-    let type_len = mapper.type_len();
     let mut execs = mapper.build().unwrap();
     let (context, cmd_queue) = {
         let same_exec = execs[0].executor();
@@ -1485,7 +1476,7 @@ fn do_solve_with_opencl_mapper<'a>(
         input_len,
         elem_inputs,
         cmd_args.hashmap_len_bits,
-        cmd_args.unknowns,
+        unknowns,
         unknown_fill_bits,
         cmd_args.max_predecessors,
         cmd_args.clear_predecessors_per_iter,
@@ -1500,7 +1491,7 @@ fn do_solve_with_opencl_mapper<'a>(
             .execute(
                 &input,
                 None,
-                |result, _, output, arg| {
+                |_, _, output, arg| {
                     println!("Step: {} / {}", arg, arg_steps);
                     hashmap_handler.process(arg, unsafe { output.buffer() });
                     let (res, ru) = hashmap_handler.get_final_result();
@@ -3938,7 +3929,7 @@ mod tests {
         outputs[2 * 8950 + 1] = 0x61a;
         outputs[2 * 50591] = 0xaabbc33e;
         outputs[2 * 50591 + 1] = 0x114 | (1 << (state_len - 32));
-        let mut hashmap = vec![HashEntry::default(); 1 << hbits];
+        let hashmap = vec![HashEntry::default(); 1 << hbits];
         let unknown_fills = create_vec_of_atomic_u32(1 << (unknown_bits - unknown_fill_bits));
         let resolved_unknowns = Arc::new(AtomicU64::new(
             unknown_fills
@@ -4138,7 +4129,7 @@ mod tests {
                 arg_bit_place,
                 arg,
                 outputs,
-                mut hashmap,
+                hashmap,
                 expected_hashmap,
                 unknown_bits,
                 unknown_fill_bits,
