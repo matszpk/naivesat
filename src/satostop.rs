@@ -98,6 +98,8 @@ struct CommandArgs {
     exec_type: ExecType,
     #[arg(short = 'G', long)]
     opencl_group_len: Option<usize>,
+    #[arg(short = 'v', long)]
+    verify: bool,
 }
 
 fn calculate_default_unknown_fill_bits(hashmap_len_bits: usize, unknown_bits: usize) -> usize {
@@ -1593,6 +1595,29 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
     let result = result.unwrap();
     if let FinalResult::Solution(sol) = result {
         println!("Solution: {:?}", sol);
+        if cmd_args.verify {
+            let mut steps = 0;
+            let mut state = sol.start;
+            loop {
+                let state_vec = (0..input_len)
+                    .map(|b| ((state >> b) & 1) != 0)
+                    .collect::<Vec<_>>();
+                let output_vec = circuit.eval(state_vec.clone());
+                state = output_vec[0..input_len]
+                    .iter()
+                    .take(input_len)
+                    .enumerate()
+                    .fold(0u64, |a, (i, x)| a | (u64::from(*x) << i));
+                steps += 1;
+                if output_vec[input_len] {
+                    break;
+                }
+            }
+            println!("Verified: end={} steps={}", state, steps);
+            if sol.end != state || sol.steps != steps {
+                println!("INCORRECT");
+            }
+        }
     } else {
         println!("Unsatisfiable!");
     }
@@ -1613,11 +1638,11 @@ fn simple_solve(circuit: Circuit<usize>, unknowns: usize) {
             if *next_state.last().unwrap() {
                 solution = Some((
                     v,
-                    next_state
+                    next_state[0..input_len]
                         .into_iter()
                         .take(input_len)
                         .enumerate()
-                        .fold(0u128, |a, (i, x)| a | (u128::from(x) << i)),
+                        .fold(0u128, |a, (i, x)| a | (u128::from(*x) << i)),
                 ));
                 break 'a;
             }
