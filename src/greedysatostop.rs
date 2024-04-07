@@ -30,10 +30,54 @@ struct CommandArgs {
     unknowns: usize,
     #[arg(short = 'C', long)]
     opencl: Option<usize>,
-    #[arg(short = 'H', long)]
-    opencl_max_hashmap_size: Option<u64>,
+    #[arg(short = 'M', long)]
+    opencl_max_memory_size: Option<u64>,
     #[arg(short = 'v', long)]
     verify: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Solution {
+    start: u64,
+    end: u64,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum FinalResult {
+    Solution(Solution),
+    NoSolution,
+}
+
+fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
+    let input_len = circuit.input_len();
+    let result = Some(FinalResult::NoSolution);
+    let result = result.unwrap();
+    if let FinalResult::Solution(sol) = result {
+        println!("Solution: {:?}", sol);
+        if cmd_args.verify {
+            let mut state = sol.start;
+            loop {
+                let state_vec = (0..input_len)
+                    .map(|b| ((state >> b) & 1) != 0)
+                    .collect::<Vec<_>>();
+                let output_vec = circuit.eval(state_vec.clone());
+                state = output_vec[0..input_len]
+                    .iter()
+                    .take(input_len)
+                    .enumerate()
+                    .fold(0u64, |a, (i, x)| a | (u64::from(*x) << i));
+                if output_vec[input_len] {
+                    break;
+                }
+            }
+            println!("Verified: end={}", state);
+            if sol.end != state {
+                println!("INCORRECT");
+            }
+        }
+    } else {
+        println!("Unsatisfiable!");
+    }
 }
 
 fn main() {
@@ -41,4 +85,10 @@ fn main() {
         println!("OpenCLDevice: {:?}", x);
     }
     let cmd_args = CommandArgs::parse();
+    let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
+    let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
+    let input_len = circuit.input_len();
+    assert_eq!(input_len + 1, circuit.outputs().len());
+    assert!(cmd_args.unknowns < input_len);
+    do_solve(circuit, cmd_args);
 }
