@@ -1190,7 +1190,7 @@ impl CPUHashMapHandler {
         assert!(arg_bit_place < state_len);
         assert_ne!(hashmap_len_bits, 0);
         assert!(unknown_bits <= state_len);
-        assert!(unknown_fill_bits < unknown_bits);
+        assert!(unknown_fill_bits <= unknown_bits);
         assert_ne!(iters_per_clear_predecessors, 0);
         Self {
             state_len,
@@ -1303,7 +1303,7 @@ impl OpenCLHashMapHandler {
         assert!(arg_bit_place < state_len);
         assert_ne!(hashmap_len_bits, 0);
         assert!(unknown_bits <= state_len);
-        assert!(unknown_fill_bits < unknown_bits);
+        assert!(unknown_fill_bits <= unknown_bits);
         assert_ne!(iters_per_clear_predecessors, 0);
         let mut hashmap_1 = unsafe {
             Buffer::create(
