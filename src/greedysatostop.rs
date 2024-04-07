@@ -110,6 +110,26 @@ fn join_nexts(input_len: usize, nexts: Arc<AtomicU32Array>) {
         });
 }
 
+fn check_sat(input_len: usize, nexts: Arc<AtomicU32Array>) -> bool {
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts.len() >> 6);
+    let chunk_len = nexts.len() / chunk_num;
+    let stop_mask = 1u32 << input_len;
+    let sat = Arc::new(AtomicU32::new(0));
+    nexts
+        .as_slice()
+        .chunks(chunk_len)
+        .par_bridge()
+        .for_each(|chunk| {
+            for cell in chunk {
+                if (cell.load(atomic::Ordering::SeqCst) & stop_mask) != 0 {
+                    sat.fetch_or(1, atomic::Ordering::SeqCst);
+                }
+            }
+        });
+    sat.load(atomic::Ordering::SeqCst) != 0
+}
+
 fn find_solution(
     input_len: usize,
     unknowns: usize,
@@ -197,12 +217,14 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     };
     let nexts = Arc::new(AtomicU32Array::from(output));
     let mut final_result = FinalResult::NoSolution;
-    for i in 0..input_len {
-        println!("Joining nexts: Stage: {} / {}", i, input_len);
-        join_nexts(input_len, nexts.clone());
-        if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
-            final_result = FinalResult::Solution(sol);
-            break;
+    if check_sat(input_len, nexts.clone()) {
+        for i in 0..input_len {
+            println!("Joining nexts: Stage: {} / {}", i, input_len);
+            join_nexts(input_len, nexts.clone());
+            if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
+                final_result = FinalResult::Solution(sol);
+                break;
+            }
         }
     }
     let time = start.elapsed().unwrap();
