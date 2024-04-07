@@ -90,14 +90,14 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #endif
 }"##;
 
-fn do_solve_with_cpu_builder<'a>(
-    mut builder: CPUBuilder<'a>,
+fn do_solve_with_cpu_builder(
     circuit: Circuit<usize>,
     unknowns: usize,
     elem_inputs: usize,
     unknown_fill_bits: usize,
     cmd_args: &CommandArgs,
 ) -> FinalResult {
+    let mut builder = CPUBuilder::new_parallel(None, Some(4096));
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -117,7 +117,6 @@ fn do_solve_with_cpu_builder<'a>(
     let mut execs = builder.build().unwrap();
     let input = execs[0].new_data(16);
     let output = execs[0].execute(&input, 0).unwrap().release();
-    let output_2 = vec![0u32; output.len() >> 1];
     FinalResult::NoSolution
 }
 

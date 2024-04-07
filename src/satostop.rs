@@ -1684,7 +1684,7 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
         match exec_type {
             ExecType::CPU => {
                 println!("Execute in CPU");
-                let builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(4096)));
+                let builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(2048)));
                 do_solve_with_cpu_mapper(
                     builder,
                     circuit.clone(),
