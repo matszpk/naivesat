@@ -1515,7 +1515,7 @@ fn do_solve_with_cpu_mapper<'a>(
     elem_inputs: usize,
     unknown_fill_bits: usize,
     cmd_args: &CommandArgs,
-) -> Option<FinalResult> {
+) -> FinalResult {
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -1564,7 +1564,7 @@ fn do_solve_with_cpu_mapper<'a>(
     }
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
-    final_result
+    final_result.unwrap()
 }
 
 const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
@@ -1591,7 +1591,7 @@ fn do_solve_with_opencl_mapper<'a>(
     elem_inputs: usize,
     unknown_fill_bits: usize,
     cmd_args: &CommandArgs,
-) -> Option<FinalResult> {
+) -> FinalResult {
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -1646,7 +1646,7 @@ fn do_solve_with_opencl_mapper<'a>(
     }
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
-    final_result
+    final_result.unwrap()
 }
 
 fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
@@ -1725,7 +1725,6 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
     } else {
         panic!("Unsupported!");
     };
-    let result = result.unwrap();
     if let FinalResult::Solution(sol) = result {
         println!("Solution: {:?}", sol);
         if cmd_args.verify {
