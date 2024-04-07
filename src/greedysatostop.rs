@@ -138,7 +138,7 @@ fn find_solution(
                 if (value & stop_mask) != 0 {
                     let mut r = result.lock().unwrap();
                     *r = Some(Solution {
-                        start: (i + (ch_idx * chunk_len)) as u64,
+                        start: ((i + (ch_idx * chunk_len)) as u64) << (input_len - unknowns),
                         end: (value & next_mask) as u64,
                     });
                 }
