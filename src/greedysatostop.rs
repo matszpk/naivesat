@@ -196,12 +196,13 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
         let mut execs = builder.build().unwrap();
         let start = SystemTime::now();
         let input = execs[0].new_data(16);
+        println!("Calculate first nexts");
         (execs[0].execute(&input, 0).unwrap().release(), start)
     };
     let nexts = Arc::new(AtomicU32Array::from(output));
     let mut final_result = FinalResult::NoSolution;
     for i in 0..input_len {
-        println!("Stage: {} / {}", i, input_len);
+        println!("Joining nexts: Stage: {} / {}", i, input_len);
         join_nexts(input_len, nexts.clone());
         if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
             final_result = FinalResult::Solution(sol);
