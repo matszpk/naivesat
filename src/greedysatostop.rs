@@ -23,6 +23,9 @@ use std::sync::atomic::{self, AtomicU32, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
+// recommended setup for 32-bit problem for 16GB main memory and 8GB GPU RAM:
+// partitions=8, main_partition_mult=2.
+
 #[derive(Clone, Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct CommandArgs {
@@ -32,6 +35,13 @@ struct CommandArgs {
     opencl: Option<usize>,
     #[arg(short = 'P', long, default_value_t = 1)]
     partitions: usize,
+    #[arg(
+        short = 'Q',
+        long,
+        default_value_t = 2,
+        help = "How many partitions contains main partitions"
+    )]
+    main_partition_mult: usize,
     #[arg(short = 'v', long)]
     verify: bool,
 }
@@ -50,6 +60,7 @@ enum FinalResult {
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let partitions = std::cmp::max(1, cmd_args.partitions);
+    let main_partition_mult = std::cmp::max(1, cmd_args.main_partition_mult);
     let input_len = circuit.input_len();
     let result = Some(FinalResult::NoSolution);
     let result = result.unwrap();
