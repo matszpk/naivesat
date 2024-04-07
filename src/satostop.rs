@@ -4463,7 +4463,7 @@ fn main() {
     let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
     let input_len = circuit.input_len();
     assert_eq!(input_len + 1, circuit.outputs().len());
-    assert!(cmd_args.unknowns < input_len);
+    assert!(cmd_args.unknowns <= input_len);
     if cmd_args.simple {
         simple_solve(circuit, cmd_args.unknowns);
     } else {
