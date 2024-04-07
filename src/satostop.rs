@@ -84,7 +84,7 @@ struct CommandArgs {
     simple: bool,
     #[arg(short = 'e', long, default_value_t = 24)]
     elem_inputs: usize,
-    #[arg(short = 'h', long, default_value_t = 24)]
+    #[arg(short = 'H', long, default_value_t = 24)]
     hashmap_len_bits: usize,
     #[arg(short = 'U', long)]
     unknown_fill_bits: Option<usize>,

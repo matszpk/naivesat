@@ -23,5 +23,22 @@ use std::sync::atomic::{self, AtomicU32, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
+#[derive(Clone, Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct CommandArgs {
+    circuit: String,
+    unknowns: usize,
+    #[arg(short = 'C', long)]
+    opencl: Option<usize>,
+    #[arg(short = 'H', long)]
+    opencl_max_hashmap_size: Option<u64>,
+    #[arg(short = 'v', long)]
+    verify: bool,
+}
+
 fn main() {
+    for x in get_all_devices(CL_DEVICE_TYPE_GPU).unwrap() {
+        println!("OpenCLDevice: {:?}", x);
+    }
+    let cmd_args = CommandArgs::parse();
 }
