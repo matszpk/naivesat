@@ -30,8 +30,8 @@ struct CommandArgs {
     unknowns: usize,
     #[arg(short = 'C', long)]
     opencl: Option<usize>,
-    #[arg(short = 'M', long)]
-    opencl_max_memory_size: Option<u64>,
+    #[arg(short = 'P', long, default_value_t = 1)]
+    partitions: usize,
     #[arg(short = 'v', long)]
     verify: bool,
 }
@@ -49,6 +49,7 @@ enum FinalResult {
 }
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
+    let partitions = std::cmp::max(1, cmd_args.partitions);
     let input_len = circuit.input_len();
     let result = Some(FinalResult::NoSolution);
     let result = result.unwrap();
