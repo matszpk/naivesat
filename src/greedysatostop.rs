@@ -58,6 +58,10 @@ enum FinalResult {
 }
 
 //
+// join nexts
+//
+
+//
 // main solver code
 //
 
@@ -92,7 +96,7 @@ fn do_solve_with_cpu_builder<'a>(
     elem_inputs: usize,
     unknown_fill_bits: usize,
     cmd_args: &CommandArgs,
-) -> Option<FinalResult> {
+) -> FinalResult {
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -111,8 +115,9 @@ fn do_solve_with_cpu_builder<'a>(
     );
     let mut execs = builder.build().unwrap();
     let input = execs[0].new_data(16);
-    let output = execs[0].execute(&input, 0).unwrap();
-    None
+    let output = execs[0].execute(&input, 0).unwrap().release();
+    let output_2 = vec![0u32; output.len() >> 1];
+    FinalResult::NoSolution
 }
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
