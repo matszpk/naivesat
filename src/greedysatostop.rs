@@ -121,10 +121,14 @@ fn check_stop(input_len: usize, nexts: Arc<AtomicU32Array>) -> bool {
         .chunks(chunk_len)
         .par_bridge()
         .for_each(|chunk| {
+            let mut stop_local = false;
             for cell in chunk {
                 if (cell.load(atomic::Ordering::SeqCst) & stop_mask) != 0 {
-                    stop.fetch_or(1, atomic::Ordering::SeqCst);
+                    stop_local = true;
                 }
+            }
+            if stop_local {
+                stop.fetch_or(1, atomic::Ordering::SeqCst);
             }
         });
     stop.load(atomic::Ordering::SeqCst) != 0
