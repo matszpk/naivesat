@@ -21,10 +21,6 @@ use std::sync::atomic::{self, AtomicU32};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
-// recommended setup for 32-bit problem for 16GB main memory and 8GB GPU RAM:
-// partitions=8, main_partition_mult=2.
-// NEW IDEA: use atomic nexts table and use single next table - no intermediate buffers.
-
 #[derive(Clone, Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct CommandArgs {
