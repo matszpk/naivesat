@@ -1,5 +1,4 @@
 use gatenative::cpu_build_exec::*;
-use gatenative::mapper::*;
 use gatenative::opencl_build_exec::*;
 use gatenative::*;
 use gatesim::*;
@@ -58,10 +57,69 @@ enum FinalResult {
     NoSolution,
 }
 
+//
+// main solver code
+//
+
+fn gen_output_transform_def(postfix: &str, range: Range<usize>) -> String {
+    let args = range.clone().map(|i| format!("o{}", i)).collect::<Vec<_>>();
+    format!(
+        "#define OUTPUT_TRANSFORM_{}(O) OUTPUT_TRANSFORM_B{}(O,{})\n",
+        postfix,
+        range.end - range.start,
+        args.join(",")
+    )
+}
+
+fn gen_output_transform_code(output_len: usize) -> String {
+    gen_output_transform_def("FIRST_32", 0..std::cmp::min(32, output_len))
+}
+
+const AGGR_OUTPUT_CPU_CODE: &str = r##"{
+    uint32_t* output_u = ((uint32_t*)output) + idx *
+        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
+#if OUTPUT_NUM <= 32
+    OUTPUT_TRANSFORM_FIRST_32(output_u);
+#else
+#error "Unsupported!"
+#endif
+}"##;
+
+fn do_solve_with_cpu_builder<'a>(
+    mut builder: CPUBuilder<'a>,
+    circuit: Circuit<usize>,
+    unknowns: usize,
+    elem_inputs: usize,
+    unknown_fill_bits: usize,
+    cmd_args: &CommandArgs,
+) -> Option<FinalResult> {
+    let input_len = circuit.input_len();
+    let output_len = input_len + 1;
+    let arg_steps = 1u128 << (input_len - elem_inputs);
+    builder.transform_helpers();
+    builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
+    builder.user_defs(&gen_output_transform_code(output_len));
+    let words_per_elem = (output_len + 31) >> 5;
+    builder.add_with_config(
+        "formula",
+        circuit,
+        CodeConfig::new()
+            .elem_inputs(Some(&(0..input_len).collect::<Vec<usize>>()))
+            .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+            .aggr_output_len(Some(words_per_elem * (1 << input_len)))
+            .dont_clear_outputs(true),
+    );
+    let mut execs = builder.build().unwrap();
+    let input = execs[0].new_data(16);
+    let output = execs[0].execute(&input, 0).unwrap();
+    None
+}
+
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let partitions = std::cmp::max(1, cmd_args.partitions);
     let main_partition_mult = std::cmp::max(1, cmd_args.main_partition_mult);
     let input_len = circuit.input_len();
+    assert!(input_len < 32);
     let result = Some(FinalResult::NoSolution);
     let result = result.unwrap();
     if let FinalResult::Solution(sol) = result {
