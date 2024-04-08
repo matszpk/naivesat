@@ -113,6 +113,7 @@ fn join_nexts(input_len: usize, nexts: Arc<AtomicU32Array>) {
 fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
     let input_len = 32;
     let nexts_len = 1usize << input_len;
+    let reserve_index = nexts_len + (1 << (input_len - 5));
     let cpu_num = rayon::current_num_threads();
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts_len >> 6);
     let chunk_len = nexts_len / chunk_num;
@@ -120,27 +121,41 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
     nexts.as_slice()[0..nexts_len]
         .chunks(chunk_len)
         .zip(nexts.as_slice()[nexts_len..].chunks(chunk_len >> 5))
+        .zip(nexts.as_slice()[reserve_index..].chunks(chunk_len >> 5))
         .par_bridge()
-        .for_each(|(chunk, stop_chunk)| {
+        .for_each(|((chunk, stop_chunk), res_chunk)| {
             for (i, cell) in chunk.iter().enumerate() {
+                let ibit = i & 31;
                 std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                let old_next = cell.load(atomic::Ordering::SeqCst);
-                let old_stop =
-                    ((stop_chunk[i >> 5].load(atomic::Ordering::SeqCst) >> (i & 31)) & 1) != 0;
-                std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                if !old_stop {
-                    cell.store(
-                        nexts.get(old_next as usize).load(atomic::Ordering::SeqCst),
-                        atomic::Ordering::SeqCst,
-                    );
-                    stop_chunk[i >> 5].fetch_or(
-                        ((nexts.as_slice()[nexts_len + ((old_next >> 5) as usize)]
-                            .load(atomic::Ordering::SeqCst)
-                            >> (old_next & 31))
-                            & 1)
-                            << (i & 31),
-                        atomic::Ordering::SeqCst,
-                    );
+                loop {
+                    let already_reserved = ((res_chunk[i >> 5]
+                        .fetch_or(1u32 << ibit, atomic::Ordering::SeqCst)
+                        >> ibit)
+                        & 1)
+                        != 0;
+                    if !already_reserved {
+                        let old_next = cell.load(atomic::Ordering::SeqCst);
+                        let old_stop =
+                            ((stop_chunk[i >> 5].load(atomic::Ordering::SeqCst) >> ibit) & 1) != 0;
+                        std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                        if !old_stop {
+                            cell.store(
+                                nexts.get(old_next as usize).load(atomic::Ordering::SeqCst),
+                                atomic::Ordering::SeqCst,
+                            );
+                            stop_chunk[i >> 5].fetch_or(
+                                ((nexts.as_slice()[nexts_len + ((old_next >> 5) as usize)]
+                                    .load(atomic::Ordering::SeqCst)
+                                    >> (old_next & 31))
+                                    & 1)
+                                    << ibit,
+                                atomic::Ordering::SeqCst,
+                            );
+                        }
+                        res_chunk[i >> 5].fetch_and(!(1u32 << ibit), atomic::Ordering::SeqCst);
+                    } else {
+                        break;
+                    }
                 }
                 std::sync::atomic::fence(atomic::Ordering::SeqCst);
             }
@@ -245,7 +260,7 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     let output_buf_len = if input_len < 32 {
         words_per_elem * (1 << input_len)
     } else if input_len == 32 {
-        (1 << input_len) + (1 << (input_len - 5))
+        (1 << input_len) + (1 << (input_len - 4))
     } else {
         panic!("Unsupported");
     };
