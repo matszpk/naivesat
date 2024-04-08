@@ -349,7 +349,7 @@ impl MemImage {
         while bit_count + 7 < self.state_len {
             self.data[idx] = (value_bytes[bit_count >> 3] >> (8 - bit));
             if bit != 0 {
-                self.data[idx] |= (value_bytes[(bit_count + 8) >> 3] >> bit);
+                self.data[idx] |= (value_bytes[(bit_count + 8) >> 3] << bit);
             }
             bit_count += 8;
             idx += 1;
@@ -360,7 +360,7 @@ impl MemImage {
                 (self.data[idx] & !mask) | ((value_bytes[bit_count >> 3] >> (8 - bit)) & mask);
             if bit != 0 && bit < self.state_len - bit_count {
                 self.data[idx] =
-                    (self.data[idx] & !mask) | ((value_bytes[(bit_count + 8) >> 3] >> bit) & mask);
+                    (self.data[idx] & !mask) | ((value_bytes[(bit_count + 8) >> 3] << bit) & mask);
             }
         }
     }
