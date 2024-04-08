@@ -26,6 +26,8 @@ use std::time::SystemTime;
 struct CommandArgs {
     circuit: String,
     unknowns: usize,
+    #[arg(short = 'p', long)]
+    partitions: Option<usize>,
     #[arg(short = 'v', long)]
     verify: bool,
 }
@@ -283,6 +285,10 @@ fn find_solution_64(
 }
 
 //
+// partition code
+//
+
+//
 // main solver code
 //
 
@@ -374,6 +380,13 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
     final_result
+}
+
+fn do_solve_with_cpu_builder_with_partitions(
+    circuit: Circuit<usize>,
+    cmd_args: &CommandArgs,
+) -> FinalResult {
+    FinalResult::NoSolution
 }
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
