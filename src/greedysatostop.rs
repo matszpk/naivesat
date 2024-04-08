@@ -14,7 +14,8 @@ use clap::Parser;
 
 use rayon::prelude::*;
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
 use std::str::FromStr;
 use std::sync::atomic::{self, AtomicU32, AtomicU64};
@@ -287,6 +288,34 @@ fn find_solution_64(
 //
 // partition code
 //
+
+struct FileImage {
+    state_len: usize,
+    partitions: usize,
+    path: String,
+}
+
+impl FileImage {
+    fn load_partition(&self, part: usize, out: &mut [u8]) -> io::Result<()> {
+        assert!(part < self.partitions);
+        assert_eq!(
+            out.len(),
+            (((1 << self.state_len) / self.partitions) * (self.state_len + 1)) >> 3
+        );
+        let mut f = File::open(&self.path)?;
+        f.seek(SeekFrom::Start(
+            (((part * (1 << self.state_len) / self.partitions) * (self.state_len + 1)) >> 3) as u64,
+        ))?;
+        f.read(out)?;
+        Ok(())
+    }
+}
+
+impl Drop for FileImage {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
 
 //
 // main solver code
