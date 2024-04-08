@@ -247,6 +247,37 @@ fn find_solution(
     result.into_inner().unwrap()
 }
 
+fn find_solution_exact_u32(unknowns: usize, nexts: Arc<AtomicU32Array>) -> Option<Solution> {
+    let input_len = 32;
+    let nexts_len = 1usize << input_len;
+    let unknown_state_num = 1 << unknowns;
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), unknown_state_num >> 6);
+    let chunk_len = unknown_state_num / chunk_num;
+    let unknowns_mult = 1 << (input_len - unknowns);
+    let result = Mutex::new(None);
+    (0..nexts_len / (unknowns_mult * chunk_len))
+        .par_bridge()
+        .for_each(|ch_idx| {
+            for i in ch_idx * chunk_len..(ch_idx + 1) * chunk_len {
+                let state = i * unknowns_mult;
+                let value = nexts.as_slice()[state].load(atomic::Ordering::SeqCst);
+                if ((nexts.as_slice()[nexts_len + (state >> 5)].load(atomic::Ordering::SeqCst)
+                    >> (state & 31))
+                    & 1)
+                    != 0
+                {
+                    let mut r = result.lock().unwrap();
+                    *r = Some(Solution {
+                        start: state as u64,
+                        end: value as u64,
+                    });
+                }
+            }
+        });
+    result.into_inner().unwrap()
+}
+
 //
 // main solver code
 //
