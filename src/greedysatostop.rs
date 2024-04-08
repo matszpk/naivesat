@@ -261,7 +261,9 @@ fn find_solution_exact_u32(unknowns: usize, nexts: Arc<AtomicU32Array>) -> Optio
         .for_each(|ch_idx| {
             for i in ch_idx * chunk_len..(ch_idx + 1) * chunk_len {
                 let state = i * unknowns_mult;
+                // get value of next
                 let value = nexts.as_slice()[state].load(atomic::Ordering::SeqCst);
+                // load stop flag from state
                 if ((nexts.as_slice()[nexts_len + (state >> 5)].load(atomic::Ordering::SeqCst)
                     >> (state & 31))
                     & 1)
