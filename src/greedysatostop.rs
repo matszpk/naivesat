@@ -289,6 +289,83 @@ fn find_solution_64(
 // partition code
 //
 
+struct MemImage {
+    state_len: usize,
+    data: Vec<u8>,
+}
+
+impl MemImage {
+    fn new(state_len: usize, len: usize) -> Self {
+        assert!(state_len < 64);
+        assert_eq!(len & 7, 0);
+        Self {
+            state_len,
+            data: vec![0u8; (len * (state_len + 1)) >> 3],
+        }
+    }
+
+    #[inline]
+    fn slice(&self) -> &[u8] {
+        &self.data
+    }
+
+    #[inline]
+    fn slice_mut(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+
+    fn get(&self, i: usize) -> u64 {
+        let mut idx = (i * self.state_len) >> 3;
+        let mut bit = (i * self.state_len) & 7;
+        let mut bit_count = 0;
+        let mut value = 0u64;
+        if (bit & 7) != 0 {
+            value |= (self.data[idx] >> bit) as u64;
+            bit_count += 8 - bit;
+            idx += 1;
+        }
+        while bit_count + 7 < self.state_len {
+            value |= (self.data[idx] as u64) << bit_count;
+            bit_count += 8;
+            idx += 1;
+        }
+        if bit_count < self.state_len {
+            let mask = u8::try_from(1u16 << (self.state_len - bit_count) - 1).unwrap();
+            value |= ((self.data[idx] & mask) as u64) << bit_count;
+        }
+        value
+    }
+
+    fn set(&mut self, i: usize, value: u64) {
+        let mut idx = (i * self.state_len) >> 3;
+        let mut bit = (i * self.state_len) & 7;
+        let mut bit_count = 0;
+        let value_bytes = value.to_le_bytes();
+        if (bit & 7) != 0 {
+            self.data[idx] = (self.data[idx] & ((1u8 << bit) - 1)) | (value_bytes[0] << bit);
+            bit_count += 8 - bit;
+            idx += 1;
+        }
+        while bit_count + 7 < self.state_len {
+            self.data[idx] = (value_bytes[bit_count >> 3] >> (8 - bit));
+            if bit != 0 {
+                self.data[idx] |= (value_bytes[(bit_count + 8) >> 3] >> bit);
+            }
+            bit_count += 8;
+            idx += 1;
+        }
+        if bit_count < self.state_len {
+            let mask = (1u8 << (self.state_len - bit_count)) - 1;
+            self.data[idx] =
+                (self.data[idx] & !mask) | ((value_bytes[bit_count >> 3] >> (8 - bit)) & mask);
+            if bit != 0 && bit < self.state_len - bit_count {
+                self.data[idx] =
+                    (self.data[idx] & !mask) | ((value_bytes[(bit_count + 8) >> 3] >> bit) & mask);
+            }
+        }
+    }
+}
+
 struct FileImage {
     state_len: usize,
     partitions: usize,
@@ -300,6 +377,7 @@ struct FileImage {
 
 impl FileImage {
     fn new(state_len: usize, partitions: usize, prefix: &str) -> io::Result<Self> {
+        assert!(state_len < 64);
         assert_eq!(partitions.count_ones(), 1);
         let path = format!(
             "{}greedy_temp_{}",
