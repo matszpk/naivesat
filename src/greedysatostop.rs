@@ -171,8 +171,10 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                     );
                     std::sync::atomic::fence(atomic::Ordering::SeqCst);
                     // free reservation for next
-                    nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
-                        .fetch_and(!(1u32 << old_next_bit), atomic::Ordering::SeqCst);
+                    if state != old_next {
+                        nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
+                            .fetch_and(!(1u32 << old_next_bit), atomic::Ordering::SeqCst);
+                    }
                 }
                 std::sync::atomic::fence(atomic::Ordering::SeqCst);
                 res_chunk[i >> 5].fetch_and(!(1u32 << ibit), atomic::Ordering::SeqCst);
