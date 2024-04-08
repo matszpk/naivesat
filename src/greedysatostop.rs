@@ -342,7 +342,13 @@ impl MemImage {
         let mut bit_count = 0;
         let value_bytes = value.to_le_bytes();
         if (bit & 7) != 0 {
-            self.data[idx] = (self.data[idx] & ((1u8 << bit) - 1)) | (value_bytes[0] << bit);
+            let mask = if self.state_len < (8 - bit) {
+                (1u8 << (self.state_len - bit_count)) - 1
+            } else {
+                0xff
+            };
+            self.data[idx] =
+                (self.data[idx] & ((1u8 << bit) - 1)) | ((value_bytes[0] & mask) << bit);
             bit_count += 8 - bit;
             idx += 1;
         }
