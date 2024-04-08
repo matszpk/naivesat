@@ -330,7 +330,7 @@ impl MemImage {
             idx += 1;
         }
         if bit_count < self.state_len {
-            let mask = u8::try_from(1u16 << (self.state_len - bit_count) - 1).unwrap();
+            let mask = 1u8 << (self.state_len - bit_count) - 1;
             value |= ((self.data[idx] & mask) as u64) << bit_count;
         }
         value
