@@ -291,15 +291,19 @@ fn find_solution_64(
 
 struct MemImage {
     state_len: usize,
+    start: u64,
     data: Vec<u8>,
 }
 
 impl MemImage {
-    fn new(state_len: usize, len: usize) -> Self {
+    fn new(state_len: usize, start: u64, len: usize) -> Self {
         assert!(state_len < 64);
+        assert!(start < 1u64 << state_len);
+        assert!(start + (len as u64) < (1u64 << state_len));
         assert_eq!(len & 7, 0);
         Self {
             state_len,
+            start,
             data: vec![0u8; (len * (state_len + 1)) >> 3],
         }
     }
@@ -371,18 +375,18 @@ impl MemImage {
         }
     }
 
-    fn from_vec_u32(state_len: usize, data: Vec<u32>) -> Self {
+    fn from_vec_u32(state_len: usize, start: u64, data: Vec<u32>) -> Self {
         assert_eq!(data.len() & 7, 0);
-        let mut m = MemImage::new(state_len, data.len());
+        let mut m = MemImage::new(state_len, start, data.len());
         for (i, v) in data.into_iter().enumerate() {
             m.set(i, v as u64);
         }
         m
     }
 
-    fn from_vec_double_u32(state_len: usize, data: Vec<u32>) -> Self {
+    fn from_vec_double_u32(state_len: usize, start: u64, data: Vec<u32>) -> Self {
         assert_eq!((data.len() >> 1) & 7, 0);
-        let mut m = MemImage::new(state_len, data.len() >> 1);
+        let mut m = MemImage::new(state_len, start, data.len() >> 1);
         for i in 0..data.len() >> 1 {
             m.set(i, (data[2 * i] as u64) | ((data[2 * i + 1] as u64) << 32));
         }
