@@ -17,7 +17,7 @@ use rayon::prelude::*;
 use std::fs;
 use std::ops::Range;
 use std::str::FromStr;
-use std::sync::atomic::{self, AtomicU32};
+use std::sync::atomic::{self, AtomicU32, AtomicU64};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -79,6 +79,43 @@ impl<'a> AtomicU32Array<'a> {
     }
 }
 
+struct AtomicU64Array<'a> {
+    original: Vec<u32>,
+    atomic: &'a [AtomicU64],
+}
+
+impl From<Vec<u32>> for AtomicU64Array<'_> {
+    fn from(mut t: Vec<u32>) -> Self {
+        let atomic = unsafe {
+            &*std::ptr::slice_from_raw_parts(
+                t.as_mut_slice().as_mut_ptr().cast::<AtomicU64>(),
+                t.len(),
+            )
+        };
+        Self {
+            original: t,
+            atomic,
+        }
+    }
+}
+
+impl<'a> AtomicU64Array<'a> {
+    #[inline]
+    fn get(&self, i: usize) -> &'a AtomicU64 {
+        &self.atomic[i]
+    }
+
+    #[inline]
+    fn as_slice(&self) -> &'a [AtomicU64] {
+        &self.atomic
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.original.len()
+    }
+}
+
 //
 // join nexts
 //
@@ -110,11 +147,59 @@ fn join_nexts(input_len: usize, nexts: Arc<AtomicU32Array>) {
         });
 }
 
+fn join_nexts_64(input_len: usize, nexts: Arc<AtomicU64Array>) {
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts.len() >> 6);
+    let chunk_len = nexts.len() / chunk_num;
+    let stop_mask = 1u64 << input_len;
+    let next_mask = stop_mask - 1u64;
+    nexts
+        .as_slice()
+        .chunks(chunk_len)
+        .par_bridge()
+        .for_each(|chunk| {
+            for cell in chunk {
+                std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                let old_value = cell.load(atomic::Ordering::SeqCst);
+                let old_next = old_value & next_mask;
+                std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                if (old_value & stop_mask) == 0 {
+                    cell.store(
+                        nexts.get(old_next as usize).load(atomic::Ordering::SeqCst),
+                        atomic::Ordering::SeqCst,
+                    );
+                }
+                std::sync::atomic::fence(atomic::Ordering::SeqCst);
+            }
+        });
+}
+
 fn check_stop(input_len: usize, nexts: Arc<AtomicU32Array>) -> bool {
     let cpu_num = rayon::current_num_threads();
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts.len() >> 6);
     let chunk_len = nexts.len() / chunk_num;
     let stop_mask = 1u32 << input_len;
+    let stop = Arc::new(AtomicU32::new(0));
+    nexts
+        .as_slice()
+        .chunks(chunk_len)
+        .par_bridge()
+        .for_each(|chunk| {
+            if chunk
+                .iter()
+                .any(|cell| (cell.load(atomic::Ordering::SeqCst) & stop_mask) != 0)
+            {
+                stop.fetch_or(1, atomic::Ordering::SeqCst);
+            }
+        });
+    stop.load(atomic::Ordering::SeqCst) != 0
+}
+
+fn check_stop_64(input_len: usize, nexts: Arc<AtomicU64Array>) -> bool {
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts.len() >> 6);
+    let chunk_len = nexts.len() / chunk_num;
+    let stop_mask = 1u64 << input_len;
     let stop = Arc::new(AtomicU32::new(0));
     nexts
         .as_slice()
@@ -164,6 +249,39 @@ fn find_solution(
     result.into_inner().unwrap()
 }
 
+fn find_solution_64(
+    input_len: usize,
+    unknowns: usize,
+    nexts: Arc<AtomicU64Array>,
+) -> Option<Solution> {
+    let unknown_state_num = 1 << unknowns;
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), unknown_state_num >> 6);
+    let chunk_len = unknown_state_num / chunk_num;
+    let stop_mask = 1u64 << input_len;
+    let next_mask = stop_mask - 1;
+    let unknowns_mult = 1 << (input_len - unknowns);
+    let result = Mutex::new(None);
+    nexts
+        .as_slice()
+        .chunks(unknowns_mult * chunk_len)
+        .enumerate()
+        .par_bridge()
+        .for_each(|(ch_idx, chunk)| {
+            for (i, v) in chunk.chunks(unknowns_mult).enumerate() {
+                let value = v[0].load(atomic::Ordering::SeqCst);
+                if (value & stop_mask) != 0 {
+                    let mut r = result.lock().unwrap();
+                    *r = Some(Solution {
+                        start: ((i + (ch_idx * chunk_len)) as u64) << (input_len - unknowns),
+                        end: value & next_mask,
+                    });
+                }
+            }
+        });
+    result.into_inner().unwrap()
+}
+
 //
 // main solver code
 //
@@ -179,7 +297,11 @@ fn gen_output_transform_def(postfix: &str, range: Range<usize>) -> String {
 }
 
 fn gen_output_transform_code(output_len: usize) -> String {
-    gen_output_transform_def("FIRST_32", 0..std::cmp::min(32, output_len))
+    let mut defs = gen_output_transform_def("FIRST_32", 0..std::cmp::min(32, output_len));
+    if output_len > 32 {
+        defs.push_str(&gen_output_transform_def("SECOND_32", 32..output_len));
+    }
+    defs
 }
 
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
@@ -188,7 +310,14 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #if OUTPUT_NUM <= 32
     OUTPUT_TRANSFORM_FIRST_32(output_u);
 #else
-#error "Unsupported!"
+    uint32_t i;
+    uint32_t temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
+    OUTPUT_TRANSFORM_FIRST_32(temp);
+    OUTPUT_TRANSFORM_SECOND_32(temp + 32 * (TYPE_LEN >> 5));
+    for (i = 0; i < TYPE_LEN; i++) {
+        output_u[i*2] = temp[i];
+        output_u[i*2 + 1] = temp[i + TYPE_LEN];
+    }
 #endif
 }"##;
 
@@ -216,15 +345,29 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
         println!("Calculate first nexts");
         (execs[0].execute(&input, 0).unwrap().release(), start)
     };
-    let nexts = Arc::new(AtomicU32Array::from(output));
     let mut final_result = FinalResult::NoSolution;
-    if check_stop(input_len, nexts.clone()) {
-        for i in 0..input_len {
-            println!("Joining nexts: Stage: {} / {}", i, input_len);
-            join_nexts(input_len, nexts.clone());
-            if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
-                final_result = FinalResult::Solution(sol);
-                break;
+    if input_len < 32 {
+        let nexts = Arc::new(AtomicU32Array::from(output));
+        if check_stop(input_len, nexts.clone()) {
+            for i in 0..input_len {
+                println!("Joining nexts: Stage: {} / {}", i, input_len);
+                join_nexts(input_len, nexts.clone());
+                if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
+                    final_result = FinalResult::Solution(sol);
+                    break;
+                }
+            }
+        }
+    } else {
+        let nexts = Arc::new(AtomicU64Array::from(output));
+        if check_stop_64(input_len, nexts.clone()) {
+            for i in 0..input_len {
+                println!("Joining nexts: Stage: {} / {}", i, input_len);
+                join_nexts_64(input_len, nexts.clone());
+                if let Some(sol) = find_solution_64(input_len, cmd_args.unknowns, nexts.clone()) {
+                    final_result = FinalResult::Solution(sol);
+                    break;
+                }
             }
         }
     }
@@ -235,7 +378,7 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
-    assert!(input_len < 32);
+    assert!(input_len < 64);
     let result = do_solve_with_cpu_builder(circuit.clone(), &cmd_args);
     if let FinalResult::Solution(sol) = result {
         println!("Solution: {:?}", sol);
