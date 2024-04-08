@@ -131,6 +131,7 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                 std::sync::atomic::fence(atomic::Ordering::SeqCst);
                 // set reservation
                 res_chunk[i >> 5].fetch_or(1u32 << ibit, atomic::Ordering::SeqCst);
+                // get old next and old stop
                 let old_next = cell.load(atomic::Ordering::SeqCst);
                 let old_stop =
                     ((stop_chunk[i >> 5].load(atomic::Ordering::SeqCst) >> ibit) & 1) != 0;
