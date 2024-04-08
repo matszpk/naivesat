@@ -364,14 +364,21 @@ impl MemImage {
             }
         }
     }
-}
 
-impl From<(usize, Vec<u64>)> for MemImage {
-    fn from((state_len, data): (usize, Vec<u64>)) -> Self {
+    fn from_vec_u32(state_len: usize, data: Vec<u32>) -> Self {
         assert_eq!(data.len() & 7, 0);
         let mut m = MemImage::new(state_len, data.len());
         for (i, v) in data.into_iter().enumerate() {
-            m.set(i, v);
+            m.set(i, v as u64);
+        }
+        m
+    }
+
+    fn from_vec_double_u32(state_len: usize, data: Vec<u32>) -> Self {
+        assert_eq!((data.len() >> 1) & 7, 0);
+        let mut m = MemImage::new(state_len, data.len() >> 1);
+        for i in 0..data.len() >> 1 {
+            m.set(i, (data[2 * i] as u64) | ((data[2 * i + 1] as u64) << 32));
         }
         m
     }
