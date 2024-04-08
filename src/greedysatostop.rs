@@ -347,9 +347,9 @@ impl MemImage {
             idx += 1;
         }
         while bit_count + 7 < self.state_len {
-            self.data[idx] = (value_bytes[bit_count >> 3] >> (8 - bit));
+            self.data[idx] = value_bytes[bit_count >> 3] >> (8 - bit);
             if bit != 0 {
-                self.data[idx] |= (value_bytes[(bit_count + 8) >> 3] << bit);
+                self.data[idx] |= value_bytes[(bit_count + 8) >> 3] << bit;
             }
             bit_count += 8;
             idx += 1;
@@ -363,6 +363,17 @@ impl MemImage {
                     (self.data[idx] & !mask) | ((value_bytes[(bit_count + 8) >> 3] << bit) & mask);
             }
         }
+    }
+}
+
+impl From<(usize, Vec<u64>)> for MemImage {
+    fn from((state_len, data): (usize, Vec<u64>)) -> Self {
+        assert_eq!(data.len() & 7, 0);
+        let mut m = MemImage::new(state_len, data.len());
+        for (i, v) in data.into_iter().enumerate() {
+            m.set(i, v);
+        }
+        m
     }
 }
 
