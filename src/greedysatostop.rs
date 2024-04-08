@@ -152,6 +152,7 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                                 atomic::Ordering::SeqCst,
                             );
                         }
+                        std::sync::atomic::fence(atomic::Ordering::SeqCst);
                         res_chunk[i >> 5].fetch_and(!(1u32 << ibit), atomic::Ordering::SeqCst);
                     } else {
                         break;
