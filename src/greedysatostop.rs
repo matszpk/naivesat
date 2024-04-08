@@ -20,7 +20,7 @@ use std::ops::Range;
 use std::str::FromStr;
 use std::sync::atomic::{self, AtomicU32, AtomicU64};
 use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -292,21 +292,61 @@ fn find_solution_64(
 struct FileImage {
     state_len: usize,
     partitions: usize,
+    file: File,
     path: String,
+    partition_len: usize,
+    count: u64,
 }
 
 impl FileImage {
-    fn load_partition(&self, part: usize, out: &mut [u8]) -> io::Result<()> {
-        assert!(part < self.partitions);
-        assert_eq!(
-            out.len(),
-            (((1 << self.state_len) / self.partitions) * (self.state_len + 1)) >> 3
+    fn new(state_len: usize, partitions: usize, prefix: &str) -> io::Result<Self> {
+        let path = format!(
+            "{}greedy_temp_{}",
+            prefix,
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         );
-        let mut f = File::open(&self.path)?;
-        f.seek(SeekFrom::Start(
-            (((part * (1 << self.state_len) / self.partitions) * (self.state_len + 1)) >> 3) as u64,
-        ))?;
-        f.read(out)?;
+        let mut file = File::create(&path)?;
+        Ok(Self {
+            state_len,
+            partitions,
+            file,
+            path,
+            partition_len: (((1 << state_len) / partitions) * (state_len + 1)) >> 3,
+            count: 0,
+        })
+    }
+
+    fn load_partition(&mut self, part: usize, out: &mut [u8]) -> io::Result<()> {
+        assert!(part < self.partitions);
+        assert_eq!(out.len(), self.partition_len);
+        assert_eq!(self.count, 1 << self.state_len);
+        let pos = self.partition_len as u64;
+        let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
+        assert_eq!(pos, new_pos);
+        self.file.read_exact(out)?;
+        Ok(())
+    }
+
+    fn save_partition(&mut self, part: usize, out: &[u8]) -> io::Result<()> {
+        assert!(part < self.partitions);
+        assert_eq!(out.len(), self.partition_len);
+        assert_eq!(self.count, 1 << self.state_len);
+        let pos = self.partition_len as u64;
+        let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
+        assert_eq!(pos, new_pos);
+        self.file.write_all(out)?;
+        Ok(())
+    }
+
+    fn save_chunk(&mut self, out: &[u8]) -> io::Result<()> {
+        let add = (out.len() / (self.state_len + 1)) as u64 * 8;
+        assert!(self.count + add <= 1u64 << self.state_len);
+        assert_eq!(out.len() % (self.state_len + 1), 0);
+        self.file.write_all(out)?;
+        self.count += add;
         Ok(())
     }
 }
