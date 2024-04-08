@@ -129,8 +129,11 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                 let state = u32::try_from(chunk_idx * chunk_len + i).unwrap();
                 let ibit = i & 31;
                 std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                // set reservation
-                res_chunk[i >> 5].fetch_or(1u32 << ibit, atomic::Ordering::SeqCst);
+                // set reservation or waiting it will be freed
+                while ((res_chunk[i >> 5].fetch_or(1u32 << ibit, atomic::Ordering::SeqCst) >> ibit)
+                    & 1)
+                    != 0
+                {}
                 // get old next and old stop
                 let old_next = cell.load(atomic::Ordering::SeqCst);
                 let old_stop =
@@ -140,11 +143,14 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                     // if current state not already stopped
                     std::sync::atomic::fence(atomic::Ordering::SeqCst);
                     // wait if reservation of next state will be freed.
+                    // and apply own reservation for next.
                     // only if not current state is not next state (avoid hangup)
+                    let old_next_bit = (old_next & 31);
                     if state != old_next {
-                        while (nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
-                            .load(atomic::Ordering::SeqCst)
-                            >> (old_next & 31))
+                        while ((nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
+                            .fetch_or(1u32 << old_next_bit, atomic::Ordering::SeqCst)
+                            >> old_next_bit)
+                            & 1)
                             != 0
                         {}
                     }
@@ -157,11 +163,15 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                     stop_chunk[i >> 5].fetch_or(
                         ((nexts.as_slice()[nexts_len + ((old_next >> 5) as usize)]
                             .load(atomic::Ordering::SeqCst)
-                            >> (old_next & 31))
+                            >> old_next_bit)
                             & 1)
                             << ibit,
                         atomic::Ordering::SeqCst,
                     );
+                    std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                    // free reservation for next
+                    nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
+                        .fetch_and(!(1u32 << old_next_bit), atomic::Ordering::SeqCst);
                 }
                 std::sync::atomic::fence(atomic::Ordering::SeqCst);
                 res_chunk[i >> 5].fetch_and(!(1u32 << ibit), atomic::Ordering::SeqCst);
