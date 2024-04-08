@@ -300,6 +300,7 @@ struct FileImage {
 
 impl FileImage {
     fn new(state_len: usize, partitions: usize, prefix: &str) -> io::Result<Self> {
+        assert_eq!(partitions.count_ones(), 1);
         let path = format!(
             "{}greedy_temp_{}",
             prefix,
