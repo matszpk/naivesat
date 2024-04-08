@@ -134,6 +134,7 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                     & 1)
                     != 0
                 {}
+                std::sync::atomic::fence(atomic::Ordering::SeqCst);
                 // get old next and old stop
                 let old_next = cell.load(atomic::Ordering::SeqCst);
                 let old_stop =
