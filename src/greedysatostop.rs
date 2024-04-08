@@ -426,33 +426,34 @@ impl FileImage {
         })
     }
 
-    fn load_partition(&mut self, part: usize, out: &mut [u8]) -> io::Result<()> {
+    fn load_partition(&mut self, part: usize, out: &mut MemImage) -> io::Result<()> {
         assert!(part < self.partitions);
-        assert_eq!(out.len(), self.partition_len);
+        assert_eq!(out.slice().len(), self.partition_len);
         assert_eq!(self.count, 1 << self.state_len);
         let pos = self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
-        self.file.read_exact(out)?;
+        self.file.read_exact(out.slice_mut())?;
+        out.start = (part * (1 << self.state_len) / self.partitions) as u64;
         Ok(())
     }
 
-    fn save_partition(&mut self, part: usize, out: &[u8]) -> io::Result<()> {
+    fn save_partition(&mut self, part: usize, out: &MemImage) -> io::Result<()> {
         assert!(part < self.partitions);
-        assert_eq!(out.len(), self.partition_len);
+        assert_eq!(out.slice().len(), self.partition_len);
         assert_eq!(self.count, 1 << self.state_len);
         let pos = self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
-        self.file.write_all(out)?;
+        self.file.write_all(out.slice())?;
         Ok(())
     }
 
-    fn save_chunk(&mut self, out: &[u8]) -> io::Result<()> {
-        let add = (out.len() / (self.state_len + 1)) as u64 * 8;
+    fn save_chunk(&mut self, out: &MemImage) -> io::Result<()> {
+        let add = (out.slice().len() / (self.state_len + 1)) as u64 * 8;
         assert!(self.count + add <= 1u64 << self.state_len);
-        assert_eq!(out.len() % (self.state_len + 1), 0);
-        self.file.write_all(out)?;
+        assert_eq!(out.slice().len() % (self.state_len + 1), 0);
+        self.file.write_all(out.slice())?;
         self.count += add;
         Ok(())
     }
