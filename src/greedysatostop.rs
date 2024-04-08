@@ -110,79 +110,6 @@ fn join_nexts(input_len: usize, nexts: Arc<AtomicU32Array>) {
         });
 }
 
-fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
-    let input_len = 32;
-    let nexts_len = 1usize << input_len;
-    let reserve_index = nexts_len + (1 << (input_len - 5));
-    let cpu_num = rayon::current_num_threads();
-    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts_len >> 6);
-    let chunk_len = nexts_len / chunk_num;
-    let chunk_len = (chunk_len + 31) & !31usize;
-    nexts.as_slice()[0..nexts_len]
-        .chunks(chunk_len)
-        .zip(nexts.as_slice()[nexts_len..reserve_index].chunks(chunk_len >> 5))
-        .zip(nexts.as_slice()[reserve_index..].chunks(chunk_len >> 5))
-        .enumerate()
-        .par_bridge()
-        .for_each(|(chunk_idx, ((chunk, stop_chunk), res_chunk))| {
-            for (i, cell) in chunk.iter().enumerate() {
-                let state = u32::try_from(chunk_idx * chunk_len + i).unwrap();
-                let ibit = i & 31;
-                std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                // set reservation or waiting it will be freed
-                while ((res_chunk[i >> 5].fetch_or(1u32 << ibit, atomic::Ordering::SeqCst) >> ibit)
-                    & 1)
-                    != 0
-                {}
-                std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                // get old next and old stop
-                let old_next = cell.load(atomic::Ordering::SeqCst);
-                let old_stop =
-                    ((stop_chunk[i >> 5].load(atomic::Ordering::SeqCst) >> ibit) & 1) != 0;
-                std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                if !old_stop {
-                    // if current state not already stopped
-                    std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                    // wait if reservation of next state will be freed.
-                    // and apply own reservation for next.
-                    // only if not current state is not next state (avoid hangup)
-                    let old_next_bit = old_next & 31;
-                    if state != old_next {
-                        while ((nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
-                            .fetch_or(1u32 << old_next_bit, atomic::Ordering::SeqCst)
-                            >> old_next_bit)
-                            & 1)
-                            != 0
-                        {}
-                    }
-                    std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                    // store next and stop
-                    cell.store(
-                        nexts.get(old_next as usize).load(atomic::Ordering::SeqCst),
-                        atomic::Ordering::SeqCst,
-                    );
-                    stop_chunk[i >> 5].fetch_or(
-                        ((nexts.as_slice()[nexts_len + ((old_next >> 5) as usize)]
-                            .load(atomic::Ordering::SeqCst)
-                            >> old_next_bit)
-                            & 1)
-                            << ibit,
-                        atomic::Ordering::SeqCst,
-                    );
-                    std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                    // free reservation for next
-                    if state != old_next {
-                        nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
-                            .fetch_and(!(1u32 << old_next_bit), atomic::Ordering::SeqCst);
-                    }
-                }
-                std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                res_chunk[i >> 5].fetch_and(!(1u32 << ibit), atomic::Ordering::SeqCst);
-                std::sync::atomic::fence(atomic::Ordering::SeqCst);
-            }
-        });
-}
-
 fn check_stop(input_len: usize, nexts: Arc<AtomicU32Array>) -> bool {
     let cpu_num = rayon::current_num_threads();
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts.len() >> 6);
@@ -197,29 +124,6 @@ fn check_stop(input_len: usize, nexts: Arc<AtomicU32Array>) -> bool {
             if chunk
                 .iter()
                 .any(|cell| (cell.load(atomic::Ordering::SeqCst) & stop_mask) != 0)
-            {
-                stop.fetch_or(1, atomic::Ordering::SeqCst);
-            }
-        });
-    stop.load(atomic::Ordering::SeqCst) != 0
-}
-
-fn check_stop_exact_u32(nexts: Arc<AtomicU32Array>) -> bool {
-    let input_len = 32;
-    let nexts_len = 1usize << input_len;
-    let stop_len = nexts_len >> 5;
-    let reserve_index = nexts_len + (1 << (input_len - 5));
-    let cpu_num = rayon::current_num_threads();
-    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), stop_len >> 6);
-    let chunk_len = (stop_len >> 5) / chunk_num;
-    let stop = Arc::new(AtomicU32::new(0));
-    nexts.as_slice()[nexts_len..reserve_index]
-        .chunks(chunk_len)
-        .par_bridge()
-        .for_each(|chunk| {
-            if chunk
-                .iter()
-                .any(|cell| cell.load(atomic::Ordering::SeqCst) != 0)
             {
                 stop.fetch_or(1, atomic::Ordering::SeqCst);
             }
@@ -260,39 +164,6 @@ fn find_solution(
     result.into_inner().unwrap()
 }
 
-fn find_solution_exact_u32(unknowns: usize, nexts: Arc<AtomicU32Array>) -> Option<Solution> {
-    let input_len = 32;
-    let nexts_len = 1usize << input_len;
-    let unknown_state_num = 1 << unknowns;
-    let cpu_num = rayon::current_num_threads();
-    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), unknown_state_num >> 6);
-    let chunk_len = unknown_state_num / chunk_num;
-    let unknowns_mult = 1 << (input_len - unknowns);
-    let result = Mutex::new(None);
-    (0..nexts_len / (unknowns_mult * chunk_len))
-        .par_bridge()
-        .for_each(|ch_idx| {
-            for i in ch_idx * chunk_len..(ch_idx + 1) * chunk_len {
-                let state = i * unknowns_mult;
-                // get value of next
-                let value = nexts.as_slice()[state].load(atomic::Ordering::SeqCst);
-                // load stop flag from state
-                if ((nexts.as_slice()[nexts_len + (state >> 5)].load(atomic::Ordering::SeqCst)
-                    >> (state & 31))
-                    & 1)
-                    != 0
-                {
-                    let mut r = result.lock().unwrap();
-                    *r = Some(Solution {
-                        start: state as u64,
-                        end: value as u64,
-                    });
-                }
-            }
-        });
-    result.into_inner().unwrap()
-}
-
 //
 // main solver code
 //
@@ -312,20 +183,12 @@ fn gen_output_transform_code(output_len: usize) -> String {
 }
 
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
-#if OUTPUT_NUM <= 32
     uint32_t* output_u = ((uint32_t*)output) + idx *
         ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
+#if OUTPUT_NUM <= 32
     OUTPUT_TRANSFORM_FIRST_32(output_u);
-#else // end of OUTPUT_NUM <= 32
-#  if OUTPUT_NUM == 33
-    uint32_t* output_u = ((uint32_t*)output) + idx * TYPE_LEN;
-    OUTPUT_TRANSFORM_FIRST_32(output_u);
-    uint32_t* output_stop = ((uint32_t*)output) + (1ULL << (OUTPUT_NUM - 1)) +
-            ((TYPE_LEN >> 5) * idx);
-    GET_U32_ALL(output_stop, o32);
-#  else
-#  error "Unsupported!"
-#  endif
+#else
+#error "Unsupported!"
 #endif
 }"##;
 
@@ -333,13 +196,6 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let words_per_elem = (output_len + 31) >> 5;
-    let output_buf_len = if input_len < 32 {
-        words_per_elem * (1 << input_len)
-    } else if input_len == 32 {
-        (1 << input_len) + (1 << (input_len - 4))
-    } else {
-        panic!("Unsupported");
-    };
     let (output, start) = {
         let mut builder = CPUBuilder::new_parallel(None, Some(2048));
         builder.transform_helpers();
@@ -351,7 +207,7 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
             CodeConfig::new()
                 .elem_inputs(Some(&(0..input_len).collect::<Vec<usize>>()))
                 .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-                .aggr_output_len(Some(output_buf_len))
+                .aggr_output_len(Some(words_per_elem * (1 << input_len)))
                 .dont_clear_outputs(true),
         );
         let mut execs = builder.build().unwrap();
@@ -362,30 +218,15 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     };
     let nexts = Arc::new(AtomicU32Array::from(output));
     let mut final_result = FinalResult::NoSolution;
-    if input_len < 32 {
-        if check_stop(input_len, nexts.clone()) {
-            for i in 0..input_len {
-                println!("Joining nexts: Stage: {} / {}", i, input_len);
-                join_nexts(input_len, nexts.clone());
-                if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
-                    final_result = FinalResult::Solution(sol);
-                    break;
-                }
+    if check_stop(input_len, nexts.clone()) {
+        for i in 0..input_len {
+            println!("Joining nexts: Stage: {} / {}", i, input_len);
+            join_nexts(input_len, nexts.clone());
+            if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
+                final_result = FinalResult::Solution(sol);
+                break;
             }
         }
-    } else if input_len == 32 {
-        if check_stop_exact_u32(nexts.clone()) {
-            for i in 0..input_len {
-                println!("Joining nexts: Stage: {} / {}", i, input_len);
-                join_nexts_exact_u32(nexts.clone());
-                if let Some(sol) = find_solution_exact_u32(cmd_args.unknowns, nexts.clone()) {
-                    final_result = FinalResult::Solution(sol);
-                    break;
-                }
-            }
-        }
-    } else {
-        panic!("Unsupported");
     }
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
@@ -394,7 +235,7 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
-    assert!(input_len <= 32);
+    assert!(input_len < 32);
     let result = do_solve_with_cpu_builder(circuit.clone(), &cmd_args);
     if let FinalResult::Solution(sol) = result {
         println!("Solution: {:?}", sol);
