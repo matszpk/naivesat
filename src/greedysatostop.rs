@@ -145,7 +145,7 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
                     // wait if reservation of next state will be freed.
                     // and apply own reservation for next.
                     // only if not current state is not next state (avoid hangup)
-                    let old_next_bit = (old_next & 31);
+                    let old_next_bit = old_next & 31;
                     if state != old_next {
                         while ((nexts.as_slice()[reserve_index + ((old_next >> 5) as usize)]
                             .fetch_or(1u32 << old_next_bit, atomic::Ordering::SeqCst)
