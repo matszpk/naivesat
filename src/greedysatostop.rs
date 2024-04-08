@@ -363,15 +363,30 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     };
     let nexts = Arc::new(AtomicU32Array::from(output));
     let mut final_result = FinalResult::NoSolution;
-    if check_stop(input_len, nexts.clone()) {
-        for i in 0..input_len {
-            println!("Joining nexts: Stage: {} / {}", i, input_len);
-            join_nexts(input_len, nexts.clone());
-            if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
-                final_result = FinalResult::Solution(sol);
-                break;
+    if input_len < 32 {
+        if check_stop(input_len, nexts.clone()) {
+            for i in 0..input_len {
+                println!("Joining nexts: Stage: {} / {}", i, input_len);
+                join_nexts(input_len, nexts.clone());
+                if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
+                    final_result = FinalResult::Solution(sol);
+                    break;
+                }
             }
         }
+    } else if input_len == 32 {
+        if check_stop_exact_u32(nexts.clone()) {
+            for i in 0..input_len {
+                println!("Joining nexts: Stage: {} / {}", i, input_len);
+                join_nexts_exact_u32(nexts.clone());
+                if let Some(sol) = find_solution_exact_u32(cmd_args.unknowns, nexts.clone()) {
+                    final_result = FinalResult::Solution(sol);
+                    break;
+                }
+            }
+        }
+    } else {
+        panic!("Unsupported");
     }
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
