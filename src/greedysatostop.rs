@@ -318,8 +318,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     OUTPUT_TRANSFORM_FIRST_32(output_u);
 #else // end of OUTPUT_NUM <= 32
 #  if OUTPUT_NUM == 33
-    uint32_t* output_u = ((uint32_t*)output) + idx *
-        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
+    uint32_t* output_u = ((uint32_t*)output) + idx * TYPE_LEN;
     OUTPUT_TRANSFORM_FIRST_32(output_u);
     uint32_t* output_stop = ((uint32_t*)output) + (1ULL << (OUTPUT_NUM - 1)) +
             ((TYPE_LEN >> 5) * idx);
@@ -395,7 +394,7 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
-    assert!(input_len < 32);
+    assert!(input_len <= 32);
     let result = do_solve_with_cpu_builder(circuit.clone(), &cmd_args);
     if let FinalResult::Solution(sol) = result {
         println!("Solution: {:?}", sol);
