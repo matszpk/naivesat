@@ -43,15 +43,15 @@ enum FinalResult {
 }
 
 struct AtomicU32Array<'a> {
-    original: Vec<u32>,
+    original: CPUDataHolder,
     atomic: &'a [AtomicU32],
 }
 
-impl From<Vec<u32>> for AtomicU32Array<'_> {
-    fn from(mut t: Vec<u32>) -> Self {
+impl From<CPUDataHolder> for AtomicU32Array<'_> {
+    fn from(mut t: CPUDataHolder) -> Self {
         let atomic = unsafe {
             &*std::ptr::slice_from_raw_parts(
-                t.as_mut_slice().as_mut_ptr().cast::<AtomicU32>(),
+                t.get_mut().get_mut().as_ptr().cast::<AtomicU32>(),
                 t.len(),
             )
         };
@@ -214,7 +214,7 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
         let start = SystemTime::now();
         let input = execs[0].new_data(16);
         println!("Calculate first nexts");
-        (execs[0].execute(&input, 0).unwrap().release(), start)
+        (execs[0].execute(&input, 0).unwrap(), start)
     };
     let nexts = Arc::new(AtomicU32Array::from(output));
     let mut final_result = FinalResult::NoSolution;
