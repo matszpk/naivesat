@@ -120,7 +120,7 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
     let chunk_len = (chunk_len + 31) & !31usize;
     nexts.as_slice()[0..nexts_len]
         .chunks(chunk_len)
-        .zip(nexts.as_slice()[nexts_len..].chunks(chunk_len >> 5))
+        .zip(nexts.as_slice()[nexts_len..reserve_index].chunks(chunk_len >> 5))
         .zip(nexts.as_slice()[reserve_index..].chunks(chunk_len >> 5))
         .enumerate()
         .par_bridge()
@@ -184,6 +184,29 @@ fn check_stop(input_len: usize, nexts: Arc<AtomicU32Array>) -> bool {
             if chunk
                 .iter()
                 .any(|cell| (cell.load(atomic::Ordering::SeqCst) & stop_mask) != 0)
+            {
+                stop.fetch_or(1, atomic::Ordering::SeqCst);
+            }
+        });
+    stop.load(atomic::Ordering::SeqCst) != 0
+}
+
+fn check_stop_exact_u32(nexts: Arc<AtomicU32Array>) -> bool {
+    let input_len = 32;
+    let nexts_len = 1usize << input_len;
+    let stop_len = nexts_len >> 5;
+    let reserve_index = nexts_len + (1 << (input_len - 5));
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), stop_len >> 6);
+    let chunk_len = (stop_len >> 5) / chunk_num;
+    let stop = Arc::new(AtomicU32::new(0));
+    nexts.as_slice()[nexts_len..reserve_index]
+        .chunks(chunk_len)
+        .par_bridge()
+        .for_each(|chunk| {
+            if chunk
+                .iter()
+                .any(|cell| cell.load(atomic::Ordering::SeqCst) != 0)
             {
                 stop.fetch_or(1, atomic::Ordering::SeqCst);
             }
