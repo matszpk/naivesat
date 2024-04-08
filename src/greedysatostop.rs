@@ -117,26 +117,32 @@ fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts_len >> 6);
     let chunk_len = nexts_len / chunk_num;
     let chunk_len = (chunk_len + 31) & !31usize;
-    nexts
-        .as_slice()[0..nexts_len]
+    nexts.as_slice()[0..nexts_len]
         .chunks(chunk_len)
-        .zip(nexts
-            .as_slice()[nexts_len..]
-            .chunks(chunk_len >> 5))
+        .zip(nexts.as_slice()[nexts_len..].chunks(chunk_len >> 5))
         .par_bridge()
         .for_each(|(chunk, stop_chunk)| {
-            for cell in chunk {
-                // std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                // let old_value = cell.load(atomic::Ordering::SeqCst);
-                // let old_next = old_value & next_mask;
-                // std::sync::atomic::fence(atomic::Ordering::SeqCst);
-                // if (old_value & stop_mask) == 0 {
-                //     cell.store(
-                //         nexts.get(old_next as usize).load(atomic::Ordering::SeqCst),
-                //         atomic::Ordering::SeqCst,
-                //     );
-                // }
-                // std::sync::atomic::fence(atomic::Ordering::SeqCst);
+            for (i, cell) in chunk.iter().enumerate() {
+                std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                let old_next = cell.load(atomic::Ordering::SeqCst);
+                let old_stop =
+                    ((stop_chunk[i >> 5].load(atomic::Ordering::SeqCst) >> (i & 31)) & 1) != 0;
+                std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                if !old_stop {
+                    cell.store(
+                        nexts.get(old_next as usize).load(atomic::Ordering::SeqCst),
+                        atomic::Ordering::SeqCst,
+                    );
+                    stop_chunk[i >> 5].fetch_or(
+                        ((nexts.as_slice()[nexts_len + ((old_next >> 5) as usize)]
+                            .load(atomic::Ordering::SeqCst)
+                            >> (old_next & 31))
+                            & 1)
+                            << (i & 31),
+                        atomic::Ordering::SeqCst,
+                    );
+                }
+                std::sync::atomic::fence(atomic::Ordering::SeqCst);
             }
         });
 }
