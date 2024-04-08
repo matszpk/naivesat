@@ -110,6 +110,37 @@ fn join_nexts(input_len: usize, nexts: Arc<AtomicU32Array>) {
         });
 }
 
+fn join_nexts_exact_u32(nexts: Arc<AtomicU32Array>) {
+    let input_len = 32;
+    let nexts_len = 1usize << input_len;
+    let cpu_num = rayon::current_num_threads();
+    let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts_len >> 6);
+    let chunk_len = nexts_len / chunk_num;
+    let chunk_len = (chunk_len + 31) & !31usize;
+    nexts
+        .as_slice()[0..nexts_len]
+        .chunks(chunk_len)
+        .zip(nexts
+            .as_slice()[nexts_len..]
+            .chunks(chunk_len >> 5))
+        .par_bridge()
+        .for_each(|(chunk, stop_chunk)| {
+            for cell in chunk {
+                // std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                // let old_value = cell.load(atomic::Ordering::SeqCst);
+                // let old_next = old_value & next_mask;
+                // std::sync::atomic::fence(atomic::Ordering::SeqCst);
+                // if (old_value & stop_mask) == 0 {
+                //     cell.store(
+                //         nexts.get(old_next as usize).load(atomic::Ordering::SeqCst),
+                //         atomic::Ordering::SeqCst,
+                //     );
+                // }
+                // std::sync::atomic::fence(atomic::Ordering::SeqCst);
+            }
+        });
+}
+
 fn check_stop(input_len: usize, nexts: Arc<AtomicU32Array>) -> bool {
     let cpu_num = rayon::current_num_threads();
     let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), nexts.len() >> 6);
@@ -183,12 +214,21 @@ fn gen_output_transform_code(output_len: usize) -> String {
 }
 
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
+#if OUTPUT_NUM <= 32
     uint32_t* output_u = ((uint32_t*)output) + idx *
         ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
-#if OUTPUT_NUM <= 32
     OUTPUT_TRANSFORM_FIRST_32(output_u);
-#else
-#error "Unsupported!"
+#else // end of OUTPUT_NUM <= 32
+#  if OUTPUT_NUM == 33
+    uint32_t* output_u = ((uint32_t*)output) + idx *
+        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
+    OUTPUT_TRANSFORM_FIRST_32(output_u);
+    uint32_t* output_stop = ((uint32_t*)output) + (1ULL << (OUTPUT_NUM - 1)) +
+            ((TYPE_LEN >> 5) * idx);
+    GET_U32_ALL(output_stop, o32);
+#  else
+#  error "Unsupported!"
+#  endif
 #endif
 }"##;
 
@@ -196,6 +236,13 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let words_per_elem = (output_len + 31) >> 5;
+    let output_buf_len = if input_len < 32 {
+        words_per_elem * (1 << input_len)
+    } else if input_len == 32 {
+        (1 << input_len) + (1 << (input_len - 5))
+    } else {
+        panic!("Unsupported");
+    };
     let (output, start) = {
         let mut builder = CPUBuilder::new_parallel(None, Some(2048));
         builder.transform_helpers();
@@ -207,7 +254,7 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
             CodeConfig::new()
                 .elem_inputs(Some(&(0..input_len).collect::<Vec<usize>>()))
                 .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-                .aggr_output_len(Some(words_per_elem * (1 << input_len)))
+                .aggr_output_len(Some(output_buf_len))
                 .dont_clear_outputs(true),
         );
         let mut execs = builder.build().unwrap();
