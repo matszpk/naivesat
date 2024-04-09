@@ -364,6 +364,33 @@ impl MemImage {
     }
 }
 
+const FILE_BUFFER_LEN: usize = 1024 * 64;
+
+fn read_u64_from_file(file: &mut File, buf: &mut [u64]) -> io::Result<()> {
+    let mut byte_buf = vec![0u8; FILE_BUFFER_LEN];
+    for chunk in buf.chunks_mut(FILE_BUFFER_LEN >> 3) {
+        file.read_exact(&mut byte_buf[0..chunk.len() << 3])?;
+        for (i, v) in chunk.iter_mut().enumerate() {
+            let mut bytes: [u8; 8] = [0u8; 8];
+            bytes.as_mut_slice().copy_from_slice(&byte_buf[i << 3..(i + 1) << 3]);
+            *v = u64::from_le_bytes(bytes);
+        }
+    }
+    Ok(())
+}
+
+fn write_u64_to_file(file: &mut File, buf: &[u64]) -> io::Result<()> {
+    let mut byte_buf = vec![0u8; FILE_BUFFER_LEN];
+    for chunk in buf.chunks(FILE_BUFFER_LEN >> 3) {
+        for (i, v) in chunk.iter().enumerate() {
+            let bytes = v.to_le_bytes();
+            byte_buf[i << 3..(i + 1) << 3].copy_from_slice(bytes.as_slice());
+        }
+        file.write_all(&byte_buf[0..chunk.len() << 3])?;
+    }
+    Ok(())
+}
+
 struct FileImage {
     state_len: usize,
     partitions: usize,
