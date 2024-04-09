@@ -304,7 +304,7 @@ impl MemImage {
     fn new(state_len: usize, start: u64, len: usize) -> Self {
         assert!(state_len < 64);
         assert!(start < 1u64 << state_len);
-        assert!(start + (len as u64) < (1u64 << state_len));
+        assert!(start + (len as u64) <= (1u64 << state_len));
         assert_eq!(len & 63, 0);
         Self {
             state_len,
