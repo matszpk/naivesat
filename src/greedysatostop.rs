@@ -292,6 +292,38 @@ fn find_solution_64(
 // partition code
 //
 
+struct MemImageChunkMut<'a> {
+    state_len: usize,
+    data: &'a mut [u64],
+    mask: u64,
+    len: usize,
+}
+
+impl<'a> MemImageChunkMut<'a> {
+    #[inline]
+    fn get(&self, i: usize) -> u64 {
+        let idx = (i * (self.state_len + 1)) >> 6;
+        let bit = (i * (self.state_len + 1)) & 63;
+        if 64 - bit >= self.state_len + 1 {
+            (self.data[idx] >> bit) & self.mask
+        } else {
+            ((self.data[idx] >> bit) | (self.data[idx + 1] << (64 - bit))) & self.mask
+        }
+    }
+
+    #[inline]
+    fn set(&mut self, i: usize, value: u64) {
+        let value = value & self.mask;
+        let idx = (i * (self.state_len + 1)) >> 6;
+        let bit = (i * (self.state_len + 1)) & 63;
+        self.data[idx] = (self.data[idx] & !(self.mask << bit)) | (value << bit);
+        if 64 - bit < self.state_len + 1 {
+            self.data[idx + 1] =
+                (self.data[idx + 1] & !(self.mask >> (64 - bit))) | (value >> (64 - bit));
+        }
+    }
+}
+
 struct MemImage {
     state_len: usize,
     start: u64,
@@ -366,19 +398,46 @@ impl MemImage {
         m
     }
 
+    fn chunks_mut<'a>(
+        &'a mut self,
+        chunk_len: usize,
+    ) -> impl Iterator<Item = MemImageChunkMut<'a>> {
+        assert_eq!(chunk_len & 63, 0);
+        self.data
+            .chunks_mut((chunk_len * (self.state_len + 1)) >> 6)
+            .map(|ch| {
+                let ch_len = ch.len();
+                MemImageChunkMut {
+                    state_len: self.state_len,
+                    data: ch,
+                    mask: self.mask,
+                    len: usize::try_from(((ch_len as u64) << 6) / (self.state_len as u64 + 1))
+                        .unwrap(),
+                }
+            })
+    }
+
     fn join_nexts(&mut self, second: &MemImage) {
         assert_eq!(self.state_len, second.state_len);
+        let cpu_num = rayon::current_num_threads();
+        let chunk_num = std::cmp::min(std::cmp::max(cpu_num * 8, 64), self.len >> 6);
+        let chunk_len = self.len / chunk_num;
+        let chunk_len = (chunk_len + 63) & !63; // align to 64 elements
         let state_mask = self.mask >> 1;
         let stop_mask = 1u64 << self.state_len;
         let end = second.start + (second.len as u64);
-        for i in 0..self.len {
-            let old_value = self.get(i);
-            let old_next = old_value & state_mask;
-            if (old_value & stop_mask) == 0 && second.start <= old_next && old_next < end {
-                // if no stopped state and next in range of second MemImage then update
-                self.set(i, second.get((old_next - second.start) as usize));
-            }
-        }
+        self.chunks_mut(chunk_len)
+            .par_bridge()
+            .for_each(|mut chunk| {
+                for i in 0..chunk.len {
+                    let old_value = chunk.get(i);
+                    let old_next = old_value & state_mask;
+                    if (old_value & stop_mask) == 0 && second.start <= old_next && old_next < end {
+                        // if no stopped state and next in range of second MemImage then update
+                        chunk.set(i, second.get((old_next - second.start) as usize));
+                    }
+                }
+            });
     }
 
     fn find_solution(&self, unknowns: usize) -> Option<Solution> {
