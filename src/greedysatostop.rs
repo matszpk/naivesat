@@ -372,7 +372,9 @@ fn read_u64_from_file(file: &mut File, buf: &mut [u64]) -> io::Result<()> {
         file.read_exact(&mut byte_buf[0..chunk.len() << 3])?;
         for (i, v) in chunk.iter_mut().enumerate() {
             let mut bytes: [u8; 8] = [0u8; 8];
-            bytes.as_mut_slice().copy_from_slice(&byte_buf[i << 3..(i + 1) << 3]);
+            bytes
+                .as_mut_slice()
+                .copy_from_slice(&byte_buf[i << 3..(i + 1) << 3]);
             *v = u64::from_le_bytes(bytes);
         }
     }
@@ -425,32 +427,32 @@ impl FileImage {
 
     fn load_partition(&mut self, part: usize, out: &mut MemImage) -> io::Result<()> {
         assert!(part < self.partitions);
-        assert_eq!(out.slice().len(), self.partition_len);
+        assert_eq!(out.slice().len() << 3, self.partition_len);
         assert_eq!(self.count, 1 << self.state_len);
         let pos = self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
-        //self.file.read_exact(out.slice_mut())?;
+        read_u64_from_file(&mut self.file, out.slice_mut())?;
         out.start = (part * (1 << self.state_len) / self.partitions) as u64;
         Ok(())
     }
 
     fn save_partition(&mut self, part: usize, out: &MemImage) -> io::Result<()> {
         assert!(part < self.partitions);
-        assert_eq!(out.slice().len(), self.partition_len);
+        assert_eq!(out.slice().len() << 3, self.partition_len);
         assert_eq!(self.count, 1 << self.state_len);
         let pos = self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
-        //self.file.write_all(out.slice())?;
+        write_u64_to_file(&mut self.file, out.slice())?;
         Ok(())
     }
 
     fn save_chunk(&mut self, out: &MemImage) -> io::Result<()> {
-        let add = (out.slice().len() / (self.state_len + 1)) as u64 * 8;
+        let add = ((out.slice().len() << 3) / (self.state_len + 1)) as u64 * 8;
         assert!(self.count + add <= 1u64 << self.state_len);
-        assert_eq!(out.slice().len() % (self.state_len + 1), 0);
-        //self.file.write_all(out.slice())?;
+        assert_eq!((out.slice().len() << 3) % (self.state_len + 1), 0);
+        write_u64_to_file(&mut self.file, out.slice())?;
         self.count += add;
         Ok(())
     }
