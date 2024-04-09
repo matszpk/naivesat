@@ -489,18 +489,17 @@ fn gen_output_transform_code(output_len: usize) -> String {
 }
 
 const AGGR_OUTPUT_CPU_CODE: &str = r##"{
-    uint32_t* output_u = ((uint32_t*)output) + idx *
-        ((OUTPUT_NUM + 31) >> 5) * TYPE_LEN;
 #if OUTPUT_NUM <= 32
+    uint32_t* output_u = ((uint32_t*)output) + idx * TYPE_LEN;
     OUTPUT_TRANSFORM_FIRST_32(output_u);
 #else
+    uint64_t* output_u = ((uint64_t*)output) + idx * TYPE_LEN;
     uint32_t i;
     uint32_t temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
     OUTPUT_TRANSFORM_FIRST_32(temp);
     OUTPUT_TRANSFORM_SECOND_32(temp + 32 * (TYPE_LEN >> 5));
     for (i = 0; i < TYPE_LEN; i++) {
-        output_u[i*2] = temp[i];
-        output_u[i*2 + 1] = temp[i + TYPE_LEN];
+        output_u[i] = ((uint64_t)temp[i]) | (((uint64_t)temp[i + TYPE_LEN]) << 32);
     }
 #endif
 }"##;
