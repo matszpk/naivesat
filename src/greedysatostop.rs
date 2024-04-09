@@ -615,15 +615,12 @@ mod tests {
         .enumerate()
         {
             let mut mi = MemImage::new(state_len, 0, len);
-            for i in 0..len {
-                mi.set(
-                    i,
-                    ((i as u64)
-                        .overflowing_mul(5858211595692021)
-                        .0
-                        .overflowing_add(5560939029013481)
-                        .0),
-                );
+            for (i, v) in mi.slice_mut().iter_mut().enumerate() {
+                *v = ((i as u64)
+                    .overflowing_mul(5884491582115956921)
+                    .0
+                    .overflowing_add(5560939029013487713)
+                    .0);
             }
             assert_eq!(mi.slice().len(), (state_len + 1) * (len >> 6));
             assert_eq!(mi.mask, (1 << (state_len + 1)) - 1);
