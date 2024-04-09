@@ -370,13 +370,11 @@ impl MemImage {
         assert_eq!(self.state_len, second.state_len);
         let state_mask = self.mask >> 1;
         let stop_mask = 1u64 << self.state_len;
+        let end = second.start + (second.len as u64);
         for i in 0..self.len {
             let old_value = self.get(i);
             let old_next = old_value & state_mask;
-            if (old_value & stop_mask) == 0
-                && second.start <= old_next
-                && old_next < second.start + (second.len as u64)
-            {
+            if (old_value & stop_mask) == 0 && second.start <= old_next && old_next < end {
                 // if no stopped state and next in range of second MemImage then update
                 self.set(i, second.get((old_next - second.start) as usize));
             }
