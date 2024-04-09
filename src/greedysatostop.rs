@@ -328,9 +328,9 @@ impl MemImage {
 
     #[inline]
     fn get(&self, i: usize) -> u64 {
-        let idx = (i * self.state_len) >> 6;
-        let bit = (i * self.state_len) & 63;
-        if 64 - bit <= self.state_len + 1 {
+        let idx = (i * (self.state_len + 1)) >> 6;
+        let bit = (i * (self.state_len + 1)) & 63;
+        if 64 - bit >= self.state_len + 1 {
             (self.data[idx] >> bit) & self.mask
         } else {
             ((self.data[idx] >> bit) | (self.data[idx + 1] << (64 - bit))) & self.mask
@@ -340,10 +340,10 @@ impl MemImage {
     #[inline]
     fn set(&mut self, i: usize, value: u64) {
         let value = value & self.mask;
-        let idx = (i * self.state_len) >> 6;
-        let bit = (i * self.state_len) & 63;
+        let idx = (i * (self.state_len + 1)) >> 6;
+        let bit = (i * (self.state_len + 1)) & 63;
         self.data[idx] = (self.data[idx] & !(self.mask << bit)) | (value << bit);
-        if 64 - bit > self.state_len + 1 {
+        if 64 - bit < self.state_len + 1 {
             self.data[idx + 1] =
                 (self.data[idx + 1] & !(self.mask >> (64 - bit))) | (value >> (64 - bit));
         }
@@ -593,6 +593,24 @@ fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
         }
     } else {
         println!("Unsatisfiable!");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_mem_image() {
+        let mut mi = MemImage::new(10, 0, 128);
+        assert_eq!(mi.slice().len(), (10 + 1) * (128 >> 6));
+        assert_eq!(mi.mask, (1 << 11) - 1);
+        for i in 0..128 {
+            mi.set(i, (i * 3 + 15) as u64);
+        }
+        for i in 0..128 {
+            assert_eq!((i * 3 + 15) as u64, mi.get(i), "{}", i);
+        }
     }
 }
 
