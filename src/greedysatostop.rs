@@ -629,7 +629,7 @@ mod tests {
             let mask = (1 << (state_len + 1)) - 1;
             // filling
             for i in 0..len {
-                mi.set(i, (i * mult + add) as u64);
+                mi.set(i, (i as u64).overflowing_mul(mult).0.overflowing_add(add).0);
             }
             // checking internal content
             for i in 0..len {
@@ -639,18 +639,47 @@ mod tests {
                     let bit = (((state_len + 1) * i) + dest_bit) & 63;
                     a | (((mi.slice()[idx] >> bit) & 1) << dest_bit)
                 });
-                assert_eq!(((i * mult + add) as u64) & mask, res, "{} {}", k, i);
+                assert_eq!(
+                    ((i as u64).overflowing_mul(mult).0.overflowing_add(add).0) & mask,
+                    res,
+                    "{} {}",
+                    k,
+                    i
+                );
             }
             // compare from get
             for i in 0..len {
-                assert_eq!(((i * mult + add) as u64) & mask, mi.get(i), "{} {}", k, i);
+                assert_eq!(
+                    ((i as u64).overflowing_mul(mult).0.overflowing_add(add).0) & mask,
+                    mi.get(i),
+                    "{} {}",
+                    k,
+                    i
+                );
             }
         }
     }
-    
+
     #[test]
     fn test_file_image() {
-        let mut fi = FileImage::new(26, 16, "").unwrap();
+        for (k, (state_len, mult, add, partitions)) in
+            [(26, 4849217, 3455641, 16)].into_iter().enumerate()
+        {
+            let mut fi = FileImage::new(state_len, partitions, "").unwrap();
+            let save_parts = partitions << 1;
+            let chunk_len = (1usize << state_len) / save_parts;
+            for part in 0..save_parts {
+                let mut chunk_mi = MemImage::new(state_len, 0, chunk_len);
+                for ci in 0..chunk_len {
+                    let i = chunk_len * part + ci;
+                    chunk_mi.set(
+                        ci,
+                        (i as u64).overflowing_mul(mult).0.overflowing_add(add).0,
+                    );
+                }
+                fi.save_chunk(&chunk_mi).unwrap();
+            }
+        }
     }
 }
 
