@@ -406,6 +406,7 @@ impl FileImage {
     fn new(state_len: usize, partitions: usize, prefix: &str) -> io::Result<Self> {
         assert!(state_len < 64);
         assert_eq!(partitions.count_ones(), 1);
+        assert!(partitions * 64 <= 1 << state_len);
         let path = format!(
             "{}greedy_temp_{}",
             prefix,
@@ -645,6 +646,11 @@ mod tests {
                 assert_eq!(((i * mult + add) as u64) & mask, mi.get(i), "{} {}", k, i);
             }
         }
+    }
+    
+    #[test]
+    fn test_file_image() {
+        let mut fi = FileImage::new(26, 16, "").unwrap();
     }
 }
 
