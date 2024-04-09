@@ -628,7 +628,7 @@ fn do_solve_with_cpu_builder_with_partitions(
         panic!("No partition specified");
     };
     let partitions_bits = (usize::BITS - partitions.leading_zeros() - 1) as usize;
-    let load_partitions_bits = std::cmp::max(partitions_bits - 1, input_len - 10);
+    let load_partitions_bits = std::cmp::min(partitions_bits - 1, input_len - 10);
     let words_per_elem = (output_len + 31) >> 5;
     let stop_mask = 1u64 << input_len;
     let mut builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(2048)));
