@@ -296,6 +296,7 @@ struct MemImage {
     start: u64,
     data: Vec<u64>,
     mask: u64,
+    len: usize,
 }
 
 impl MemImage {
@@ -313,6 +314,7 @@ impl MemImage {
             } else {
                 u64::MAX
             },
+            len,
         }
     }
 
@@ -361,6 +363,22 @@ impl MemImage {
             m.set(i, u64::try_from(v.clone()).unwrap());
         }
         m
+    }
+
+    fn join_nexts(&mut self, second: &MemImage) {
+        assert_eq!(self.state_len, second.state_len);
+        let state_mask = self.mask >> 1;
+        for i in 0..self.len {
+            let old_value = self.get(i);
+            let old_next = old_value & state_mask;
+            if (old_value >> self.state_len) == 0
+                && second.start <= old_next
+                && old_next < second.start + (second.len as u64)
+            {
+                // if no stopped state and next in range of second MemImage then update
+                self.set(i, second.get((old_next - second.start) as usize));
+            }
+        }
     }
 }
 
