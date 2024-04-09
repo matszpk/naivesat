@@ -708,24 +708,39 @@ fn do_solve_with_cpu_builder_with_partitions(
         'a: for stage in 0..input_len {
             println!("Stage {} / {}", stage, input_len);
             for i in 0..partitions {
-                println!("Load partition {} / {}", i, partitions);
+                println!(
+                    "Load partition {} / {}: {} / {}",
+                    i, partitions, stage, input_len
+                );
                 file_image.load_partition(i, &mut part_dest).unwrap();
                 for j in 0..partitions {
-                    println!("Load second partition {} / {}", j, partitions);
+                    println!(
+                        "Load second partition {} / {}: {} / {}",
+                        j, partitions, stage, input_len
+                    );
                     if i != j {
                         file_image.load_partition(j, &mut part_second).unwrap();
                     } else {
                         part_second.copy_from(&part_dest);
                     }
-                    println!("Join nexts {} / {} / {}", i, j, partitions);
+                    println!(
+                        "Join nexts {} / {} / {}: {} / {}",
+                        i, j, partitions, stage, input_len
+                    );
                     part_dest.join_nexts(&part_second);
                 }
-                println!("Find solution {} / {}", i, partitions);
+                println!(
+                    "Find solution {} / {}: {} / {}",
+                    i, partitions, stage, input_len
+                );
                 if let Some(sol) = part_dest.find_solution(cmd_args.unknowns) {
                     final_result = FinalResult::Solution(sol);
                     break 'a;
                 }
-                println!("Save partition {} / {}", i, partitions);
+                println!(
+                    "Save partition {} / {}: {} / {}",
+                    i, partitions, stage, input_len
+                );
                 file_image.save_partition(i, &part_dest).unwrap();
             }
         }
