@@ -415,7 +415,11 @@ impl FileImage {
                 .unwrap()
                 .as_nanos()
         );
-        let file = File::create(&path)?;
+        let file = File::options()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(&path)?;
         Ok(Self {
             state_len,
             partitions,
@@ -430,7 +434,7 @@ impl FileImage {
         assert!(part < self.partitions);
         assert_eq!(out.slice().len() << 3, self.partition_len);
         assert_eq!(self.count, 1 << self.state_len);
-        let pos = self.partition_len as u64;
+        let pos = (part as u64) * self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
         read_u64_from_file(&mut self.file, out.slice_mut())?;
@@ -442,7 +446,7 @@ impl FileImage {
         assert!(part < self.partitions);
         assert_eq!(out.slice().len() << 3, self.partition_len);
         assert_eq!(self.count, 1 << self.state_len);
-        let pos = self.partition_len as u64;
+        let pos = (part as u64) * self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
         write_u64_to_file(&mut self.file, out.slice())?;
@@ -618,11 +622,11 @@ mod tests {
             let mut mi = MemImage::new(state_len, 0, len);
             // initialize mem image by messy content
             for (i, v) in mi.slice_mut().iter_mut().enumerate() {
-                *v = ((i as u64)
+                *v = (i as u64)
                     .overflowing_mul(5884491582115956921)
                     .0
                     .overflowing_add(5560939029013487713)
-                    .0);
+                    .0;
             }
             assert_eq!(mi.slice().len(), (state_len + 1) * (len >> 6));
             assert_eq!(mi.mask, (1 << (state_len + 1)) - 1);
@@ -662,12 +666,15 @@ mod tests {
 
     #[test]
     fn test_file_image() {
-        for (k, (state_len, mult, add, partitions)) in
-            [(26, 4849217, 3455641, 16)].into_iter().enumerate()
+        for (k, (state_len, mult, add, partitions, changer)) in
+            [(26, 4849217, 3455641, 16, 9450290114)]
+                .into_iter()
+                .enumerate()
         {
             let mut fi = FileImage::new(state_len, partitions, "").unwrap();
             let save_parts = partitions << 1;
             let chunk_len = (1usize << state_len) / save_parts;
+            // save chunks
             for part in 0..save_parts {
                 let mut chunk_mi = MemImage::new(state_len, 0, chunk_len);
                 for ci in 0..chunk_len {
@@ -678,6 +685,62 @@ mod tests {
                     );
                 }
                 fi.save_chunk(&chunk_mi).unwrap();
+            }
+            // check partitions
+            let chunk_len = (1usize << state_len) / partitions;
+            let mask = (1u64 << (state_len + 1)) - 1;
+            for part in (0..partitions).rev() {
+                let mut part_chunk = MemImage::new(state_len, 0, chunk_len);
+                fi.load_partition(part, &mut part_chunk).unwrap();
+                // check partition
+                for ci in 0..chunk_len {
+                    let i = chunk_len * part + ci;
+                    assert_eq!(
+                        ((i as u64).overflowing_mul(mult).0.overflowing_add(add).0) & mask,
+                        part_chunk.get(ci),
+                        "{} {}",
+                        part,
+                        ci
+                    );
+                }
+            }
+            // write new partitions
+            for part in (0..partitions).rev() {
+                // save new partition
+                let mut part_chunk = MemImage::new(state_len, 0, chunk_len);
+                for ci in 0..chunk_len {
+                    let i = chunk_len * part + ci;
+                    part_chunk.set(
+                        ci,
+                        ((i + changer) as u64)
+                            .overflowing_mul(mult)
+                            .0
+                            .overflowing_add(add)
+                            .0,
+                    );
+                }
+                fi.save_partition(part, &part_chunk).unwrap();
+            }
+            // check new partitions
+            for part in (0..partitions).rev() {
+                let mut part_chunk = MemImage::new(state_len, 0, chunk_len);
+                fi.load_partition(part, &mut part_chunk).unwrap();
+                // check partition
+                for ci in 0..chunk_len {
+                    let i = chunk_len * part + ci;
+                    assert_eq!(
+                        (((i + changer) as u64)
+                            .overflowing_mul(mult)
+                            .0
+                            .overflowing_add(add)
+                            .0)
+                            & mask,
+                        part_chunk.get(ci),
+                        "new: {} {}",
+                        part,
+                        ci
+                    );
+                }
             }
         }
     }
