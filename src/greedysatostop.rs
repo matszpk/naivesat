@@ -14,6 +14,7 @@ use clap::Parser;
 
 use rayon::prelude::*;
 
+use std::fmt::Debug;
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::ops::Range;
@@ -293,7 +294,8 @@ fn find_solution_64(
 struct MemImage {
     state_len: usize,
     start: u64,
-    data: Vec<u8>,
+    data: Vec<u64>,
+    mask: u64,
 }
 
 impl MemImage {
@@ -301,95 +303,62 @@ impl MemImage {
         assert!(state_len < 64);
         assert!(start < 1u64 << state_len);
         assert!(start + (len as u64) < (1u64 << state_len));
-        assert_eq!(len & 7, 0);
+        assert_eq!(len & 63, 0);
         Self {
             state_len,
             start,
-            data: vec![0u8; (len * (state_len + 1)) >> 3],
+            data: vec![0u64; (len * (state_len + 1)) >> 6],
+            mask: if state_len + 1 < 64 {
+                u64::try_from((1u128 << (state_len + 1)) - 1).unwrap()
+            } else {
+                u64::MAX
+            },
         }
     }
 
     #[inline]
-    fn slice(&self) -> &[u8] {
+    fn slice(&self) -> &[u64] {
         &self.data
     }
 
     #[inline]
-    fn slice_mut(&mut self) -> &mut [u8] {
+    fn slice_mut(&mut self) -> &mut [u64] {
         &mut self.data
     }
 
+    #[inline]
     fn get(&self, i: usize) -> u64 {
-        let mut idx = (i * self.state_len) >> 3;
-        let mut bit = (i * self.state_len) & 7;
-        let mut bit_count = 0;
-        let mut value = 0u64;
-        if (bit & 7) != 0 {
-            value |= (self.data[idx] >> bit) as u64;
-            bit_count += 8 - bit;
-            idx += 1;
+        let idx = (i * self.state_len) >> 6;
+        let bit = (i * self.state_len) & 63;
+        if 64 - bit <= self.state_len + 1 {
+            (self.data[idx] >> bit) & self.mask
+        } else {
+            ((self.data[idx] >> bit) | (self.data[idx + 1] << (64 - bit))) & self.mask
         }
-        while bit_count + 7 < self.state_len {
-            value |= (self.data[idx] as u64) << bit_count;
-            bit_count += 8;
-            idx += 1;
-        }
-        if bit_count < self.state_len {
-            let mask = 1u8 << (self.state_len - bit_count) - 1;
-            value |= ((self.data[idx] & mask) as u64) << bit_count;
-        }
-        value
     }
 
+    #[inline]
     fn set(&mut self, i: usize, value: u64) {
-        let mut idx = (i * self.state_len) >> 3;
-        let mut bit = (i * self.state_len) & 7;
-        let mut bit_count = 0;
-        let value_bytes = value.to_le_bytes();
-        if (bit & 7) != 0 {
-            let mask = if self.state_len < (8 - bit) {
-                (1u8 << (self.state_len - bit_count)) - 1
-            } else {
-                0xff
-            };
-            self.data[idx] =
-                (self.data[idx] & ((1u8 << bit) - 1)) | ((value_bytes[0] & mask) << bit);
-            bit_count += 8 - bit;
-            idx += 1;
-        }
-        while bit_count + 7 < self.state_len {
-            self.data[idx] = value_bytes[bit_count >> 3] >> (8 - bit);
-            if bit != 0 {
-                self.data[idx] |= value_bytes[(bit_count + 8) >> 3] << bit;
-            }
-            bit_count += 8;
-            idx += 1;
-        }
-        if bit_count < self.state_len {
-            let mask = (1u8 << (self.state_len - bit_count)) - 1;
-            self.data[idx] =
-                (self.data[idx] & !mask) | ((value_bytes[bit_count >> 3] >> (8 - bit)) & mask);
-            if bit != 0 && bit < self.state_len - bit_count {
-                self.data[idx] =
-                    (self.data[idx] & !mask) | ((value_bytes[(bit_count + 8) >> 3] << bit) & mask);
-            }
+        let value = value & self.mask;
+        let idx = (i * self.state_len) >> 6;
+        let bit = (i * self.state_len) & 63;
+        self.data[idx] = (self.data[idx] & !(self.mask << bit)) | (value << bit);
+        if 64 - bit > self.state_len + 1 {
+            self.data[idx + 1] =
+                (self.data[idx + 1] & !(self.mask >> (64 - bit))) | (value >> (64 - bit));
         }
     }
 
-    fn from_vec_u32(state_len: usize, start: u64, data: Vec<u32>) -> Self {
-        assert_eq!(data.len() & 7, 0);
+    fn from_slice<T>(state_len: usize, start: u64, data: &[T]) -> Self
+    where
+        T: Clone,
+        u64: TryFrom<T>,
+        <u64 as TryFrom<T>>::Error: Debug,
+    {
+        assert_eq!(data.len() & 63, 0);
         let mut m = MemImage::new(state_len, start, data.len());
-        for (i, v) in data.into_iter().enumerate() {
-            m.set(i, v as u64);
-        }
-        m
-    }
-
-    fn from_vec_double_u32(state_len: usize, start: u64, data: Vec<u32>) -> Self {
-        assert_eq!((data.len() >> 1) & 7, 0);
-        let mut m = MemImage::new(state_len, start, data.len() >> 1);
-        for i in 0..data.len() >> 1 {
-            m.set(i, (data[2 * i] as u64) | ((data[2 * i + 1] as u64) << 32));
+        for (i, v) in data.iter().enumerate() {
+            m.set(i, u64::try_from(v.clone()).unwrap());
         }
         m
     }
@@ -434,7 +403,7 @@ impl FileImage {
         let pos = self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
-        self.file.read_exact(out.slice_mut())?;
+        //self.file.read_exact(out.slice_mut())?;
         out.start = (part * (1 << self.state_len) / self.partitions) as u64;
         Ok(())
     }
@@ -446,7 +415,7 @@ impl FileImage {
         let pos = self.partition_len as u64;
         let new_pos = self.file.seek(SeekFrom::Start(pos as u64))?;
         assert_eq!(pos, new_pos);
-        self.file.write_all(out.slice())?;
+        //self.file.write_all(out.slice())?;
         Ok(())
     }
 
@@ -454,7 +423,7 @@ impl FileImage {
         let add = (out.slice().len() / (self.state_len + 1)) as u64 * 8;
         assert!(self.count + add <= 1u64 << self.state_len);
         assert_eq!(out.slice().len() % (self.state_len + 1), 0);
-        self.file.write_all(out.slice())?;
+        //self.file.write_all(out.slice())?;
         self.count += add;
         Ok(())
     }
