@@ -631,6 +631,7 @@ fn do_solve_with_cpu_builder_with_partitions(
     let load_partitions_bits = std::cmp::min(partitions_bits + 2, input_len - 10);
     let words_per_elem = (output_len + 31) >> 5;
     let stop_mask = 1u64 << input_len;
+    println!("Load partition bits: {}", load_partitions_bits);
     let mut builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(2048)));
     builder.transform_helpers();
     builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
@@ -646,7 +647,9 @@ fn do_solve_with_cpu_builder_with_partitions(
                 &(0..input_len - load_partitions_bits).collect::<Vec<usize>>(),
             ))
             .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
-            .aggr_output_len(Some(words_per_elem * (1 << input_len)))
+            .aggr_output_len(Some(
+                words_per_elem * (1 << (input_len - load_partitions_bits)),
+            ))
             .dont_clear_outputs(true),
     );
     let mut execs = builder.build().unwrap();
@@ -660,24 +663,39 @@ fn do_solve_with_cpu_builder_with_partitions(
             &input,
             false,
             |res, _, output, arg| {
-                // output can be safely cast to u64 slice because correct
-                // conversion has been done in aggregated output code.
-                let output = unsafe {
-                    &*std::ptr::slice_from_raw_parts(
-                        output.as_ptr().cast::<u64>(),
-                        output.len() >> 1,
-                    )
-                };
-                println!("Calculated {} / {}", arg, 1 << load_partitions_bits);
-                let chunk = MemImage::from_slice(
-                    input_len,
-                    arg << (input_len - load_partitions_bits),
-                    &output,
-                );
-                println!("Saving chunk {} / {}", arg, 1 << load_partitions_bits);
-                file_image.save_chunk(&chunk).unwrap();
-                // return true if any state is stopped
-                res | output.into_iter().any(|x| (*x & stop_mask) != 0)
+                if words_per_elem == 2 {
+                    // output can be safely cast to u64 slice because correct
+                    // conversion has been done in aggregated output code.
+                    let output = unsafe {
+                        &*std::ptr::slice_from_raw_parts(
+                            output.as_ptr().cast::<u64>(),
+                            output.len() >> 1,
+                        )
+                    };
+                    println!("Len output: {}", output.len());
+                    println!("Calculated {} / {}", arg, 1 << load_partitions_bits);
+                    let chunk = MemImage::from_slice(
+                        input_len,
+                        arg << (input_len - load_partitions_bits),
+                        &output,
+                    );
+                    println!("Saving chunk {} / {}", arg, 1 << load_partitions_bits);
+                    file_image.save_chunk(&chunk).unwrap();
+                    // return true if any state is stopped
+                    res | output.into_iter().any(|x| (*x & stop_mask) != 0)
+                } else {
+                    println!("Len output: {}", output.len());
+                    println!("Calculated {} / {}", arg, 1 << load_partitions_bits);
+                    let chunk = MemImage::from_slice(
+                        input_len,
+                        arg << (input_len - load_partitions_bits),
+                        &output,
+                    );
+                    println!("Saving chunk {} / {}", arg, 1 << load_partitions_bits);
+                    file_image.save_chunk(&chunk).unwrap();
+                    // return true if any state is stopped
+                    res | output.into_iter().any(|x| (*x & (stop_mask as u32)) != 0)
+                }
             },
             |_| false,
         )
