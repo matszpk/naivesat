@@ -380,6 +380,32 @@ impl MemImage {
             }
         }
     }
+
+    fn find_solution(&self, unknowns: usize) -> Option<Solution> {
+        assert!(unknowns <= self.state_len);
+        let before_unknowns_mask = (1u64 << (self.state_len - unknowns)) - 1;
+        let unknowns_step = before_unknowns_mask + 1;
+        let unknown_state_start = if (self.start & before_unknowns_mask) != 0 {
+            // add one unknowns step if start is not zero in before unknown bits
+            (self.start & !before_unknowns_mask) + unknowns_step
+        } else {
+            self.start & !before_unknowns_mask
+        };
+        let end = self.start + (self.len as u64);
+        let mut unknown_state = unknown_state_start;
+        let state_mask = self.mask >> 1;
+        while unknown_state < end {
+            let value = self.get((unknown_state - self.start) as usize);
+            if (value >> self.state_len) != 0 {
+                return Some(Solution {
+                    start: unknown_state,
+                    end: value & state_mask,
+                });
+            }
+            unknown_state += unknowns_step;
+        }
+        None
+    }
 }
 
 const FILE_BUFFER_LEN: usize = 1024 * 64;
