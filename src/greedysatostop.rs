@@ -709,6 +709,73 @@ mod tests {
     }
 
     #[test]
+    fn test_mem_image_find_solution() {
+        for (i, (state_len, start, len, unknowns, pos_sol, next, exp_sol)) in [
+            (24, 3 << 20, 1 << 20, 11, 63491, 58586, None),
+            (
+                24,
+                3 << 20,
+                1 << 20,
+                11,
+                79 * 8192,
+                58591,
+                Some(Solution {
+                    start: (3 << 20) + 79 * 8192,
+                    end: 58591,
+                }),
+            ),
+            (
+                24,
+                11 << 20,
+                1 << 20,
+                22,
+                45821 << 2,
+                679116,
+                Some(Solution {
+                    start: (11 << 20) + (45821 << 2),
+                    end: 679116,
+                }),
+            ),
+            (24, 11 << 20, 1 << 20, 2, 0, 1133454, None),
+            (24, 12 << 20, 1 << 20, 2, 1, 1233454, None),
+            (
+                24,
+                12 << 20,
+                1 << 20,
+                2,
+                0,
+                1133454,
+                Some(Solution {
+                    start: 12 << 20,
+                    end: 1133454,
+                }),
+            ),
+            (24, 12 << 20, 1 << 20, 1, 0, 1133454, None),
+            (24, 4 << 20, 1 << 20, 1, 0, 1133454, None),
+            (24, 8 << 20, 1 << 20, 1, 1, 1133454, None),
+            (
+                24,
+                8 << 20,
+                1 << 20,
+                1,
+                0,
+                9955001,
+                Some(Solution {
+                    start: 8 << 20,
+                    end: 9955001,
+                }),
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut mi = MemImage::new(state_len, start, len);
+            mi.set(pos_sol, (1 << state_len) | (next & ((1 << state_len) - 1)));
+            assert_eq!(exp_sol, mi.find_solution(unknowns), "{}", i);
+        }
+    }
+
+    #[test]
     fn test_file_image() {
         for (k, (state_len, mult, add, partitions, changer)) in
             [(26, 4849217, 3455641, 16, 9450290114)]
