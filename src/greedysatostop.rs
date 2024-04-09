@@ -631,10 +631,10 @@ mod tests {
             for i in 0..len {
                 mi.set(i, (i * mult + add) as u64);
                 // get bit by bit from mem image slice.
-                let res = (0..state_len + 1).fold(0, |a, x| {
-                    let idx = (((state_len + 1) * i) + x) >> 6;
-                    let bit = (((state_len + 1) * i) + x) & 63;
-                    a | (((mi.slice()[idx] >> bit) & 1) << x)
+                let res = (0..state_len + 1).fold(0, |a, dest_bit| {
+                    let idx = (((state_len + 1) * i) + dest_bit) >> 6;
+                    let bit = (((state_len + 1) * i) + dest_bit) & 63;
+                    a | (((mi.slice()[idx] >> bit) & 1) << dest_bit)
                 });
                 assert_eq!(((i * mult + add) as u64) & mask, res, "{} {}", k, i);
             }
