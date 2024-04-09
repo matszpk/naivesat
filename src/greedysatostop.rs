@@ -89,10 +89,11 @@ struct AtomicU64Array<'a> {
 
 impl From<Vec<u32>> for AtomicU64Array<'_> {
     fn from(mut t: Vec<u32>) -> Self {
+        assert_eq!(t.len() & 1, 0);
         let atomic = unsafe {
             &*std::ptr::slice_from_raw_parts(
                 t.as_mut_slice().as_mut_ptr().cast::<AtomicU64>(),
-                t.len(),
+                t.len() >> 1,
             )
         };
         Self {
@@ -115,7 +116,7 @@ impl<'a> AtomicU64Array<'a> {
 
     #[inline]
     fn len(&self) -> usize {
-        self.original.len()
+        self.original.len() >> 1
     }
 }
 
