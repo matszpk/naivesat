@@ -629,6 +629,7 @@ mod tests {
             let mask = (1 << (state_len + 1)) - 1;
             for i in 0..len {
                 mi.set(i, (i * mult + add) as u64);
+                // get bit by bit from mem image slice.
                 let res = (0..state_len + 1).fold(0, |a, x| {
                     let idx = (((state_len + 1) * i) + x) >> 6;
                     let bit = (((state_len + 1) * i) + x) & 63;
@@ -636,6 +637,7 @@ mod tests {
                 });
                 assert_eq!(((i * mult + add) as u64) & mask, res, "{} {}", k, i);
             }
+            // compare from get
             for i in 0..len {
                 assert_eq!(((i * mult + add) as u64) & mask, mi.get(i), "{} {}", k, i);
             }
