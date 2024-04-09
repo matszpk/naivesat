@@ -615,6 +615,7 @@ mod tests {
         .enumerate()
         {
             let mut mi = MemImage::new(state_len, 0, len);
+            // initialize mem image by messy content
             for (i, v) in mi.slice_mut().iter_mut().enumerate() {
                 *v = ((i as u64)
                     .overflowing_mul(5884491582115956921)
@@ -625,8 +626,12 @@ mod tests {
             assert_eq!(mi.slice().len(), (state_len + 1) * (len >> 6));
             assert_eq!(mi.mask, (1 << (state_len + 1)) - 1);
             let mask = (1 << (state_len + 1)) - 1;
+            // filling
             for i in 0..len {
                 mi.set(i, (i * mult + add) as u64);
+            }
+            // checking internal content
+            for i in 0..len {
                 // get bit by bit from mem image slice.
                 let res = (0..state_len + 1).fold(0, |a, dest_bit| {
                     let idx = (((state_len + 1) * i) + dest_bit) >> 6;
