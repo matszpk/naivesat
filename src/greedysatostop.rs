@@ -705,7 +705,7 @@ fn do_solve_with_cpu_builder_with_partitions(
     if have_stop {
         let mut part_dest = MemImage::new(input_len, 0, 1 << (input_len - partitions_bits));
         let mut part_second = MemImage::new(input_len, 0, 1 << (input_len - partitions_bits));
-        for stage in 0..input_len {
+        'a: for stage in 0..input_len {
             println!("Stage {} / {}", stage, input_len);
             for i in 0..partitions {
                 println!("Load partition {} / {}", i, partitions);
@@ -723,7 +723,7 @@ fn do_solve_with_cpu_builder_with_partitions(
                 println!("Find solution {} / {}", i, partitions);
                 if let Some(sol) = part_dest.find_solution(cmd_args.unknowns) {
                     final_result = FinalResult::Solution(sol);
-                    break;
+                    break 'a;
                 }
                 println!("Save partition {} / {}", i, partitions);
                 file_image.save_partition(i, &part_dest).unwrap();
