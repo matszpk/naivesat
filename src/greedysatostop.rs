@@ -692,6 +692,7 @@ mod tests {
             for part in (0..partitions).rev() {
                 let mut part_chunk = MemImage::new(state_len, 0, chunk_len);
                 fi.load_partition(part, &mut part_chunk).unwrap();
+                assert_eq!((chunk_len as u64) * (part as u64), part_chunk.start);
                 // check partition
                 for ci in 0..chunk_len {
                     let i = chunk_len * part + ci;
@@ -725,6 +726,7 @@ mod tests {
             for part in (0..partitions).rev() {
                 let mut part_chunk = MemImage::new(state_len, 0, chunk_len);
                 fi.load_partition(part, &mut part_chunk).unwrap();
+                assert_eq!((chunk_len as u64) * (part as u64), part_chunk.start);
                 // check partition
                 for ci in 0..chunk_len {
                     let i = chunk_len * part + ci;
