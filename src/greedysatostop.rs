@@ -722,7 +722,8 @@ fn do_solve_with_cpu_builder_with_partitions(
                 }
                 println!("Find solution {} / {}", i, partitions);
                 if let Some(sol) = part_dest.find_solution(cmd_args.unknowns) {
-                    final_result = FinalResult::Solution(sol)
+                    final_result = FinalResult::Solution(sol);
+                    break;
                 }
                 println!("Save partition {} / {}", i, partitions);
                 file_image.save_partition(i, &part_dest).unwrap();
