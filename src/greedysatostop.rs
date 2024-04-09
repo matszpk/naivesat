@@ -731,7 +731,6 @@ fn do_solve_with_cpu_builder_with_partitions(
                             output.len() >> 1,
                         )
                     };
-                    println!("Len output: {}", output.len());
                     println!("Calculated {} / {}", arg, 1 << load_partitions_bits);
                     let chunk = MemImage::from_slice(
                         input_len,
@@ -743,7 +742,6 @@ fn do_solve_with_cpu_builder_with_partitions(
                     // return true if any state is stopped
                     res | output.into_iter().any(|x| (*x & stop_mask) != 0)
                 } else {
-                    println!("Len output: {}", output.len());
                     println!("Calculated {} / {}", arg, 1 << load_partitions_bits);
                     let chunk = MemImage::from_slice(
                         input_len,
