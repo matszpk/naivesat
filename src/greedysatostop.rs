@@ -1,5 +1,6 @@
 use gatenative::cpu_build_exec::*;
 //use gatenative::opencl_build_exec::*;
+use gatenative::mapper::*;
 use gatenative::*;
 use gatesim::*;
 
@@ -408,6 +409,12 @@ impl MemImage {
         }
         None
     }
+
+    fn copy_from(&mut self, src: &MemImage) {
+        assert_eq!(self.state_len, src.state_len);
+        self.start = src.start;
+        self.data.copy_from_slice(&src.data);
+    }
 }
 
 const FILE_BUFFER_LEN: usize = 1024 * 64;
@@ -612,13 +619,112 @@ fn do_solve_with_cpu_builder_with_partitions(
     circuit: Circuit<usize>,
     cmd_args: &CommandArgs,
 ) -> FinalResult {
-    FinalResult::NoSolution
+    let input_len = circuit.input_len();
+    let output_len = input_len + 1;
+    let partitions: usize = if let Some(partitions) = cmd_args.partitions {
+        assert!(partitions < 2, "Too small number of partitions");
+        assert_eq!(partitions.count_ones(), 1);
+        partitions
+    } else {
+        panic!("No partition specified");
+    };
+    let partitions_bits = (usize::BITS - partitions.leading_zeros() - 1) as usize;
+    let load_partitions_bits = std::cmp::max(partitions_bits - 1, input_len - 10);
+    let words_per_elem = (output_len + 31) >> 5;
+    let stop_mask = 1u64 << input_len;
+    let mut builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(2048)));
+    builder.transform_helpers();
+    builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
+    builder.user_defs(&gen_output_transform_code(output_len));
+    builder.add_with_config(
+        "formula",
+        circuit,
+        CodeConfig::new()
+            .arg_inputs(Some(
+                &(input_len - load_partitions_bits..input_len).collect::<Vec<usize>>(),
+            ))
+            .elem_inputs(Some(
+                &(0..input_len - load_partitions_bits).collect::<Vec<usize>>(),
+            ))
+            .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+            .aggr_output_len(Some(words_per_elem * (1 << input_len)))
+            .dont_clear_outputs(true),
+    );
+    let mut execs = builder.build().unwrap();
+    let start = SystemTime::now();
+    let input = execs[0].new_data(16);
+
+    let mut file_image = FileImage::new(input_len, partitions, "").unwrap();
+    println!("Calculate first nexts");
+    let have_stop = execs[0]
+        .execute_direct(
+            &input,
+            false,
+            |res, _, output, arg| {
+                // output can be safely cast to u64 slice because correct
+                // conversion has been done in aggregated output code.
+                let output = unsafe {
+                    &*std::ptr::slice_from_raw_parts(
+                        output.as_ptr().cast::<u64>(),
+                        output.len() >> 1,
+                    )
+                };
+                println!("Calculated {} / {}", arg, 1 << load_partitions_bits);
+                let chunk = MemImage::from_slice(
+                    input_len,
+                    arg << (input_len - load_partitions_bits),
+                    &output,
+                );
+                println!("Saving chunk {} / {}", arg, 1 << load_partitions_bits);
+                file_image.save_chunk(&chunk).unwrap();
+                // return true if any state is stopped
+                res | output.into_iter().any(|x| (*x & stop_mask) != 0)
+            },
+            |_| false,
+        )
+        .unwrap();
+
+    let mut final_result = FinalResult::NoSolution;
+    if have_stop {
+        let mut part_dest = MemImage::new(input_len, 0, 1 << (input_len - partitions_bits));
+        let mut part_second = MemImage::new(input_len, 0, 1 << (input_len - partitions_bits));
+        for stage in 0..input_len {
+            println!("Stage {} / {}", stage, input_len);
+            for i in 0..partitions {
+                println!("Load partition {} / {}", i, partitions);
+                file_image.load_partition(i, &mut part_dest).unwrap();
+                for j in 0..partitions {
+                    println!("Load second partition {} / {}", j, partitions);
+                    if i != j {
+                        file_image.load_partition(j, &mut part_second).unwrap();
+                    } else {
+                        part_second.copy_from(&part_dest);
+                    }
+                    println!("Join nexts {} / {} / {}", i, j, partitions);
+                    part_dest.join_nexts(&part_second);
+                }
+                println!("Find solution {} / {}", i, partitions);
+                if let Some(sol) = part_dest.find_solution(cmd_args.unknowns) {
+                    final_result = FinalResult::Solution(sol)
+                }
+                println!("Save partition {} / {}", i, partitions);
+                file_image.save_partition(i, &part_dest).unwrap();
+            }
+        }
+    }
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    final_result
 }
 
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
     assert!(input_len < 64);
-    let result = do_solve_with_cpu_builder(circuit.clone(), &cmd_args);
+    let result = if cmd_args.partitions.is_some() {
+        do_solve_with_cpu_builder_with_partitions(circuit.clone(), &cmd_args)
+    } else {
+        do_solve_with_cpu_builder(circuit.clone(), &cmd_args)
+    };
     if let FinalResult::Solution(sol) = result {
         println!("Solution: {:?}", sol);
         if cmd_args.verify {
