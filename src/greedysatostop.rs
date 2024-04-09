@@ -368,10 +368,11 @@ impl MemImage {
     fn join_nexts(&mut self, second: &MemImage) {
         assert_eq!(self.state_len, second.state_len);
         let state_mask = self.mask >> 1;
+        let stop_mask = 1u64 << self.state_len;
         for i in 0..self.len {
             let old_value = self.get(i);
             let old_next = old_value & state_mask;
-            if (old_value >> self.state_len) == 0
+            if (old_value & stop_mask) == 0
                 && second.start <= old_next
                 && old_next < second.start + (second.len as u64)
             {
@@ -394,9 +395,10 @@ impl MemImage {
         let end = self.start + (self.len as u64);
         let mut unknown_state = unknown_state_start;
         let state_mask = self.mask >> 1;
+        let stop_mask = 1u64 << self.state_len;
         while unknown_state < end {
             let value = self.get((unknown_state - self.start) as usize);
-            if (value >> self.state_len) != 0 {
+            if (value & stop_mask) != 0 {
                 return Some(Solution {
                     start: unknown_state,
                     end: value & state_mask,
