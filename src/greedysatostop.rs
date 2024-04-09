@@ -602,14 +602,37 @@ mod tests {
 
     #[test]
     fn test_mem_image() {
-        let mut mi = MemImage::new(10, 0, 128);
-        assert_eq!(mi.slice().len(), (10 + 1) * (128 >> 6));
-        assert_eq!(mi.mask, (1 << 11) - 1);
-        for i in 0..128 {
-            mi.set(i, (i * 3 + 15) as u64);
-        }
-        for i in 0..128 {
-            assert_eq!((i * 3 + 15) as u64, mi.get(i), "{}", i);
+        for (k, (bits, mult, add, len)) in [
+            (10, 3, 25, 256),
+            (16, 67, 441, 1024),
+            (19, 49414, 9481778, 64 * 80),
+            (31, 96069201, 9669093056, 64 * 222),
+            (32, 139696069201, 9669093056, 64 * 222),
+            (40, 166139696069201, 966771239093056, 64 * 320),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut mi = MemImage::new(bits, 0, len);
+            for i in 0..len {
+                mi.set(
+                    i,
+                    ((i as u64)
+                        .overflowing_mul(5858211595692021)
+                        .0
+                        .overflowing_add(5560939029013481)
+                        .0),
+                );
+            }
+            assert_eq!(mi.slice().len(), (bits + 1) * (len >> 6));
+            assert_eq!(mi.mask, (1 << (bits + 1)) - 1);
+            for i in 0..len {
+                mi.set(i, (i * mult + add) as u64);
+            }
+            let mask = (1 << (bits + 1)) - 1;
+            for i in 0..len {
+                assert_eq!(((i * mult + add) as u64) & mask, mi.get(i), "{} {}", k, i);
+            }
         }
     }
 }
