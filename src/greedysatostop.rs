@@ -31,6 +31,8 @@ struct CommandArgs {
     unknowns: usize,
     #[arg(short = 'p', long)]
     partitions: Option<usize>,
+    #[arg(short = 'x', long)]
+    file_image_prefix: Option<String>,
     #[arg(short = 'v', long)]
     verify: bool,
 }
@@ -715,7 +717,16 @@ fn do_solve_with_cpu_builder_with_partitions(
     let start = SystemTime::now();
     let input = execs[0].new_data(16);
 
-    let mut file_image = FileImage::new(input_len, partitions, "").unwrap();
+    let mut file_image = FileImage::new(
+        input_len,
+        partitions,
+        cmd_args
+            .file_image_prefix
+            .as_ref()
+            .map(|x| x.as_str())
+            .unwrap_or(""),
+    )
+    .unwrap();
     println!("Calculate first nexts");
     let have_stop = execs[0]
         .execute_direct(
