@@ -602,7 +602,7 @@ mod tests {
 
     #[test]
     fn test_mem_image() {
-        for (k, (bits, mult, add, len)) in [
+        for (k, (state_len, mult, add, len)) in [
             (10, 3, 25, 256),
             (16, 67, 441, 1024),
             (19, 49414, 9481778, 64 * 80),
@@ -613,7 +613,7 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let mut mi = MemImage::new(bits, 0, len);
+            let mut mi = MemImage::new(state_len, 0, len);
             for i in 0..len {
                 mi.set(
                     i,
@@ -624,12 +624,18 @@ mod tests {
                         .0),
                 );
             }
-            assert_eq!(mi.slice().len(), (bits + 1) * (len >> 6));
-            assert_eq!(mi.mask, (1 << (bits + 1)) - 1);
+            assert_eq!(mi.slice().len(), (state_len + 1) * (len >> 6));
+            assert_eq!(mi.mask, (1 << (state_len + 1)) - 1);
+            let mask = (1 << (state_len + 1)) - 1;
             for i in 0..len {
                 mi.set(i, (i * mult + add) as u64);
+                let res = (0..state_len + 1).fold(0, |a, x| {
+                    let idx = (((state_len + 1) * i) + x) >> 6;
+                    let bit = (((state_len + 1) * i) + x) & 63;
+                    a | (((mi.slice()[idx] >> bit) & 1) << x)
+                });
+                assert_eq!(((i * mult + add) as u64) & mask, res, "{} {}", k, i);
             }
-            let mask = (1 << (bits + 1)) - 1;
             for i in 0..len {
                 assert_eq!(((i * mult + add) as u64) & mask, mi.get(i), "{} {}", k, i);
             }
