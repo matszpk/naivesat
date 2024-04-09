@@ -412,6 +412,7 @@ impl MemImage {
 
     fn copy_from(&mut self, src: &MemImage) {
         assert_eq!(self.state_len, src.state_len);
+        assert_eq!(self.len, src.len);
         self.start = src.start;
         self.data.copy_from_slice(&src.data);
     }
