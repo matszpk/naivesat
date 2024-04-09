@@ -414,7 +414,7 @@ impl FileImage {
                 .unwrap()
                 .as_nanos()
         );
-        let mut file = File::create(&path)?;
+        let file = File::create(&path)?;
         Ok(Self {
             state_len,
             partitions,
