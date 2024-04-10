@@ -8,10 +8,11 @@ use clap::Parser;
 use opencl3::command_queue::CommandQueue;
 use opencl3::context::Context;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
+use opencl3::error_codes::ClError;
 use opencl3::kernel::{ExecuteKernel, Kernel};
-// use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
-// use opencl3::program::Program;
-// use opencl3::types::{cl_ulong, CL_BLOCKING};
+use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
+use opencl3::program::Program;
+use opencl3::types::{cl_ulong, CL_BLOCKING};
 
 use rayon::prelude::*;
 
@@ -853,7 +854,182 @@ kernel void join_nexts(global uint* nexts) {
         atomic_xchg(nexts + idx, atomic_or(nexts + old_next));
     }
 }
+
+kernel void check_stop(const global uint* nexts, global uint* stop) {
+    const size_t idx = get_global_id(0);
+    const size_t lidx = get_local_id(0);
+    if (idx >= (1UL << STATE_LEN)) return;
+    local uint local_stop;
+    if (lidx == 0)
+        local_stop = 0;
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if (nexts[idx] & (1U << STATE_LEN)) != 0)
+        atomic_or(&local_stop, 1);
+    barrier(CLK_LOCAL_MEM_FENCE);
+    if (lidx == 0)
+        atomic_or(stop, local_stop);
+}
+
+kernel void find_solution(const global uint* nexts, global uint* sol) {
+    const size_t idx = get_global_id(0);
+    if (idx >= (1UL << STATE_LEN)) return;
+    if ((idx & ((1U << (STATE_LEN - UNKNONWS)) - 1)) == 0) {
+        const uint value = nexts[idx];
+        if (value & (1U << STATE_LEN)) != 0) {
+            if (atomic_or(sol, 1) == 0) {
+                sol[1] = idx & ((1U << STATE_LEN) - 1);
+                sol[2] = value & ((1U << STATE_LEN) - 1);
+            }
+        }
+    }
+}
 "##;
+
+struct OpenCLKernels {
+    state_len: usize,
+    context: Arc<Context>,
+    cmd_queue: Arc<CommandQueue>,
+    stop_buffer: Buffer<u32>,
+    sol_buffer: Buffer<u32>,
+    group_len: usize,
+    join_nexts_kernel: Kernel,
+    check_stop_kernel: Kernel,
+    find_solution_kernel: Kernel,
+}
+
+#[derive(Debug)]
+enum ClGeneralError {
+    Error(ClError),
+    BuildError(String),
+}
+
+impl std::fmt::Display for ClGeneralError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            ClGeneralError::Error(e) => write!(f, "ClError: {}", e),
+            ClGeneralError::BuildError(e) => write!(f, "ClBuildError: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for ClGeneralError {}
+
+impl From<ClError> for ClGeneralError {
+    fn from(t: ClError) -> Self {
+        ClGeneralError::Error(t)
+    }
+}
+
+impl From<String> for ClGeneralError {
+    fn from(t: String) -> Self {
+        ClGeneralError::BuildError(t)
+    }
+}
+
+impl OpenCLKernels {
+    fn new(
+        state_len: usize,
+        unknowns: usize,
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+    ) -> Result<Self, ClGeneralError> {
+        let device = Device::new(context.devices()[0]);
+        let group_len = usize::try_from(device.max_work_group_size()?).unwrap();
+        let defs = format!("-DSTATE_LEN=({}) -DUNKNOWNS=({})", state_len, unknowns);
+        let program = Program::create_and_build_from_source(&context, KERNELS_OPENCL_CODE, &defs)?;
+        let mut stop_buffer =
+            unsafe { Buffer::create(&context, CL_MEM_READ_WRITE, 1, std::ptr::null_mut())? };
+        let mut sol_buffer =
+            unsafe { Buffer::create(&context, CL_MEM_READ_WRITE, 3, std::ptr::null_mut())? };
+        unsafe {
+            cmd_queue.enqueue_write_buffer(&mut stop_buffer, CL_BLOCKING, 0, &[0u32], &[])?;
+            cmd_queue.enqueue_write_buffer(
+                &mut sol_buffer,
+                CL_BLOCKING,
+                0,
+                &[0u32, 0u32, 0u32],
+                &[],
+            )?;
+        }
+        cmd_queue.finish()?;
+        Ok(OpenCLKernels {
+            state_len,
+            context,
+            cmd_queue,
+            stop_buffer,
+            sol_buffer,
+            group_len,
+            join_nexts_kernel: Kernel::create(&program, "join_nexts")?,
+            check_stop_kernel: Kernel::create(&program, "check_stop")?,
+            find_solution_kernel: Kernel::create(&program, "find_solution")?,
+        })
+    }
+
+    fn join_nexts(&mut self, nexts_buffer: &mut Buffer<u32>) -> Result<(), ClError> {
+        unsafe {
+            ExecuteKernel::new(&self.join_nexts_kernel)
+                .set_arg(nexts_buffer)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    (((1usize << self.state_len) + self.group_len - 1) / self.group_len)
+                        * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)?;
+            self.cmd_queue.finish()?;
+        }
+        Ok(())
+    }
+
+    fn check_stop(&mut self, nexts_buffer: &Buffer<u32>) -> Result<bool, ClError> {
+        let mut stop = [0];
+        unsafe {
+            ExecuteKernel::new(&self.check_stop_kernel)
+                .set_arg(nexts_buffer)
+                .set_arg(&self.stop_buffer)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    (((1usize << self.state_len) + self.group_len - 1) / self.group_len)
+                        * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)?;
+            self.cmd_queue.finish()?;
+            self.cmd_queue.enqueue_read_buffer(
+                &self.stop_buffer,
+                CL_BLOCKING,
+                0,
+                &mut stop,
+                &[],
+            )?;
+        }
+        Ok(stop[0] != 0)
+    }
+
+    fn find_solution(&mut self, nexts_buffer: &Buffer<u32>) -> Result<Option<Solution>, ClError> {
+        let mut sol = [0, 0, 0];
+        unsafe {
+            ExecuteKernel::new(&self.find_solution_kernel)
+                .set_arg(nexts_buffer)
+                .set_arg(&self.sol_buffer)
+                .set_local_work_size(self.group_len)
+                .set_global_work_size(
+                    (((1usize << self.state_len) + self.group_len - 1) / self.group_len)
+                        * self.group_len,
+                )
+                .enqueue_nd_range(&self.cmd_queue)?;
+            self.cmd_queue.finish()?;
+            self.cmd_queue
+                .enqueue_read_buffer(&self.sol_buffer, CL_BLOCKING, 0, &mut sol, &[])?;
+            Ok(if sol[0] != 0 {
+                Some(Solution {
+                    start: sol[1] as u64,
+                    end: sol[2] as u64,
+                })
+            } else {
+                None
+            })
+        }
+    }
+}
 
 fn do_solve_with_opencl_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) -> FinalResult {
     let input_len = circuit.input_len();
