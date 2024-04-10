@@ -829,10 +829,10 @@ fn do_solve_with_cpu_builder_with_partitions(
 
 const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
 #if OUTPUT_NUM <= 32
-    uint* output_u = ((uint*)output) + idx * TYPE_LEN;
+    global uint* output_u = ((global uint*)output) + idx * TYPE_LEN;
     OUTPUT_TRANSFORM_FIRST_32(output_u);
 #else
-    ulong* output_u = ((ulong*)output) + idx * TYPE_LEN;
+    global ulong* output_u = ((global ulong*)output) + idx * TYPE_LEN;
     uint i;
     uint temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
     OUTPUT_TRANSFORM_FIRST_32(temp);
@@ -851,7 +851,7 @@ kernel void join_nexts(global uint* nexts) {
     const uint old_next = old_value & ((1U << STATE_LEN) - 1);
     mem_fence(CLK_GLOBAL_MEM_FENCE);
     if ((old_value & (1U << STATE_LEN)) == 0)
-        atomic_xchg(nexts + idx, atomic_or(nexts + old_next));
+        atomic_xchg(nexts + idx, atomic_or(nexts + old_next, 0));
 }
 
 kernel void check_stop(const global uint* nexts, global uint* stop) {
@@ -862,7 +862,7 @@ kernel void check_stop(const global uint* nexts, global uint* stop) {
     if (lidx == 0)
         local_stop = 0;
     barrier(CLK_LOCAL_MEM_FENCE);
-    if (nexts[idx] & (1U << STATE_LEN)) != 0)
+    if ((nexts[idx] & (1U << STATE_LEN)) != 0)
         atomic_or(&local_stop, 1);
     barrier(CLK_LOCAL_MEM_FENCE);
     if (lidx == 0)
@@ -872,9 +872,9 @@ kernel void check_stop(const global uint* nexts, global uint* stop) {
 kernel void find_solution(const global uint* nexts, global uint* sol) {
     const size_t idx = get_global_id(0);
     if (idx >= (1UL << STATE_LEN)) return;
-    if ((idx & ((1U << (STATE_LEN - UNKNONWS)) - 1)) == 0) {
+    if ((idx & ((1U << (STATE_LEN - UNKNOWNS)) - 1)) == 0) {
         const uint value = nexts[idx];
-        if (value & (1U << STATE_LEN)) != 0) {
+        if ((value & (1U << STATE_LEN)) != 0) {
             if (atomic_or(sol, 1) == 0) {
                 sol[1] = idx & ((1U << STATE_LEN) - 1);
                 sol[2] = value & ((1U << STATE_LEN) - 1);
