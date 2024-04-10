@@ -17,6 +17,9 @@ use std::time::SystemTime;
 //       for OpenCL: use work group to reduce to some level.
 //                   and use extra kernel to reduce more and reduce at CPU.
 //                   or (alternatively) use reduction at CPU.
+//         or just make all reduction for execution in OpenCL kernel:
+//           by multi level global reduction: global1, global2, ... final by adding
+//           additional bit: filled entry.
 // level 2: reduce in argument bits:
 //       write special object that reduces and remove reduced data and handle
 //       final reduction.
