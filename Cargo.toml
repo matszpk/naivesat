@@ -8,6 +8,10 @@ name = "naivesat"
 path = "src/main.rs"
 
 [[bin]]
+name = "naiveqsat"
+path = "src/qsat.rs"
+
+[[bin]]
 name = "naivesatostop"
 path = "src/satostop.rs"
 
