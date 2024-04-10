@@ -12,7 +12,7 @@ use opencl3::error_codes::ClError;
 use opencl3::kernel::{ExecuteKernel, Kernel};
 use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
 use opencl3::program::Program;
-use opencl3::types::{cl_ulong, CL_BLOCKING};
+use opencl3::types::CL_BLOCKING;
 
 use rayon::prelude::*;
 
@@ -850,9 +850,8 @@ kernel void join_nexts(global uint* nexts) {
     const uint old_value = atomic_or(nexts + idx, 0);
     const uint old_next = old_value & ((1U << STATE_LEN) - 1);
     mem_fence(CLK_GLOBAL_MEM_FENCE);
-    if ((old_value & (1U << STATE_LEN)) == 0) {
+    if ((old_value & (1U << STATE_LEN)) == 0)
         atomic_xchg(nexts + idx, atomic_or(nexts + old_next));
-    }
 }
 
 kernel void check_stop(const global uint* nexts, global uint* stop) {
@@ -887,7 +886,6 @@ kernel void find_solution(const global uint* nexts, global uint* sol) {
 
 struct OpenCLKernels {
     state_len: usize,
-    context: Arc<Context>,
     cmd_queue: Arc<CommandQueue>,
     stop_buffer: Buffer<u32>,
     sol_buffer: Buffer<u32>,
@@ -954,7 +952,6 @@ impl OpenCLKernels {
         cmd_queue.finish()?;
         Ok(OpenCLKernels {
             state_len,
-            context,
             cmd_queue,
             stop_buffer,
             sol_buffer,
@@ -1035,58 +1032,53 @@ fn do_solve_with_opencl_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs)
     let input_len = circuit.input_len();
     let output_len = input_len + 1;
     let words_per_elem = (output_len + 31) >> 5;
-    let (output, start) = {
-        let device = Device::new(
-            *get_all_devices(CL_DEVICE_TYPE_GPU)
-                .unwrap()
-                .get(cmd_args.opencl.unwrap())
-                .unwrap(),
-        );
-        let mut builder = OpenCLBuilder::new(&device, None);
-        builder.transform_helpers();
-        builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
-        builder.user_defs(&gen_output_transform_code(output_len));
-        builder.add_with_config(
-            "formula",
-            circuit,
-            CodeConfig::new()
-                .elem_inputs(Some(&(0..input_len).collect::<Vec<usize>>()))
-                .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-                .aggr_output_len(Some(words_per_elem * (1 << input_len)))
-                .dont_clear_outputs(true),
-        );
-        let mut execs = builder.build().unwrap();
-        let start = SystemTime::now();
-        let input = execs[0].new_data(16);
-        println!("Calculate first nexts");
-        (execs[0].execute(&input, 0).unwrap().release(), start)
-    };
+    let device = Device::new(
+        *get_all_devices(CL_DEVICE_TYPE_GPU)
+            .unwrap()
+            .get(cmd_args.opencl.unwrap())
+            .unwrap(),
+    );
+    let mut builder = OpenCLBuilder::new(&device, None);
+    builder.transform_helpers();
+    builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
+    builder.user_defs(&gen_output_transform_code(output_len));
+    builder.add_with_config(
+        "formula",
+        circuit,
+        CodeConfig::new()
+            .elem_inputs(Some(&(0..input_len).collect::<Vec<usize>>()))
+            .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+            .aggr_output_len(Some(words_per_elem * (1 << input_len)))
+            .dont_clear_outputs(true),
+    );
+    let mut execs = builder.build().unwrap();
+    let start = SystemTime::now();
+    let input = execs[0].new_data(16);
+    println!("Calculate first nexts");
+    let mut output = execs[0].execute(&input, 0).unwrap();
     let mut final_result = FinalResult::NoSolution;
-    // if input_len < 32 {
-    //     let nexts = Arc::new(AtomicU32Array::from(output));
-    //     if check_stop(input_len, nexts.clone()) {
-    //         for i in 0..input_len {
-    //             println!("Joining nexts: Stage: {} / {}", i, input_len);
-    //             join_nexts(input_len, nexts.clone());
-    //             if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
-    //                 final_result = FinalResult::Solution(sol);
-    //                 break;
-    //             }
-    //         }
-    //     }
-    // } else {
-    //     let nexts = Arc::new(AtomicU64Array::from(output));
-    //     if check_stop_64(input_len, nexts.clone()) {
-    //         for i in 0..input_len {
-    //             println!("Joining nexts: Stage: {} / {}", i, input_len);
-    //             join_nexts_64(input_len, nexts.clone());
-    //             if let Some(sol) = find_solution_64(input_len, cmd_args.unknowns, nexts.clone()) {
-    //                 final_result = FinalResult::Solution(sol);
-    //                 break;
-    //             }
-    //         }
-    //     }
-    // }
+    if input_len < 32 {
+        let nexts_buffer = unsafe { output.buffer_mut() };
+        let mut kernels = OpenCLKernels::new(
+            input_len,
+            cmd_args.unknowns,
+            unsafe { execs[0].context().clone() },
+            unsafe { execs[0].command_queue().clone() },
+        )
+        .unwrap();
+        if kernels.check_stop(nexts_buffer).unwrap() {
+            for i in 0..input_len {
+                println!("Joining nexts: Stage: {} / {}", i, input_len);
+                kernels.join_nexts(nexts_buffer).unwrap();
+                if let Some(sol) = kernels.find_solution(nexts_buffer).unwrap() {
+                    final_result = FinalResult::Solution(sol);
+                    break;
+                }
+            }
+        }
+    } else {
+        panic!("Unsupported!");
+    }
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
     final_result
@@ -1098,7 +1090,7 @@ fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let result = if cmd_args.partitions.is_some() {
         assert!(cmd_args.opencl.is_none());
         do_solve_with_cpu_builder_with_partitions(circuit.clone(), &cmd_args)
-    } else if let Some(opencl) = cmd_args.opencl {
+    } else if cmd_args.opencl.is_some() {
         do_solve_with_opencl_builder(circuit.clone(), &cmd_args)
     } else {
         do_solve_with_cpu_builder(circuit.clone(), &cmd_args)
