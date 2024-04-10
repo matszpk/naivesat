@@ -683,7 +683,11 @@ fn do_solve_with_cpu_builder_with_partitions(
     let output_len = input_len + 1;
     let partitions: usize = if let Some(partitions) = cmd_args.partitions {
         assert!(partitions >= 2, "Too small number of partitions");
-        assert_eq!(partitions.count_ones(), 1);
+        assert_eq!(
+            partitions.count_ones(),
+            1,
+            "Number of partitions must be power of 2"
+        );
         partitions
     } else {
         panic!("No partition specified");
