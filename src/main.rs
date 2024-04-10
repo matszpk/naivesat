@@ -369,9 +369,10 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
 }
 
 fn main() {
-    for x in get_all_devices(CL_DEVICE_TYPE_GPU).unwrap() {
-        println!("OpenCLDevice: {:?}", x);
-    }
+    println!(
+        "OpenCL devices: {:?}",
+        get_all_devices(CL_DEVICE_TYPE_GPU).unwrap_or(vec![])
+    );
     let cmd_args = CommandArgs::parse();
     let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
     let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
