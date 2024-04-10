@@ -1,14 +1,14 @@
 use gatenative::cpu_build_exec::*;
-//use gatenative::opencl_build_exec::*;
 use gatenative::mapper::*;
+use gatenative::opencl_build_exec::*;
 use gatenative::*;
 use gatesim::*;
 
 use clap::Parser;
-// use opencl3::command_queue::CommandQueue;
-// use opencl3::context::Context;
-// use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
-// use opencl3::kernel::{ExecuteKernel, Kernel};
+use opencl3::command_queue::CommandQueue;
+use opencl3::context::Context;
+use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
+use opencl3::kernel::{ExecuteKernel, Kernel};
 // use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
 // use opencl3::program::Program;
 // use opencl3::types::{cl_ulong, CL_BLOCKING};
@@ -29,6 +29,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 struct CommandArgs {
     circuit: String,
     unknowns: usize,
+    #[arg(short = 'C', long)]
+    opencl: Option<usize>,
     #[arg(short = 'p', long)]
     partitions: Option<usize>,
     #[arg(short = 'x', long)]
@@ -822,11 +824,106 @@ fn do_solve_with_cpu_builder_with_partitions(
     final_result
 }
 
+// OpenCL support
+
+const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
+#if OUTPUT_NUM <= 32
+    uint* output_u = ((uint*)output) + idx * TYPE_LEN;
+    OUTPUT_TRANSFORM_FIRST_32(output_u);
+#else
+    ulong* output_u = ((ulong*)output) + idx * TYPE_LEN;
+    uint i;
+    uint temp[((OUTPUT_NUM + 31) >> 5) * TYPE_LEN];
+    OUTPUT_TRANSFORM_FIRST_32(temp);
+    OUTPUT_TRANSFORM_SECOND_32(temp + 32 * (TYPE_LEN >> 5));
+    for (i = 0; i < TYPE_LEN; i++) {
+        output_u[i] = ((ulong)temp[i]) | (((ulong)temp[i + TYPE_LEN]) << 32);
+    }
+#endif
+}"##;
+
+const KERNELS_OPENCL_CODE: &str = r##"
+kernel void join_nexts(global uint* nexts) {
+    const size_t idx = get_global_id(0);
+    if (idx >= (1UL << STATE_LEN)) return;
+    const uint old_value = atomic_or(nexts + idx, 0);
+    const uint old_next = old_value & ((1U << STATE_LEN) - 1);
+    mem_fence(CLK_GLOBAL_MEM_FENCE);
+    if ((old_value & (1U << STATE_LEN)) == 0) {
+        atomic_xchg(nexts + idx, atomic_or(nexts + old_next));
+    }
+}
+"##;
+
+fn do_solve_with_opencl_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) -> FinalResult {
+    let input_len = circuit.input_len();
+    let output_len = input_len + 1;
+    let words_per_elem = (output_len + 31) >> 5;
+    let (output, start) = {
+        let device = Device::new(
+            *get_all_devices(CL_DEVICE_TYPE_GPU)
+                .unwrap()
+                .get(cmd_args.opencl.unwrap())
+                .unwrap(),
+        );
+        let mut builder = OpenCLBuilder::new(&device, None);
+        builder.transform_helpers();
+        builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
+        builder.user_defs(&gen_output_transform_code(output_len));
+        builder.add_with_config(
+            "formula",
+            circuit,
+            CodeConfig::new()
+                .elem_inputs(Some(&(0..input_len).collect::<Vec<usize>>()))
+                .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+                .aggr_output_len(Some(words_per_elem * (1 << input_len)))
+                .dont_clear_outputs(true),
+        );
+        let mut execs = builder.build().unwrap();
+        let start = SystemTime::now();
+        let input = execs[0].new_data(16);
+        println!("Calculate first nexts");
+        (execs[0].execute(&input, 0).unwrap().release(), start)
+    };
+    let mut final_result = FinalResult::NoSolution;
+    // if input_len < 32 {
+    //     let nexts = Arc::new(AtomicU32Array::from(output));
+    //     if check_stop(input_len, nexts.clone()) {
+    //         for i in 0..input_len {
+    //             println!("Joining nexts: Stage: {} / {}", i, input_len);
+    //             join_nexts(input_len, nexts.clone());
+    //             if let Some(sol) = find_solution(input_len, cmd_args.unknowns, nexts.clone()) {
+    //                 final_result = FinalResult::Solution(sol);
+    //                 break;
+    //             }
+    //         }
+    //     }
+    // } else {
+    //     let nexts = Arc::new(AtomicU64Array::from(output));
+    //     if check_stop_64(input_len, nexts.clone()) {
+    //         for i in 0..input_len {
+    //             println!("Joining nexts: Stage: {} / {}", i, input_len);
+    //             join_nexts_64(input_len, nexts.clone());
+    //             if let Some(sol) = find_solution_64(input_len, cmd_args.unknowns, nexts.clone()) {
+    //                 final_result = FinalResult::Solution(sol);
+    //                 break;
+    //             }
+    //         }
+    //     }
+    // }
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    final_result
+}
+
 fn do_solve(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
     assert!(input_len < 64);
     let result = if cmd_args.partitions.is_some() {
+        assert!(cmd_args.opencl.is_none());
         do_solve_with_cpu_builder_with_partitions(circuit.clone(), &cmd_args)
+    } else if let Some(opencl) = cmd_args.opencl {
+        do_solve_with_opencl_builder(circuit.clone(), &cmd_args)
     } else {
         do_solve_with_cpu_builder(circuit.clone(), &cmd_args)
     };
@@ -1073,9 +1170,9 @@ mod tests {
 }
 
 fn main() {
-    // for x in get_all_devices(CL_DEVICE_TYPE_GPU).unwrap() {
-    //     println!("OpenCLDevice: {:?}", x);
-    // }
+    for x in get_all_devices(CL_DEVICE_TYPE_GPU).unwrap() {
+        println!("OpenCLDevice: {:?}", x);
+    }
     let cmd_args = CommandArgs::parse();
     let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
     let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
