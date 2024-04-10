@@ -12,6 +12,16 @@ use std::fs;
 use std::str::FromStr;
 use std::time::SystemTime;
 
+// IDEA HOW TO WRITE REDUCTION:
+// level 1: reduce single execution to one bit of result
+//       for OpenCL: use work group to reduce to some level.
+//                   and use extra kernel to reduce more and reduce at CPU.
+//                   or (alternatively) use reduction at CPU.
+// level 2: reduce in argument bits:
+//       write special object that reduces and remove reduced data and handle
+//       final reduction.
+//
+
 #[derive(Clone, Copy, Debug)]
 enum ExecType {
     CPU,
