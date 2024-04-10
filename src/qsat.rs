@@ -68,6 +68,6 @@ fn main() {
     );
     let cmd_args = CommandArgs::parse();
     let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
-    let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
+    let qcircuit = QuantCircuit::<usize>::from_str(&circuit_str).unwrap();
     // do_command(circuit, cmd_args);
 }
