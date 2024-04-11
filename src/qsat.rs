@@ -109,14 +109,14 @@ impl QuantReducer {
     }
 
     fn push(&mut self, index: u64, item: bool) {
-        assert!(self.is_end());
+        assert!(!self.is_end());
         self.items.push((std::cmp::Reverse(index), item));
         self.flush();
     }
 
     // returns final result is
     fn flush(&mut self) {
-        assert!(self.is_end());
+        assert!(!self.is_end());
         while let Some((index, item)) = self.items.peek().copied() {
             if self.start == index.0 {
                 // if index is match then flush
@@ -129,7 +129,7 @@ impl QuantReducer {
     }
 
     fn apply(&mut self, item: bool) {
-        assert!(self.is_end());
+        assert!(!self.is_end());
         self.started = true;
         let mut index = self.start;
         let quant_pos = 0;
