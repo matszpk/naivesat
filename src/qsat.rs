@@ -251,6 +251,7 @@ mod tests {
         // info: result solution is bit reversed!
         // indexes of items are reversed to original input of circuit!
         for (i, (quants, items, ordering, opt_result, result)) in [
+            // 0
             (
                 str_to_quants("eea"),
                 str_to_bools("00000000"),
@@ -262,6 +263,7 @@ mod tests {
                     solution: None,
                 },
             ),
+            // 1
             (
                 str_to_quants("eea"),
                 str_to_bools("00000100"),
@@ -273,6 +275,7 @@ mod tests {
                     solution: None,
                 },
             ),
+            // 2
             (
                 str_to_quants("eea"),
                 str_to_bools("00001100"),
@@ -284,6 +287,7 @@ mod tests {
                     solution: Some(1),
                 },
             ),
+            // 3
             (
                 str_to_quants("eea"),
                 str_to_bools("00001100"),
@@ -295,6 +299,7 @@ mod tests {
                     solution: Some(1),
                 },
             ),
+            // 4
             (
                 str_to_quants("eea"),
                 str_to_bools("00110011"),
@@ -304,6 +309,140 @@ mod tests {
                     reversed: false,
                     solution_bits: 2,
                     solution: Some(2),
+                },
+            ),
+            // 5
+            (
+                str_to_quants("eea"),
+                str_to_bools("00110011"),
+                vec![0, 1, 5, 3, 4, 2, 6, 7],
+                Some(5),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 2,
+                    solution: Some(2),
+                },
+            ),
+            // changed quantifiers 1
+            // 6
+            (
+                str_to_quants("aae"),
+                str_to_bools("11111111"),
+                (0..8).collect::<Vec<_>>(),
+                None,
+                FinalResult {
+                    reversed: true,
+                    solution_bits: 2,
+                    solution: None,
+                },
+            ),
+            // 7
+            (
+                str_to_quants("aae"),
+                str_to_bools("11111011"),
+                (0..8).collect::<Vec<_>>(),
+                None,
+                FinalResult {
+                    reversed: true,
+                    solution_bits: 2,
+                    solution: None,
+                },
+            ),
+            // 8
+            (
+                str_to_quants("aae"),
+                str_to_bools("11110011"),
+                (0..8).collect::<Vec<_>>(),
+                Some(5),
+                FinalResult {
+                    reversed: true,
+                    solution_bits: 2,
+                    solution: Some(1),
+                },
+            ),
+            // one quantifier
+            // 9
+            (
+                str_to_quants("eee"),
+                str_to_bools("00000000"),
+                (0..8).collect::<Vec<_>>(),
+                None,
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: None,
+                },
+            ),
+            // 10
+            (
+                str_to_quants("eee"),
+                str_to_bools("10000000"),
+                (0..8).collect::<Vec<_>>(),
+                Some(0),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(0),
+                },
+            ),
+            // 11
+            (
+                str_to_quants("eee"),
+                str_to_bools("01000000"),
+                (0..8).collect::<Vec<_>>(),
+                Some(1),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(4),
+                },
+            ),
+            // 12
+            (
+                str_to_quants("eee"),
+                str_to_bools("00100000"),
+                (0..8).collect::<Vec<_>>(),
+                Some(2),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(2),
+                },
+            ),
+            // 13
+            (
+                str_to_quants("eee"),
+                str_to_bools("00001000"),
+                (0..8).collect::<Vec<_>>(),
+                Some(4),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(1),
+                },
+            ),
+            // 14
+            (
+                str_to_quants("eee"),
+                str_to_bools("00000100"),
+                (0..8).collect::<Vec<_>>(),
+                Some(5),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(5),
+                },
+            ),
+            // 15
+            (
+                str_to_quants("eee"),
+                str_to_bools("00000010"),
+                (0..8).collect::<Vec<_>>(),
+                Some(6),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(3),
                 },
             ),
         ]
