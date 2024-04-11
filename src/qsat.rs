@@ -107,6 +107,8 @@ struct QuantReducer {
     started: bool,
     start: u64,
     all_mask: u64,
+    first_mask: u64, // for first quantifier
+    other_mask: u64, // other than for first quantifier
     items: BinaryHeap<(std::cmp::Reverse<u64>, bool)>,
     result: Vec<bool>,
     solution: Option<u64>,
@@ -120,11 +122,18 @@ impl QuantReducer {
             .rev()
             .map(|q| *q == Quant::All)
             .collect::<Vec<_>>();
+        let first_quant = quants[0];
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+        let all_mask = u64::try_from((1u128 << quants.len()) - 1).unwrap();
+        let first_mask = u64::try_from((1u128 << first_quant_bits) - 1).unwrap()
+            << (quants.len() - first_quant_bits);
         Self {
             quants: quants.clone(),
             started: false,
             start: 0,
-            all_mask: u64::try_from((1u128 << quants.len()) - 1).unwrap(),
+            all_mask,
+            first_mask,
+            other_mask: all_mask & !first_mask,
             items: BinaryHeap::new(),
             result: quants,
             solution: None,
@@ -172,12 +181,30 @@ impl QuantReducer {
             index >>= 1;
             *r = *q;
         }
+        // if this all bits of other quantifiers are ones (last item in current value of first
+        // quantifier) - then resolve solution -
+        // result for first quantifier: all - last -> result=0, exists -> result=1
+        if self.solution.is_none()
+            && (self.start & self.other_mask) == self.other_mask
+            && self.result.last().unwrap() ^ self.quants.last().unwrap()
+        {
+            let first_bits = self.first_mask.count_ones() as usize;
+            // calculate solution in original order of bits.
+            self.solution = Some(
+                (self.start >> (self.quants.len() - first_bits)).reverse_bits()
+                    >> (64 - first_bits),
+            );
+        }
         self.start = self.start.overflowing_add(1).0;
     }
 
-    fn final_result(&self) -> Option<bool> {
-        if self.is_end() {
-            Some(*self.result.last().unwrap())
+    fn final_result(&self) -> Option<FinalResult> {
+        if self.is_end() || self.solution.is_some() {
+            Some(FinalResult {
+                reversed: *self.quants.last().unwrap(),
+                solution_bits: self.first_mask.count_ones() as usize,
+                solution: self.solution,
+            })
         } else {
             None
         }
