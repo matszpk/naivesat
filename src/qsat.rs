@@ -131,6 +131,7 @@ impl QuantReducer {
         let all_mask = u64::try_from((1u128 << quants.len()) - 1).unwrap();
         let first_mask = u64::try_from((1u128 << first_quant_bits) - 1).unwrap()
             << (quants.len() - first_quant_bits);
+        println!("Q: {} {} {}", all_mask, first_mask, first_quant_bits);
         Self {
             quants: quants.clone(),
             started: false,
@@ -191,11 +192,11 @@ impl QuantReducer {
         // if this all bits of other quantifiers are ones (last item in current value of first
         // quantifier) - then resolve solution -
         // result for first quantifier: all - last -> result=0, exists -> result=1
-        let first_bits = self.first_mask.count_ones() as usize;
         if self.solution.is_none()
             && (self.start & self.other_mask) == self.other_mask
             && (prev ^ self.quants.last().unwrap())
         {
+            let first_bits = self.first_mask.count_ones() as usize;
             // calculate solution in original order of bits.
             self.solution = Some(
                 (self.start >> (self.quants.len() - first_bits)).reverse_bits()
