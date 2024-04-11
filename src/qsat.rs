@@ -117,9 +117,12 @@ struct QuantReducer {
 
 impl QuantReducer {
     fn new(quants: &[Quant]) -> Self {
-        // initialize bits by rule: All=1, Exists=0 (and requires 1, or requires 0)
+        println!("Start");
         let first_quant = quants[0];
+        // determine first quantifier length (bits)
         let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+        // to quants reversed and to bool:
+        // initialize bits by rule: All=1, Exists=0 (and requires 1, or requires 0)
         let quants = quants
             .iter()
             .rev()
@@ -128,7 +131,6 @@ impl QuantReducer {
         let all_mask = u64::try_from((1u128 << quants.len()) - 1).unwrap();
         let first_mask = u64::try_from((1u128 << first_quant_bits) - 1).unwrap()
             << (quants.len() - first_quant_bits);
-        println!("First mask: {:0b} {}", first_mask, first_quant_bits);
         Self {
             quants: quants.clone(),
             started: false,
@@ -158,6 +160,7 @@ impl QuantReducer {
         assert!(!self.is_end());
         while let Some((index, item)) = self.items.peek().copied() {
             if self.start == index.0 {
+                println!("Popped: {} {}", index.0, item);
                 // if index is match then flush
                 self.items.pop();
                 self.apply(item);
@@ -169,6 +172,7 @@ impl QuantReducer {
 
     fn apply(&mut self, item: bool) {
         assert!(!self.is_end());
+        println!("Apply: {}: {:?}", item, self.quants);
         self.started = true;
         let mut index = self.start;
         let quant_pos = 0;
@@ -183,14 +187,15 @@ impl QuantReducer {
             index >>= 1;
             *r = *q;
         }
+        println!("Apply after: {}: {:?} {}", item, self.quants, prev);
         // if this all bits of other quantifiers are ones (last item in current value of first
         // quantifier) - then resolve solution -
         // result for first quantifier: all - last -> result=0, exists -> result=1
+        let first_bits = self.first_mask.count_ones() as usize;
         if self.solution.is_none()
             && (self.start & self.other_mask) == self.other_mask
-            && (self.result.last().unwrap() ^ self.quants.last().unwrap())
+            && (prev ^ self.quants.last().unwrap())
         {
-            let first_bits = self.first_mask.count_ones() as usize;
             // calculate solution in original order of bits.
             self.solution = Some(
                 (self.start >> (self.quants.len() - first_bits)).reverse_bits()
@@ -243,6 +248,8 @@ mod tests {
 
     #[test]
     fn test_quant_reducer() {
+        // info: result solution is bit reversed!
+        // indexes of items are reversed to original input of circuit!
         for (i, (quants, items, ordering, opt_result, result)) in [
             (
                 str_to_quants("eea"),
@@ -259,11 +266,33 @@ mod tests {
                 str_to_quants("eea"),
                 str_to_bools("00000100"),
                 (0..8).collect::<Vec<_>>(),
+                None,
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 2,
+                    solution: None,
+                },
+            ),
+            (
+                str_to_quants("eea"),
+                str_to_bools("00001100"),
+                (0..8).collect::<Vec<_>>(),
                 Some(5),
                 FinalResult {
                     reversed: false,
                     solution_bits: 2,
-                    solution: Some(2),
+                    solution: Some(1),
+                },
+            ),
+            (
+                str_to_quants("eea"),
+                str_to_bools("00001100"),
+                vec![4, 7, 3, 2, 0, 1, 6, 5],
+                Some(7),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 2,
+                    solution: Some(1),
                 },
             ),
         ]
@@ -271,10 +300,12 @@ mod tests {
         .enumerate()
         {
             let mut reducer = QuantReducer::new(&quants);
-            for ord in ordering.into_iter() {
+            for (j, ord) in ordering.into_iter().enumerate() {
                 reducer.push(ord, items[usize::try_from(ord).unwrap()]);
-                if let Some(res_index) = opt_result {
-                    assert_eq!(Some(result), reducer.final_result(), "{}", i);
+                if let Some(push_index) = opt_result {
+                    if j >= push_index {
+                        assert_eq!(Some(result), reducer.final_result(), "{}", i);
+                    }
                 }
             }
             assert_eq!(result, reducer.final_result().unwrap(), "{}", i);
