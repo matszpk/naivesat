@@ -214,6 +214,98 @@ impl QuantReducer {
     }
 }
 
+// CPU Code
+
+const AGGR_OUTPUT_CPU_CODE: &str = r##"{
+    // out format:
+    // 0 .. (TYPE_LEN >> 5) - machine word that have solution
+    // (TYPE_LEN >> 5) - final result bit
+    // (TYPE_LEN >> 5) + 1 - non-zero if solution found
+    // (TYPE_LEN >> 5) + 2 - low 32-bits of machine word index
+    // (TYPE_LEN >> 5) + 3 - high 32-bits of machine word index
+    uint32_t i;
+    uint32_t temp[TYPE_LEN >> 5];
+    uint32_t* out = (uint32_t*)output;
+    uint32_t work_bit;
+    uint32_t mod_idx = idx;
+    GET_U32_ALL(temp, o0);
+    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_0 (temp[i] >> 1);
+    }
+    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_1 (temp[i] >> 2);
+    }
+    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_2 (temp[i] >> 4);
+    }
+    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_3 (temp[i] >> 8);
+    }
+    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_4 (temp[i] >> 16);
+    }
+    // continue reduction on machine word
+#if TYPE_LEN > 32
+    for (i = 0; i < (TYPE_LEN >> 5); i += 2) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_5 temp[i + 1];
+    }
+#endif
+#if TYPE_LEN > 64
+    for (i = 0; i < (TYPE_LEN >> 5); i += 4) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_6 temp[i + 2];
+    }
+#endif
+#if TYPE_LEN > 128
+    for (i = 0; i < (TYPE_LEN >> 5); i += 8) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_7 temp[i + 4];
+    }
+#endif
+#if TYPE_LEN > 256
+    for (i = 0; i < (TYPE_LEN >> 5); i += 16) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_8 temp[i + 8];
+    }
+#endif
+#if TYPE_LEN > 512
+    for (i = 0; i < (TYPE_LEN >> 5); i += 32) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_9 temp[i + 16];
+    }
+#endif
+#define BASE (4 + (TYPE_LEN >> 5))
+    work_bit = (temp[0] & 1);
+    if (idx == 0) {
+        // initialization of work bits
+        out[0] = 0;
+        out[1] = 0; // solution word
+        for (i = 0; i < WORK_WORD_NUM_BITS; i++) {
+            out[BASE + i] = (WORK_QUANT_REDUCE_INIT_DATA >> i) & 1;
+        }
+    }
+    // main loop to reduce single work
+    for (i = 0; i < WORK_WORD_NUM_BITS; i++) {
+        uint32_t r = out[BASE + i];
+        work_bit = (r & work_bit) | ((r ^ work_bit) &
+            (((~WORK_QUANT_REDUCE_INIT_DATA) >> i) & 1));
+        out[BASE + i] = work_bit;
+        if ((mod_idx & 1) == 0)
+            break;
+        mod_idx >>= 1;
+        out[BASE + i] = ((WORK_QUANT_REDUCE_INIT_DATA >> i) & 1);
+    }
+    // finally write to work bit
+    if ((idx & ((1ULL << WORK_WORD_NUM_BITS) - 1ULL)) != ((1ULL << WORK_WORD_NUM_BITS) - 1ULL))
+        out[(TYPE_LEN >> 5)] = work_bit;
+    if (out[(TYPE_LEN >> 5) + 1] == 0 && (idx & OTHER_MASK) == OTHER_MASK &&
+        (work_bit ^ ((WORK_QUANT_REDUCE_INIT_DATA >> (WORK_WORD_NUM_BITS - 1)) & 1)) != 0) {
+        out[(TYPE_LEN >> 5) + 1] = 1;
+        out[(TYPE_LEN >> 5) + 2] = idx & 0xffffffffU;
+        out[(TYPE_LEN >> 5) + 3] = idx >> 32;
+        // store machine word that have solution
+        GET_U32_ALL(out, o0);
+    }
+#undef BASE
+#undef PBASE
+}"##;
+
 #[cfg(test)]
 mod tests {
     use super::*;
