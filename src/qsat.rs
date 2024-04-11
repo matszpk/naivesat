@@ -78,6 +78,7 @@ struct CommandArgs {
 struct QuantReducer {
     // quants in boolean encoding: All=1, Exists=0
     quants: Vec<bool>, // reversed list of quantifiers (first is lowest)
+    started: bool,
     start: u64,
     items: BinaryHeap<(std::cmp::Reverse<u64>, bool)>,
     result: Vec<bool>,
@@ -93,6 +94,7 @@ impl QuantReducer {
             .collect::<Vec<_>>();
         Self {
             quants: quants.clone(),
+            started: false,
             start: 0,
             items: BinaryHeap::new(),
             result: quants,
@@ -117,6 +119,7 @@ impl QuantReducer {
     }
 
     fn apply(&mut self, item: bool) {
+        self.started = true;
         let mut index = self.start;
         let quant_pos = 0;
         let mut prev = item;
@@ -130,7 +133,16 @@ impl QuantReducer {
             index >>= 1;
             *r = *q;
         }
-        self.start += 1;
+        self.start = self.start.overflowing_add(1).0;
+    }
+
+    fn final_result(&self) -> Option<bool> {
+        let mask = u64::try_from((1u128 << self.quants.len()) - 1).unwrap();
+        if self.started && (self.start & mask) == 0 {
+            Some(*self.result.last().unwrap())
+        } else {
+            None
+        }
     }
 }
 
