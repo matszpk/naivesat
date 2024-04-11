@@ -295,6 +295,17 @@ mod tests {
                     solution: Some(1),
                 },
             ),
+            (
+                str_to_quants("eea"),
+                str_to_bools("00110011"),
+                (0..8).collect::<Vec<_>>(),
+                Some(3),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 2,
+                    solution: Some(2),
+                },
+            ),
         ]
         .into_iter()
         .enumerate()
