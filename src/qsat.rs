@@ -106,9 +106,10 @@ struct QuantReducer {
     quants: Vec<bool>, // reversed list of quantifiers (first is lowest)
     started: bool,
     start: u64,
-    mask: u64,
+    all_mask: u64,
     items: BinaryHeap<(std::cmp::Reverse<u64>, bool)>,
     result: Vec<bool>,
+    solution: Option<u64>,
 }
 
 impl QuantReducer {
@@ -123,15 +124,16 @@ impl QuantReducer {
             quants: quants.clone(),
             started: false,
             start: 0,
-            mask: u64::try_from((1u128 << quants.len()) - 1).unwrap(),
+            all_mask: u64::try_from((1u128 << quants.len()) - 1).unwrap(),
             items: BinaryHeap::new(),
             result: quants,
+            solution: None,
         }
     }
 
     #[inline]
     fn is_end(&self) -> bool {
-        self.started && (self.start & self.mask) == 0
+        self.started && (self.start & self.all_mask) == 0
     }
 
     fn push(&mut self, index: u64, item: bool) {
