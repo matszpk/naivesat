@@ -76,6 +76,7 @@ struct CommandArgs {
     opencl_group_len: Option<usize>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct FinalResult {
     // reversed: if first quantifier is 'All' then is reversed (solution if not satisfiable)
     // otherwise solution is satisfiable.
@@ -117,16 +118,17 @@ struct QuantReducer {
 impl QuantReducer {
     fn new(quants: &[Quant]) -> Self {
         // initialize bits by rule: All=1, Exists=0 (and requires 1, or requires 0)
+        let first_quant = quants[0];
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
         let quants = quants
             .iter()
             .rev()
             .map(|q| *q == Quant::All)
             .collect::<Vec<_>>();
-        let first_quant = quants[0];
-        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
         let all_mask = u64::try_from((1u128 << quants.len()) - 1).unwrap();
         let first_mask = u64::try_from((1u128 << first_quant_bits) - 1).unwrap()
             << (quants.len() - first_quant_bits);
+        println!("First mask: {:0b} {}", first_mask, first_quant_bits);
         Self {
             quants: quants.clone(),
             started: false,
@@ -207,6 +209,75 @@ impl QuantReducer {
             })
         } else {
             None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn str_to_quants(s: &str) -> Vec<Quant> {
+        s.chars()
+            .map(|c| match c {
+                'a' => Quant::All,
+                'e' => Quant::Exists,
+                _ => {
+                    panic!("Unexpected");
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn str_to_bools(s: &str) -> Vec<bool> {
+        s.chars()
+            .map(|c| match c {
+                '0' => false,
+                '1' => true,
+                _ => {
+                    panic!("Unexpected");
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    #[test]
+    fn test_quant_reducer() {
+        for (i, (quants, items, ordering, opt_result, result)) in [
+            (
+                str_to_quants("eea"),
+                str_to_bools("00000000"),
+                (0..8).collect::<Vec<_>>(),
+                None,
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 2,
+                    solution: None,
+                },
+            ),
+            (
+                str_to_quants("eea"),
+                str_to_bools("00000100"),
+                (0..8).collect::<Vec<_>>(),
+                Some(5),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 2,
+                    solution: Some(2),
+                },
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut reducer = QuantReducer::new(&quants);
+            for ord in ordering.into_iter() {
+                reducer.push(ord, items[usize::try_from(ord).unwrap()]);
+                if let Some(res_index) = opt_result {
+                    assert_eq!(Some(result), reducer.final_result(), "{}", i);
+                }
+            }
+            assert_eq!(result, reducer.final_result().unwrap(), "{}", i);
         }
     }
 }
