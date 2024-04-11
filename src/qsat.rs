@@ -9,6 +9,7 @@ use clap::Parser;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 
 use std::collections::BinaryHeap;
+use std::fmt::{Display, Formatter};
 use std::fs;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -73,6 +74,31 @@ struct CommandArgs {
     exec_type: ExecType,
     #[arg(short = 'G', long)]
     opencl_group_len: Option<usize>,
+}
+
+struct FinalResult {
+    // reversed: if first quantifier is 'All' then is reversed (solution if not satisfiable)
+    // otherwise solution is satisfiable.
+    reversed: bool,
+    solution_bits: usize,
+    // only for first quantifier
+    solution: Option<u64>,
+}
+
+impl Display for FinalResult {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        if self.reversed {
+            if let Some(sol) = self.solution {
+                write!(f, "(Unsatisfiable: {1:00$b})", self.solution_bits, sol)
+            } else {
+                write!(f, "(Satisfiable)")
+            }
+        } else if let Some(sol) = self.solution {
+            write!(f, "(Satisfiable: {1:00$b})", self.solution_bits, sol)
+        } else {
+            write!(f, "(Unsatisfiable)")
+        }
+    }
 }
 
 struct QuantReducer {
