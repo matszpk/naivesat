@@ -624,6 +624,25 @@ mod tests {
                     solution: Some(3),
                 },
             ),
+            // 27: various ordering
+            (
+                str_to_quants("aaaeaee"),
+                str_to_bools(concat!(
+                    "0010_0100.0000_0000:0000_0000.0010_0010",
+                    "0000_0100.0010_0001:0100_0010.0001_0010",
+                    "0010_0100.0000_0000:0000_0000.0010_0010",
+                    "X0000_0100.0010_0000:0100_0010.0001_0010"
+                )),
+                (0..96)
+                    .chain((0..32).map(|i| 96 + ((i >> 1) | ((i << 4) & 16))))
+                    .collect::<Vec<_>>(),
+                Some(127),
+                FinalResult {
+                    reversed: true,
+                    solution_bits: 3,
+                    solution: Some(3),
+                },
+            ),
         ]
         .into_iter()
         .enumerate()
