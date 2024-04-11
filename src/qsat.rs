@@ -294,6 +294,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     // finally write to work bit
     if ((idx & ((1ULL << WORK_WORD_NUM_BITS) - 1ULL)) != ((1ULL << WORK_WORD_NUM_BITS) - 1ULL))
         out[(TYPE_LEN >> 5)] = work_bit;
+#ifdef WORK_HAVE_FIRST_QUANT
     if (out[(TYPE_LEN >> 5) + 1] == 0 && (idx & OTHER_MASK) == OTHER_MASK &&
         (work_bit ^ ((WORK_QUANT_REDUCE_INIT_DATA >> (WORK_WORD_NUM_BITS - 1)) & 1)) != 0) {
         out[(TYPE_LEN >> 5) + 1] = 1;
@@ -302,6 +303,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         // store machine word that have solution
         GET_U32_ALL(out, o0);
     }
+#endif
 #undef BASE
 #undef PBASE
 }"##;
