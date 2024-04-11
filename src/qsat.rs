@@ -564,8 +564,25 @@ mod tests {
                     solution: Some(3),
                 },
             ),
-            // reverse quantifiers
             // 24
+            (
+                str_to_quants("eeeaeaa"),
+                str_to_bools(concat!(
+                    "0000_0011.1001_0000:1000_0000.0000_0001",
+                    "0000_1100.0000_1011:0000_1001.1101_1011",
+                    "0000_0011.1001_0100:1001_0010.0100_0001",
+                    "1111_1100.0000_1111:0000_1001.1100_1101"
+                )),
+                (0..128).collect::<Vec<_>>(),
+                Some(111),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(0b011),
+                },
+            ),
+            // reverse quantifiers
+            // 25
             (
                 str_to_quants("aaeaee"),
                 str_to_bools(concat!(
@@ -580,12 +597,12 @@ mod tests {
                     solution: Some(1),
                 },
             ),
-            // 25
+            // 26
             (
                 str_to_quants("aaeaee"),
                 str_to_bools(concat!(
                     "0010_0100.0000_0000:0000_0000.0010_0010",
-                    "0000_0100.0010_0000:0100_0010.0001_0010"
+                    "X0000_0100.0010_0000:0100_0010.0001_0010"
                 )),
                 (0..64).collect::<Vec<_>>(),
                 Some(47),
@@ -593,6 +610,23 @@ mod tests {
                     reversed: true,
                     solution_bits: 2,
                     solution: Some(1),
+                },
+            ),
+            // 27
+            (
+                str_to_quants("aaaeaee"),
+                str_to_bools(concat!(
+                    "0010_0100.0000_0000:0000_0000.0010_0010",
+                    "0000_0100.0010_0001:0100_0010.0001_0010",
+                    "0010_0100.0000_0000:0000_0000.0010_0010",
+                    "X0000_0100.0010_0000:0100_0010.0001_0010"
+                )),
+                (0..128).collect::<Vec<_>>(),
+                Some(111),
+                FinalResult {
+                    reversed: true,
+                    solution_bits: 3,
+                    solution: Some(3),
                 },
             ),
         ]
