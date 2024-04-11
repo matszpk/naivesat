@@ -80,6 +80,7 @@ struct QuantReducer {
     quants: Vec<bool>, // reversed list of quantifiers (first is lowest)
     started: bool,
     start: u64,
+    mask: u64,
     items: BinaryHeap<(std::cmp::Reverse<u64>, bool)>,
     result: Vec<bool>,
 }
@@ -96,17 +97,26 @@ impl QuantReducer {
             quants: quants.clone(),
             started: false,
             start: 0,
+            mask: u64::try_from((1u128 << quants.len()) - 1).unwrap(),
             items: BinaryHeap::new(),
             result: quants,
         }
     }
 
+    #[inline]
+    fn is_end(&self) -> bool {
+        self.started && (self.start & self.mask) == 0
+    }
+
     fn push(&mut self, index: u64, item: bool) {
+        assert!(self.is_end());
         self.items.push((std::cmp::Reverse(index), item));
+        self.flush();
     }
 
     // returns final result is
     fn flush(&mut self) {
+        assert!(self.is_end());
         while let Some((index, item)) = self.items.peek().copied() {
             if self.start == index.0 {
                 // if index is match then flush
@@ -119,6 +129,7 @@ impl QuantReducer {
     }
 
     fn apply(&mut self, item: bool) {
+        assert!(self.is_end());
         self.started = true;
         let mut index = self.start;
         let quant_pos = 0;
@@ -137,8 +148,7 @@ impl QuantReducer {
     }
 
     fn final_result(&self) -> Option<bool> {
-        let mask = u64::try_from((1u128 << self.quants.len()) - 1).unwrap();
-        if self.started && (self.start & mask) == 0 {
+        if self.is_end() {
             Some(*self.result.last().unwrap())
         } else {
             None
