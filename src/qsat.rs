@@ -83,7 +83,7 @@ struct FinalResult {
     reversed: bool,
     solution_bits: usize,
     // only for first quantifier
-    solution: Option<u64>,
+    solution: Option<u128>,
 }
 
 impl Display for FinalResult {
@@ -206,7 +206,7 @@ impl QuantReducer {
             Some(FinalResult {
                 reversed: *self.quants.last().unwrap(),
                 solution_bits: self.first_mask.count_ones() as usize,
-                solution: self.solution,
+                solution: self.solution.map(|x| x as u128),
             })
         } else {
             None
@@ -718,7 +718,7 @@ mod tests {
                     solution: Some(3),
                 },
             ),
-            // 27: various ordering
+            // 28: various ordering
             (
                 str_to_quants("aaaeaee"),
                 str_to_bools(concat!(
@@ -735,6 +735,23 @@ mod tests {
                     reversed: true,
                     solution_bits: 3,
                     solution: Some(3),
+                },
+            ),
+            // 29: bigger first
+            (
+                str_to_quants("eeeeeae"),
+                str_to_bools(concat!(
+                    "0000_0000.0000_0100:0000_0000.0000_0000",
+                    "0000_0100.0000_0000:0000_0010.0000_0000",
+                    "0000_0000.0000_0110:0000_0000.0000_0000",
+                    "0000_0000.0000_0000:0000_0000.0000_0000",
+                )),
+                (0..128).collect::<Vec<_>>(),
+                Some(79),
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 5,
+                    solution: Some(0b11001),
                 },
             ),
         ]
