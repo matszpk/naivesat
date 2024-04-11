@@ -186,7 +186,7 @@ impl QuantReducer {
         // result for first quantifier: all - last -> result=0, exists -> result=1
         if self.solution.is_none()
             && (self.start & self.other_mask) == self.other_mask
-            && self.result.last().unwrap() ^ self.quants.last().unwrap()
+            && (self.result.last().unwrap() ^ self.quants.last().unwrap())
         {
             let first_bits = self.first_mask.count_ones() as usize;
             // calculate solution in original order of bits.
