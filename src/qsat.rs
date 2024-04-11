@@ -117,7 +117,6 @@ struct QuantReducer {
 
 impl QuantReducer {
     fn new(quants: &[Quant]) -> Self {
-        println!("Start");
         let first_quant = quants[0];
         // determine first quantifier length (bits)
         let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
@@ -131,7 +130,6 @@ impl QuantReducer {
         let all_mask = u64::try_from((1u128 << quants.len()) - 1).unwrap();
         let first_mask = u64::try_from((1u128 << first_quant_bits) - 1).unwrap()
             << (quants.len() - first_quant_bits);
-        println!("Q: {} {} {}", all_mask, first_mask, first_quant_bits);
         Self {
             quants: quants.clone(),
             started: false,
@@ -161,7 +159,6 @@ impl QuantReducer {
         assert!(!self.is_end());
         while let Some((index, item)) = self.items.peek().copied() {
             if self.start == index.0 {
-                println!("Popped: {} {}", index.0, item);
                 // if index is match then flush
                 self.items.pop();
                 self.apply(item);
@@ -173,7 +170,6 @@ impl QuantReducer {
 
     fn apply(&mut self, item: bool) {
         assert!(!self.is_end());
-        println!("Apply: {}: {:?}", item, self.quants);
         self.started = true;
         let mut index = self.start;
         let quant_pos = 0;
@@ -188,7 +184,6 @@ impl QuantReducer {
             index >>= 1;
             *r = *q;
         }
-        println!("Apply after: {}: {:?} {}", item, self.quants, prev);
         // if this all bits of other quantifiers are ones (last item in current value of first
         // quantifier) - then resolve solution -
         // result for first quantifier: all - last -> result=0, exists -> result=1
