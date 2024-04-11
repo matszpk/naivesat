@@ -8,6 +8,7 @@ use gatesim::*;
 use clap::Parser;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 
+use std::collections::BinaryHeap;
 use std::fs;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -72,6 +73,65 @@ struct CommandArgs {
     exec_type: ExecType,
     #[arg(short = 'G', long)]
     opencl_group_len: Option<usize>,
+}
+
+struct QuantReducer {
+    // quants in boolean encoding: All=1, Exists=0
+    quants: Vec<bool>, // reversed list of quantifiers (first is lowest)
+    start: u64,
+    items: BinaryHeap<(std::cmp::Reverse<u64>, bool)>,
+    result: Vec<bool>,
+}
+
+impl QuantReducer {
+    fn new(quants: &[Quant]) -> Self {
+        // initialize bits by rule: All=1, Exists=0 (and requires 1, or requires 0)
+        let quants = quants
+            .iter()
+            .rev()
+            .map(|q| *q == Quant::All)
+            .collect::<Vec<_>>();
+        Self {
+            quants: quants.clone(),
+            start: 0,
+            items: BinaryHeap::new(),
+            result: quants,
+        }
+    }
+
+    fn push(&mut self, index: u64, item: bool) {
+        self.items.push((std::cmp::Reverse(index), item));
+    }
+
+    // returns final result is
+    fn flush(&mut self) {
+        while let Some((index, item)) = self.items.peek().copied() {
+            if self.start == index.0 {
+                // if index is match then flush
+                self.items.pop();
+                self.apply(item);
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn apply(&mut self, item: bool) {
+        let mut index = self.start;
+        let quant_pos = 0;
+        let mut prev = item;
+        for (q, r) in self.quants.iter().zip(self.result.iter_mut()) {
+            // if quants=true then use result & item, otherwise result | item.
+            prev = (*r & prev) | ((*r ^ prev) & !q);
+            *r = prev;
+            if (index & 1) == 0 {
+                break;
+            }
+            index >>= 1;
+            *r = *q;
+        }
+        self.start += 1;
+    }
 }
 
 fn main() {
