@@ -9,7 +9,7 @@ use clap::Parser;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
 
 use std::collections::BinaryHeap;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Write};
 use std::fs;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -307,6 +307,44 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #undef BASE
 #undef PBASE
 }"##;
+
+fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]) -> String {
+    let first_quant = quants[0];
+    // determine first quantifier length (bits)
+    let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+    assert_eq!(type_len.count_ones(), 1);
+    let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
+    let mut defs = String::new();
+    writeln!(
+        defs,
+        "#define WORK_QUANT_REDUCE_INIT_DATA ({}ULL)",
+        quants[0..quants.len()]
+            .iter()
+            .rev()
+            .enumerate()
+            .fold(0u64, |a, (b, q)| a | (u64::from(*q == Quant::All) << b))
+    )
+    .unwrap();
+    for i in 0..type_len_bits {
+        writeln!(
+            defs,
+            "#define TYPE_QUANT_REDUCE_OP_{} {}",
+            i,
+            quants[quants.len() - i - 1]
+        )
+        .unwrap();
+    }
+    writeln!(
+        defs,
+        "#define WORK_WORD_NUM_BITS ({})",
+        elem_bits - type_len_bits
+    )
+    .unwrap();
+    if first_quant_bits > quants.len() - elem_bits {
+        writeln!(defs, "#define WORK_HAVE_FIRST_QUANT").unwrap();
+    }
+    defs
+}
 
 #[cfg(test)]
 mod tests {
