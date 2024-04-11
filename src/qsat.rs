@@ -401,7 +401,7 @@ mod tests {
             // 12
             (
                 str_to_quants("eee"),
-                str_to_bools("00100000"),
+                str_to_bools("00100100"),
                 (0..8).collect::<Vec<_>>(),
                 Some(2),
                 FinalResult {
@@ -444,6 +444,31 @@ mod tests {
                     reversed: false,
                     solution_bits: 3,
                     solution: Some(3),
+                },
+            ),
+            // one quantifier
+            // 16
+            (
+                str_to_quants("aaa"),
+                str_to_bools("11111101"),
+                (0..8).collect::<Vec<_>>(),
+                Some(6),
+                FinalResult {
+                    reversed: true,
+                    solution_bits: 3,
+                    solution: Some(3),
+                },
+            ),
+            // 17
+            (
+                str_to_quants("eeee"),
+                str_to_bools("0000000000010000"),
+                (0..16).collect::<Vec<_>>(),
+                None,
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 4,
+                    solution: Some(13),
                 },
             ),
         ]
