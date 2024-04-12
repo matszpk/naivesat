@@ -291,16 +291,17 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         out[BASE + i] = ((WORK_QUANT_REDUCE_INIT_DATA >> i) & 1);
     }
     // finally write to work bit
+    if ((work_bit ^ ((WORK_QUANT_REDUCE_INIT_DATA >> (WORK_WORD_NUM_BITS - 1)) & 1)) != 0) {
 #ifdef WORK_HAVE_FIRST_QUANT
-    if (out[(TYPE_LEN >> 5) + 1] == 0 && (idx & OTHER_MASK) == OTHER_MASK &&
-        (work_bit ^ ((WORK_QUANT_REDUCE_INIT_DATA >> (WORK_WORD_NUM_BITS - 1)) & 1)) != 0) {
-        out[(TYPE_LEN >> 5) + 1] = 1;
-        out[(TYPE_LEN >> 5) + 2] = idx & 0xffffffffU;
-        out[(TYPE_LEN >> 5) + 3] = idx >> 32;
-        GET_U32_ALL(out, o0);
+        if (out[(TYPE_LEN >> 5) + 1] == 0 && (idx & OTHER_MASK) == OTHER_MASK) {
+            out[(TYPE_LEN >> 5) + 1] = 1;
+            out[(TYPE_LEN >> 5) + 2] = idx & 0xffffffffU;
+            out[(TYPE_LEN >> 5) + 3] = idx >> 32;
+            GET_U32_ALL(out, o0);
+        }
+#endif  // WORK_HAVE_FIRST_QUANT
         out[(TYPE_LEN >> 5)] = work_bit;
     }
-#endif  // WORK_HAVE_FIRST_QUANT
 #undef BASE
 #else // WORK_QUANT_REDUCE_INIT_DATA
     // if only one word to process - then copy
@@ -1211,6 +1212,40 @@ mod tests {
                         ],
                         vec![0xfed756db, 0x56dab31e],
                         Some(6),
+                        true,
+                    ),
+                ],
+            ),
+            // no first quantifier in work bits
+            (
+                9,
+                &str_to_quants("AEEE_AAAAEE"),
+                vec![
+                    (
+                        vec![
+                            0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+                            0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+                        ],
+                        vec![0, 0],
+                        None,
+                        false,
+                    ),
+                    (
+                        vec![
+                            0x0100, 0x0010, 0x0800, 0x0800, 0x0000, 0x0000, 0x557736bb, 0xd7952696,
+                            0x0000, 0x0200, 0x4000, 0x0002, 0x0800, 0x0000, 0x0000, 0x0080,
+                        ],
+                        vec![0, 0],
+                        None,
+                        true,
+                    ),
+                    (
+                        vec![
+                            0x0100, 0x0010, 0x0800, 0x0800, 0x0000, 0x0000, 0x557706bb, 0xd7959696,
+                            0x0000, 0x0200, 0x4000, 0x0002, 0xfed756db, 0x56dab31e, 0x0000, 0x0080,
+                        ],
+                        vec![0, 0],
+                        None,
                         true,
                     ),
                 ],
