@@ -270,9 +270,11 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_9 temp[i + 16];
     }
 #endif
+
+    work_bit = (temp[0] & 1);
+
 #ifdef WORK_QUANT_REDUCE_INIT_DATA
 #define BASE (4 + (TYPE_LEN >> 5))
-    work_bit = (temp[0] & 1);
     if (idx == 0) {
         // initialization of work bits
         out[0] = 0;
@@ -308,6 +310,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #undef BASE
 #undef PBASE
 #else
+    GET_U32_ALL(out, o0);
     out[(TYPE_LEN >> 5)] = work_bit;
 #endif
 }"##;
@@ -913,13 +916,38 @@ mod tests {
     #[test]
     fn test_get_aggr_output_cpu_code() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
-        for (i, (quants, data, result)) in [(
+        for (i, (quants, testcases)) in [(
             &str_to_quants("AAEAEA"),
             vec![
-                0b00000000_00000000_00000000_00000000u32,
-                0b00000000_00000000_00000000_00000000u32,
+                (
+                    vec![
+                        0b00000000_00000000_00000000_00000000u32,
+                        0b00000000_00000000_00000000_00000000u32,
+                    ],
+                    false,
+                ),
+                (
+                    vec![
+                        0b00100000_00100000_00010000_00100010u32,
+                        0b00000100_00001000_00010000_00100000u32,
+                    ],
+                    false,
+                ),
+                (
+                    vec![
+                        0b00100000_00111100_00010000_00100010u32,
+                        0b00000100_00001000_00010000_00100000u32,
+                    ],
+                    false,
+                ),
+                (
+                    vec![
+                        0b00100000_00111100_11010011_00100010u32,
+                        0b11001100_00001000_00010000_00110011u32,
+                    ],
+                    true,
+                ),
             ],
-            false,
         )]
         .into_iter()
         .enumerate()
@@ -939,6 +967,12 @@ mod tests {
                     .aggr_output_len(Some(200)),
             );
             let mut execs = builder.build().unwrap();
+            for (j, (data, result)) in testcases.into_iter().enumerate() {
+                let input = execs[0].new_data_from_vec(data);
+                let output = execs[0].execute(&input, 0).unwrap().release();
+                println!("{:032b} {:032b} {:032b}", output[0], output[1], output[2]);
+                assert_eq!(result, output[2] != 0, "{} {}", i, j);
+            }
         }
     }
 }
