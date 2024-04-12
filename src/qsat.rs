@@ -916,8 +916,10 @@ mod tests {
     #[test]
     fn test_get_aggr_output_cpu_code() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
-        for (i, (quants, testcases)) in [
+        for (i, (cpu_exts, clang_writer, quants, testcases)) in [
             (
+                vec![CPUExtension::NoExtension],
+                &CLANG_WRITER_U64,
                 &str_to_quants("AAEAEA"),
                 vec![
                     (
@@ -958,6 +960,8 @@ mod tests {
                 ],
             ),
             (
+                vec![CPUExtension::NoExtension],
+                &CLANG_WRITER_U64,
                 &str_to_quants("EEAEAE"),
                 vec![
                     (
@@ -976,14 +980,41 @@ mod tests {
                     ),
                 ],
             ),
+            (
+                vec![
+                    CPUExtension::IntelAVX,
+                    CPUExtension::IntelAVX2,
+                    CPUExtension::IntelAVX512,
+                ],
+                &CLANG_WRITER_INTEL_AVX,
+                &str_to_quants("EEAEAEAA"),
+                vec![(
+                    vec![
+                        0b00010000_00000000_00000000_00100000u32,
+                        0b00000010_00000010_00001000_00000000u32,
+                        0b00010000_00000000_00000000_00100000u32,
+                        0b00000010_00000010_00001000_00000000u32,
+                        0b00010000_00000000_00000000_00100000u32,
+                        0b00000010_00000010_00001000_00000000u32,
+                        0b00010000_00000000_00000000_00100000u32,
+                        0b00000010_00000010_00001000_00000000u32,
+                    ],
+                    false,
+                )],
+            ),
         ]
         .into_iter()
         .enumerate()
         {
-            let defs = get_aggr_output_code_defs(64, 6, &quants);
+            let defs = get_aggr_output_code_defs(1 << quants.len(), quants.len(), &quants);
+            if *cpu_exts.last().unwrap() != CPUExtension::NoExtension
+                && !cpu_exts.iter().any(|ext| *ext == *CPU_EXTENSION)
+            {
+                continue;
+            }
             let mut builder = CPUBuilder::new_with_cpu_ext_and_clang_config(
-                CPUExtension::NoExtension,
-                &CLANG_WRITER_U64,
+                *cpu_exts.last().unwrap(),
+                clang_writer,
                 None,
             );
             builder.user_defs(&defs);
@@ -995,10 +1026,11 @@ mod tests {
                     .aggr_output_len(Some(200)),
             );
             let mut execs = builder.build().unwrap();
+            println!("Run {}", i);
             for (j, (data, result)) in testcases.into_iter().enumerate() {
                 let input = execs[0].new_data_from_vec(data);
                 let output = execs[0].execute(&input, 0).unwrap().release();
-                assert_eq!(result, output[2] != 0, "{} {}", i, j);
+                assert_eq!(result, output[1 << (quants.len() - 5)] != 0, "{} {}", i, j);
             }
         }
     }
