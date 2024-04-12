@@ -1149,6 +1149,7 @@ mod tests {
 
     #[test]
     fn test_get_aggr_output_cpu_code_2() {
+        // info: index of solution is not reversed index of machine word in work.
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         for (i, (elem_bits, quants, testcases)) in [
             (
