@@ -319,28 +319,34 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
     assert_eq!(type_len.count_ones(), 1);
     let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
     let mut defs = String::new();
+    let quants_len = quants.len();
     if elem_bits > type_len_bits {
         writeln!(
             defs,
             "#define WORK_QUANT_REDUCE_INIT_DATA ({}ULL)",
-            quants[quants.len() - elem_bits..quants.len() - type_len_bits]
+            quants[quants_len - elem_bits..quants_len - type_len_bits]
                 .iter()
                 .rev()
                 .enumerate()
                 .fold(0u64, |a, (b, q)| a | (u64::from(*q == Quant::All) << b))
         )
         .unwrap();
-        // TODO: make
-        // writeln!(defs,
-        //     "#define OTHER_MASK ({}ULL)",
-        //          1u64 << 
+        if first_quant_bits > quants_len - elem_bits {
+            writeln!(
+                defs,
+                "#define OTHER_MASK ({}ULL)",
+                ((1u64 << (elem_bits - type_len_bits)) - 1)
+                    & !(1u64 << (first_quant_bits - (quants_len - elem_bits)) - 1)
+            )
+            .unwrap();
+        }
     }
     for i in 0..type_len_bits {
         writeln!(
             defs,
             "#define TYPE_QUANT_REDUCE_OP_{} {}",
             i,
-            match quants[quants.len() - i - 1] {
+            match quants[quants_len - i - 1] {
                 Quant::Exists => '|',
                 Quant::All => '&',
             }
@@ -353,7 +359,7 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
         elem_bits - type_len_bits
     )
     .unwrap();
-    if first_quant_bits > quants.len() - elem_bits && elem_bits > type_len_bits {
+    if first_quant_bits > quants_len - elem_bits && elem_bits > type_len_bits {
         writeln!(defs, "#define WORK_HAVE_FIRST_QUANT").unwrap();
     }
     defs
@@ -843,6 +849,7 @@ mod tests {
         );
         assert_eq!(
             r##"#define WORK_QUANT_REDUCE_INIT_DATA (399ULL)
+#define OTHER_MASK (1022ULL)
 #define TYPE_QUANT_REDUCE_OP_0 |
 #define TYPE_QUANT_REDUCE_OP_1 |
 #define TYPE_QUANT_REDUCE_OP_2 |
@@ -908,11 +915,13 @@ mod tests {
                 None,
             );
             builder.user_defs(&defs);
-            builder.add_with_config("formula", circuit.clone(),
+            builder.add_with_config(
+                "formula",
+                circuit.clone(),
                 CodeConfig::new()
                     .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
                     .aggr_output_len(Some(200)),
-                    );
+            );
             let mut execs = builder.build().unwrap();
         }
     }
