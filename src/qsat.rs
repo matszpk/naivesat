@@ -305,7 +305,6 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     }
 #endif  // WORK_HAVE_FIRST_QUANT
 #undef BASE
-#undef PBASE
 #else // WORK_QUANT_REDUCE_INIT_DATA
     // if only one word to process - then copy
     for (i = 0; i < (TYPE_LEN >> 5); i++)
