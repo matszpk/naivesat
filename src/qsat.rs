@@ -1149,7 +1149,8 @@ mod tests {
     #[test]
     fn test_get_aggr_output_cpu_code_2() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
-        for (i, (quants, testcases)) in [(
+        for (i, (elem_bits, quants, testcases)) in [(
+            6,
             &str_to_quants("AAEAEA"),
             vec![
                 (
@@ -1181,7 +1182,7 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let defs = get_aggr_output_code_defs(1 << quants.len(), quants.len(), &quants);
+            let defs = get_aggr_output_code_defs(64, elem_bits, &quants);
             let mut builder = CPUBuilder::new_with_cpu_ext_and_clang_config(
                 CPUExtension::NoExtension,
                 &CLANG_WRITER_U64,
@@ -1197,7 +1198,7 @@ mod tests {
             );
             let mut execs = builder.build().unwrap();
             println!("Run {}", i);
-            let base = 1 << (quants.len() - 5);
+            let base = 2;
             for (j, (data, mword, found, result)) in testcases.into_iter().enumerate() {
                 let input = execs[0].new_data_from_vec(data);
                 let output = execs[0].execute(&input, 0).unwrap().release();
