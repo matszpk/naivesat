@@ -267,16 +267,19 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 
     work_bit = (temp[0] & 1);
 
-#ifdef WORK_QUANT_REDUCE_INIT_DATA
-#define BASE (4 + (TYPE_LEN >> 5))
     if (idx == 0) {
         // initialization of work bits
-        out[0] = 0;
-        out[1] = 0; // solution word
+        out[(TYPE_LEN >> 5)] = 0;
+        out[(TYPE_LEN >> 5) + 1] = 0; // solution word
+    }
+
+#ifdef WORK_QUANT_REDUCE_INIT_DATA
+#define BASE (4 + (TYPE_LEN >> 5))
+    if (idx == 0)
+        // initialization of work bits
         for (i = 0; i < WORK_WORD_NUM_BITS; i++) {
             out[BASE + i] = (WORK_QUANT_REDUCE_INIT_DATA >> i) & 1;
         }
-    }
     // main loop to reduce single work
     for (i = 0; i < WORK_WORD_NUM_BITS; i++) {
         uint32_t r = out[BASE + i];
@@ -1181,7 +1184,7 @@ mod tests {
                 ],
             ),
             (
-                6,
+                9,
                 &str_to_quants("EEEE_AAAAEE"),
                 vec![
                     (
@@ -1226,6 +1229,8 @@ mod tests {
                 &CLANG_WRITER_U64,
                 None,
             );
+            println!("Defs: {}", defs);
+            builder.user_defs("#include <stdio.h>");
             builder.user_defs(&defs);
             builder.add_with_config(
                 "formula",
