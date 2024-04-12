@@ -1288,9 +1288,10 @@ mod tests {
                     assert_eq!(
                         ((i as u64).overflowing_mul(mult).0.overflowing_add(add).0) & mask,
                         part_chunk.get(ci),
-                        "{} {}",
+                        "{} {} {}",
                         part,
-                        ci
+                        ci,
+                        k
                     );
                 }
             }
@@ -1327,9 +1328,10 @@ mod tests {
                             .0)
                             & mask,
                         part_chunk.get(ci),
-                        "new: {} {}",
+                        "new: {} {} {}",
                         part,
-                        ci
+                        ci,
+                        k
                     );
                 }
             }
