@@ -306,7 +306,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     GET_U32_ALL(out, o0);
     out[(TYPE_LEN >> 5)] = work_bit;
 #ifdef WORK_HAVE_FIRST_QUANT
-    if ((work_bit & 1) != 0) {
+    if ((work_bit ^ TYPE_QUANT_REDUCE_QUANT_ALL) != 0) {
         out[(TYPE_LEN >> 5) + 1] = 1;
         out[(TYPE_LEN >> 5) + 2] = 0;
         out[(TYPE_LEN >> 5) + 3] = 0;
@@ -321,6 +321,7 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
     let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
     assert_eq!(type_len.count_ones(), 1);
     let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
+    assert!(elem_bits >= type_len_bits);
     let mut defs = String::new();
     let quants_len = quants.len();
     if elem_bits > type_len_bits {
@@ -343,6 +344,13 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
             )
             .unwrap();
         }
+    } else {
+        writeln!(
+            defs,
+            "#define TYPE_QUANT_REDUCE_QUANT_ALL ({})",
+            u64::from(quants[quants_len - type_len_bits] == Quant::All)
+        )
+        .unwrap();
     }
     for i in 0..type_len_bits {
         writeln!(
@@ -362,7 +370,7 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
         elem_bits - type_len_bits
     )
     .unwrap();
-    if first_quant_bits > quants_len - elem_bits && elem_bits > type_len_bits {
+    if first_quant_bits > quants_len - elem_bits {
         writeln!(defs, "#define WORK_HAVE_FIRST_QUANT").unwrap();
     }
     defs
@@ -897,7 +905,8 @@ mod tests {
             get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEEEEAAAEEEAAAAEEAEAEEE"))
         );
         assert_eq!(
-            r##"#define TYPE_QUANT_REDUCE_OP_0 |
+            r##"#define TYPE_QUANT_REDUCE_QUANT_ALL (0)
+#define TYPE_QUANT_REDUCE_OP_0 |
 #define TYPE_QUANT_REDUCE_OP_1 |
 #define TYPE_QUANT_REDUCE_OP_2 |
 #define TYPE_QUANT_REDUCE_OP_3 &
@@ -906,6 +915,7 @@ mod tests {
 #define TYPE_QUANT_REDUCE_OP_6 |
 #define TYPE_QUANT_REDUCE_OP_7 |
 #define WORK_WORD_NUM_BITS (0)
+#define WORK_HAVE_FIRST_QUANT
 "##,
             get_aggr_output_code_defs(256, 8, &str_to_quants("EEAEAEEE"))
         );
