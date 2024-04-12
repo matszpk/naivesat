@@ -172,7 +172,6 @@ impl QuantReducer {
         assert!(!self.is_end());
         self.started = true;
         let mut index = self.start;
-        let quant_pos = 0;
         let mut prev = item;
         for (q, r) in self.quants.iter().zip(self.result.iter_mut()) {
             // if quants=true then use result & item, otherwise result | item.
@@ -307,7 +306,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #endif  // WORK_HAVE_FIRST_QUANT
 #undef BASE
 #undef PBASE
-#else // WORK_HAVE_FIRST_QUANT
+#else // WORK_QUANT_REDUCE_INIT_DATA
     // if only one word to process - then copy
     for (i = 0; i < (TYPE_LEN >> 5); i++)
         out[i] = to_out[i];
