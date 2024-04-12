@@ -270,6 +270,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_9 temp[i + 16];
     }
 #endif
+#ifdef WORK_QUANT_REDUCE_INIT_DATA
 #define BASE (4 + (TYPE_LEN >> 5))
     work_bit = (temp[0] & 1);
     if (idx == 0) {
@@ -306,6 +307,9 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #endif
 #undef BASE
 #undef PBASE
+#else
+    out[(TYPE_LEN >> 5)] = work_bit;
+#endif
 }"##;
 
 fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]) -> String {
@@ -315,16 +319,22 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
     assert_eq!(type_len.count_ones(), 1);
     let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
     let mut defs = String::new();
-    writeln!(
-        defs,
-        "#define WORK_QUANT_REDUCE_INIT_DATA ({}ULL)",
-        quants[quants.len() - elem_bits..quants.len() - type_len_bits]
-            .iter()
-            .rev()
-            .enumerate()
-            .fold(0u64, |a, (b, q)| a | (u64::from(*q == Quant::All) << b))
-    )
-    .unwrap();
+    if elem_bits > type_len_bits {
+        writeln!(
+            defs,
+            "#define WORK_QUANT_REDUCE_INIT_DATA ({}ULL)",
+            quants[quants.len() - elem_bits..quants.len() - type_len_bits]
+                .iter()
+                .rev()
+                .enumerate()
+                .fold(0u64, |a, (b, q)| a | (u64::from(*q == Quant::All) << b))
+        )
+        .unwrap();
+        // TODO: make
+        // writeln!(defs,
+        //     "#define OTHER_MASK ({}ULL)",
+        //          1u64 << 
+    }
     for i in 0..type_len_bits {
         writeln!(
             defs,
@@ -343,7 +353,7 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
         elem_bits - type_len_bits
     )
     .unwrap();
-    if first_quant_bits > quants.len() - elem_bits {
+    if first_quant_bits > quants.len() - elem_bits && elem_bits > type_len_bits {
         writeln!(defs, "#define WORK_HAVE_FIRST_QUANT").unwrap();
     }
     defs
@@ -860,6 +870,51 @@ mod tests {
 "##,
             get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEEEEAAAEEEAAAAEEAEAEEE"))
         );
+        assert_eq!(
+            r##"#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define TYPE_QUANT_REDUCE_OP_5 &
+#define TYPE_QUANT_REDUCE_OP_6 |
+#define TYPE_QUANT_REDUCE_OP_7 |
+#define WORK_WORD_NUM_BITS (0)
+"##,
+            get_aggr_output_code_defs(256, 8, &str_to_quants("EEAEAEEE"))
+        );
+    }
+
+    use gatenative::clang_writer::*;
+
+    #[test]
+    fn test_get_aggr_output_cpu_code() {
+        let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
+        for (i, (quants, data, result)) in [(
+            &str_to_quants("AAEAEA"),
+            vec![
+                0b00000000_00000000_00000000_00000000u32,
+                0b00000000_00000000_00000000_00000000u32,
+            ],
+            false,
+        )]
+        .into_iter()
+        .enumerate()
+        {
+            let defs = get_aggr_output_code_defs(64, 6, &quants);
+            let mut builder = CPUBuilder::new_with_cpu_ext_and_clang_config(
+                CPUExtension::NoExtension,
+                &CLANG_WRITER_U64,
+                None,
+            );
+            builder.user_defs(&defs);
+            builder.add_with_config("formula", circuit.clone(),
+                CodeConfig::new()
+                    .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+                    .aggr_output_len(Some(200)),
+                    );
+            let mut execs = builder.build().unwrap();
+        }
     }
 }
 
