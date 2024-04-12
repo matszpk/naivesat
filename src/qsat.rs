@@ -1145,6 +1145,78 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_get_aggr_output_cpu_code_2() {
+        let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
+        for (i, (quants, testcases)) in [(
+            &str_to_quants("AAEAEA"),
+            vec![
+                (
+                    vec![
+                        0b00000000_00000000_00000000_00000000u32,
+                        0b00000000_00000000_00000000_00000000u32,
+                    ],
+                    vec![
+                        0b00000000_00000000_00000000_00000000u32,
+                        0b00000000_00000000_00000000_00000000u32,
+                    ],
+                    Some(0),
+                    false,
+                ),
+                (
+                    vec![
+                        0b00100000_00111100_11010011_00100010u32,
+                        0b11001100_00001000_00010000_00110011u32,
+                    ],
+                    vec![
+                        0b00100000_00111100_11010011_00100010u32,
+                        0b11001100_00001000_00010000_00110011u32,
+                    ],
+                    None,
+                    true,
+                ),
+            ],
+        )]
+        .into_iter()
+        .enumerate()
+        {
+            let defs = get_aggr_output_code_defs(1 << quants.len(), quants.len(), &quants);
+            let mut builder = CPUBuilder::new_with_cpu_ext_and_clang_config(
+                CPUExtension::NoExtension,
+                &CLANG_WRITER_U64,
+                None,
+            );
+            builder.user_defs(&defs);
+            builder.add_with_config(
+                "formula",
+                circuit.clone(),
+                CodeConfig::new()
+                    .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+                    .aggr_output_len(Some(200)),
+            );
+            let mut execs = builder.build().unwrap();
+            println!("Run {}", i);
+            let base = 1 << (quants.len() - 5);
+            for (j, (data, mword, found, result)) in testcases.into_iter().enumerate() {
+                let input = execs[0].new_data_from_vec(data);
+                let output = execs[0].execute(&input, 0).unwrap().release();
+                assert_eq!(result, output[base] != 0, "{} {}", i, j);
+                assert_eq!(found.is_some(), output[base + 1] != 0, "{} {}", i, j);
+                assert_eq!(&mword, &output[0..base], "{} {}", i, j);
+                if let Option::<u64>::Some(found) = found {
+                    assert_eq!(
+                        (found & ((1u64 << 32) - 1)) as u32,
+                        output[base + 2],
+                        "{} {}",
+                        i,
+                        j
+                    );
+                    assert_eq!((found >> 32) as u32, output[base + 3], "{} {}", i, j);
+                }
+            }
+        }
+    }
 }
 
 fn main() {
