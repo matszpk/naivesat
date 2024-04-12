@@ -318,7 +318,7 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
     writeln!(
         defs,
         "#define WORK_QUANT_REDUCE_INIT_DATA ({}ULL)",
-        quants[0..quants.len()]
+        quants[quants.len() - elem_bits..quants.len() - type_len_bits]
             .iter()
             .rev()
             .enumerate()
@@ -330,7 +330,10 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
             defs,
             "#define TYPE_QUANT_REDUCE_OP_{} {}",
             i,
-            quants[quants.len() - i - 1]
+            match quants[quants.len() - i - 1] {
+                Quant::Exists => '|',
+                Quant::All => '&',
+            }
         )
         .unwrap();
     }
@@ -352,8 +355,11 @@ mod tests {
 
     fn str_to_quants(s: &str) -> Vec<Quant> {
         s.chars()
-            .filter(|c| *c == 'a' || *c == 'e')
-            .map(|c| match c {
+            .filter(|c| {
+                let c = c.to_ascii_lowercase();
+                c == 'a' || c == 'e'
+            })
+            .map(|c| match c.to_ascii_lowercase() {
                 'a' => Quant::All,
                 'e' => Quant::Exists,
                 _ => {
@@ -807,6 +813,24 @@ mod tests {
             }
             assert_eq!(result, reducer.final_result().unwrap(), "{}", i);
         }
+    }
+
+    #[test]
+    fn test_get_aggr_output_code_defs() {
+        assert_eq!(
+            r##"#define WORK_QUANT_REDUCE_INIT_DATA (399ULL)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define TYPE_QUANT_REDUCE_OP_5 &
+#define TYPE_QUANT_REDUCE_OP_6 |
+#define TYPE_QUANT_REDUCE_OP_7 |
+#define WORK_WORD_NUM_BITS (10)
+"##,
+            get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
+        );
     }
 }
 
