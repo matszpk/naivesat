@@ -298,9 +298,13 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
             out[(TYPE_LEN >> 5) + 2] = idx & 0xffffffffU;
             out[(TYPE_LEN >> 5) + 3] = idx >> 32;
             GET_U32_ALL(out, o0);
+            out[(TYPE_LEN >> 5)] = work_bit;
         }
+#else
+        if ((idx & ((1ULL << WORK_WORD_NUM_BITS) - 1ULL)) ==
+                    ((1ULL << WORK_WORD_NUM_BITS) - 1ULL))
+            out[(TYPE_LEN >> 5)] = work_bit;
 #endif  // WORK_HAVE_FIRST_QUANT
-        out[(TYPE_LEN >> 5)] = work_bit;
     }
 #undef BASE
 #else // WORK_QUANT_REDUCE_INIT_DATA
@@ -338,11 +342,13 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
         )
         .unwrap();
         if first_quant_bits > quants_len - elem_bits {
+            let rest_first_bits = first_quant_bits - (quants_len - elem_bits);
             writeln!(
                 defs,
                 "#define OTHER_MASK ({}ULL)",
                 ((1u64 << (elem_bits - type_len_bits)) - 1)
-                    & !((1u64 << (first_quant_bits - (quants_len - elem_bits))) - 1)
+                    & !(((1u64 << rest_first_bits) - 1)
+                        << ((elem_bits - type_len_bits) - rest_first_bits))
             )
             .unwrap();
         }
@@ -862,7 +868,7 @@ mod tests {
         );
         assert_eq!(
             r##"#define WORK_QUANT_REDUCE_INIT_DATA (399ULL)
-#define OTHER_MASK (1022ULL)
+#define OTHER_MASK (511ULL)
 #define TYPE_QUANT_REDUCE_OP_0 |
 #define TYPE_QUANT_REDUCE_OP_1 |
 #define TYPE_QUANT_REDUCE_OP_2 |
@@ -878,7 +884,7 @@ mod tests {
         );
         assert_eq!(
             r##"#define WORK_QUANT_REDUCE_INIT_DATA (15ULL)
-#define OTHER_MASK (960ULL)
+#define OTHER_MASK (15ULL)
 #define TYPE_QUANT_REDUCE_OP_0 |
 #define TYPE_QUANT_REDUCE_OP_1 |
 #define TYPE_QUANT_REDUCE_OP_2 |
@@ -1216,6 +1222,31 @@ mod tests {
                     ),
                 ],
             ),
+            // with no arg part
+            (
+                9,
+                &str_to_quants("EEE_AAAAEE"),
+                vec![
+                    (
+                        vec![
+                            0x0100, 0x0010, 0x0800, 0x0800, 0x0000, 0x0000, 0x557736bb, 0xd7952696,
+                            0x0000, 0x0200, 0x4000, 0x0002, 0x0800, 0x0000, 0x0000, 0x0080,
+                        ],
+                        vec![0x557736bb, 0xd7952696],
+                        Some(3),
+                        true,
+                    ),
+                    (
+                        vec![
+                            0x0100, 0x0010, 0x0800, 0x0800, 0x0000, 0x0000, 0x557706bb, 0xd7959696,
+                            0x0000, 0x0200, 0x4000, 0x0002, 0xfed756db, 0x56dab31e, 0x0000, 0x0080,
+                        ],
+                        vec![0xfed756db, 0x56dab31e],
+                        Some(6),
+                        true,
+                    ),
+                ],
+            ),
             // no first quantifier in work bits
             (
                 9,
@@ -1400,6 +1431,34 @@ mod tests {
                         false,
                     ),
                 ],
+            ),
+            // more complex
+            (
+                12,
+                &str_to_quants("AAAEEAE_EEEEEE"),
+                vec![(
+                    vec![
+                        0, 0, 0, 0, 0, 0, 0, 0, // 0: 0
+                        0, 0, 0, 0, 0, 0, 0, 0, // 0: 1
+                        0, 0, 3, 0, 0, 3, 0, 0, // 0: 2
+                        0, 0, 0, 0, 0, 0, 0, 0, // 0: 3
+                        0, 2, 0, 0, 0, 0, 7, 0, // 1: 0
+                        0, 0, 0, 0, 0, 0, 0, 0, // 1: 1
+                        0, 0, 0, 0, 0, 0, 0, 0, // 1: 2
+                        0, 0, 0, 0, 0, 0, 0, 0, // 1: 3
+                        0, 0, 0, 0, 0, 0, 0, 0, // 2: 0
+                        0, 0, 0, 0, 0, 0, 0, 0, // 2: 1
+                        0, 0, 0, 0, 0, 0, 0, 0, // 2: 2
+                        2, 0, 0, 0, 0, 1, 0, 0, // 2: 3
+                        0, 0, 0, 0, 0, 0, 0, 0, // 3: 0
+                        9, 0, 0, 0, 0, 8, 0, 0, // 3: 1
+                        0, 0, 0, 0, 0, 0, 0, 0, // 3: 2
+                        0, 0, 0, 0, 0, 0, 0, 0, // 3: 3
+                    ],
+                    vec![0, 0],
+                    None,
+                    true,
+                )],
             ),
         ]
         .into_iter()
