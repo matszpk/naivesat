@@ -267,19 +267,18 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 
     work_bit = (temp[0] & 1);
 
-    if (idx == 0) {
-        // initialization of work bits
-        out[(TYPE_LEN >> 5)] = 0;
+    if (idx == 0)
         out[(TYPE_LEN >> 5) + 1] = 0; // solution word
-    }
 
 #ifdef WORK_QUANT_REDUCE_INIT_DATA
 #define BASE (4 + (TYPE_LEN >> 5))
-    if (idx == 0)
+    if (idx == 0) {
         // initialization of work bits
+        out[(TYPE_LEN >> 5)] = (WORK_QUANT_REDUCE_INIT_DATA >> (WORK_WORD_NUM_BITS - 1)) & 1;
         for (i = 0; i < WORK_WORD_NUM_BITS; i++) {
             out[BASE + i] = (WORK_QUANT_REDUCE_INIT_DATA >> i) & 1;
         }
+    }
     // main loop to reduce single work
     for (i = 0; i < WORK_WORD_NUM_BITS; i++) {
         uint32_t r = out[BASE + i];
@@ -292,8 +291,6 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         out[BASE + i] = ((WORK_QUANT_REDUCE_INIT_DATA >> i) & 1);
     }
     // finally write to work bit
-    if ((idx & ((1ULL << WORK_WORD_NUM_BITS) - 1ULL)) != ((1ULL << WORK_WORD_NUM_BITS) - 1ULL))
-        out[(TYPE_LEN >> 5)] = work_bit;
 #ifdef WORK_HAVE_FIRST_QUANT
     if (out[(TYPE_LEN >> 5) + 1] == 0 && (idx & OTHER_MASK) == OTHER_MASK &&
         (work_bit ^ ((WORK_QUANT_REDUCE_INIT_DATA >> (WORK_WORD_NUM_BITS - 1)) & 1)) != 0) {
@@ -301,6 +298,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         out[(TYPE_LEN >> 5) + 2] = idx & 0xffffffffU;
         out[(TYPE_LEN >> 5) + 3] = idx >> 32;
         GET_U32_ALL(out, o0);
+        out[(TYPE_LEN >> 5)] = work_bit;
     }
 #endif  // WORK_HAVE_FIRST_QUANT
 #undef BASE
