@@ -224,13 +224,10 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     // (TYPE_LEN >> 5) + 3 - high 32-bits of machine word index
     uint32_t i;
     uint32_t temp[TYPE_LEN >> 5];
-    uint32_t to_out[TYPE_LEN >> 5];
     uint32_t* out = (uint32_t*)output;
     uint32_t work_bit;
     uint32_t mod_idx = idx;
     GET_U32_ALL(temp, o0);
-    for (i = 0; i < (TYPE_LEN >> 5); i++)
-        to_out[i] = temp[i];
     for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_0 (temp[i] >> 1);
     for (i = 0; i < (TYPE_LEN >> 5); i++)
@@ -300,15 +297,13 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         out[(TYPE_LEN >> 5) + 1] = 1;
         out[(TYPE_LEN >> 5) + 2] = idx & 0xffffffffU;
         out[(TYPE_LEN >> 5) + 3] = idx >> 32;
-        for (i = 0; i < (TYPE_LEN >> 5); i++)
-            out[i] = to_out[i];
+        GET_U32_ALL(out, o0);
     }
 #endif  // WORK_HAVE_FIRST_QUANT
 #undef BASE
 #else // WORK_QUANT_REDUCE_INIT_DATA
     // if only one word to process - then copy
-    for (i = 0; i < (TYPE_LEN >> 5); i++)
-        out[i] = to_out[i];
+    GET_U32_ALL(out, o0);
     out[(TYPE_LEN >> 5)] = work_bit;
 #ifdef WORK_HAVE_FIRST_QUANT
     if ((work_bit & 1) != 0) {
@@ -1067,7 +1062,7 @@ mod tests {
                 continue;
             }
             let mut builder = CPUBuilder::new_with_cpu_ext_and_clang_config(
-                *cpu_exts.last().unwrap(),
+                *cpu_exts.first().unwrap(),
                 clang_writer,
                 None,
             );
