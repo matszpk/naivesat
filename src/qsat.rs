@@ -831,6 +831,35 @@ mod tests {
 "##,
             get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
         );
+        assert_eq!(
+            r##"#define WORK_QUANT_REDUCE_INIT_DATA (399ULL)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define TYPE_QUANT_REDUCE_OP_5 &
+#define TYPE_QUANT_REDUCE_OP_6 |
+#define TYPE_QUANT_REDUCE_OP_7 |
+#define WORK_WORD_NUM_BITS (10)
+#define WORK_HAVE_FIRST_QUANT
+"##,
+            get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEEEEEAAEEEAAAAEEAEAEEE"))
+        );
+        assert_eq!(
+            r##"#define WORK_QUANT_REDUCE_INIT_DATA (911ULL)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define TYPE_QUANT_REDUCE_OP_5 &
+#define TYPE_QUANT_REDUCE_OP_6 |
+#define TYPE_QUANT_REDUCE_OP_7 |
+#define WORK_WORD_NUM_BITS (10)
+"##,
+            get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEEEEAAAEEEAAAAEEAEAEEE"))
+        );
     }
 }
 
