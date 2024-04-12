@@ -229,21 +229,18 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
     uint32_t work_bit;
     uint32_t mod_idx = idx;
     GET_U32_ALL(temp, o0);
-    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
+        out[i] = temp[i];
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_0 (temp[i] >> 1);
-    }
-    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_1 (temp[i] >> 2);
-    }
-    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_2 (temp[i] >> 4);
-    }
-    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_3 (temp[i] >> 8);
-    }
-    for (i = 0; i < (TYPE_LEN >> 5); i++) {
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_4 (temp[i] >> 16);
-    }
     // continue reduction on machine word
 #if TYPE_LEN > 32
     for (i = 0; i < (TYPE_LEN >> 5); i += 2) {
@@ -303,14 +300,11 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
         out[(TYPE_LEN >> 5) + 1] = 1;
         out[(TYPE_LEN >> 5) + 2] = idx & 0xffffffffU;
         out[(TYPE_LEN >> 5) + 3] = idx >> 32;
-        // store machine word that have solution
-        GET_U32_ALL(out, o0);
     }
 #endif
 #undef BASE
 #undef PBASE
 #else
-    GET_U32_ALL(out, o0);
     out[(TYPE_LEN >> 5)] = work_bit;
 #endif
 }"##;
@@ -1018,6 +1012,39 @@ mod tests {
                 ],
             ),
             // Check for AVX2!!!
+            (
+                vec![CPUExtension::IntelAVX2, CPUExtension::IntelAVX512],
+                &CLANG_WRITER_INTEL_AVX2,
+                &str_to_quants("EEAEAEAA"),
+                vec![
+                    (
+                        vec![
+                            0b00010000_00000000_00000000_00100000u32,
+                            0b00000010_00000010_00001000_00000000u32,
+                            0b00010000_00000000_00000000_00100000u32,
+                            0b00000010_00000010_00001000_00000000u32,
+                            0b00010000_00000000_00000000_00100000u32,
+                            0b00000010_00000010_00001000_00000000u32,
+                            0b00010000_00000000_00000000_00100000u32,
+                            0b00000010_00000010_00001000_00000000u32,
+                        ],
+                        false,
+                    ),
+                    (
+                        vec![
+                            0b00010000_00000000_00000000_00100000u32,
+                            0b00000010_00000010_00001000_00000000u32,
+                            0b11110000_00001111_00000000_00100000u32,
+                            0b00000010_00000010_00001111_11110000u32,
+                            0b00010000_00000000_00000000_00100000u32,
+                            0b00000010_00000010_00001000_00000000u32,
+                            0b00010000_00000000_00000000_00100000u32,
+                            0b00000010_00000010_00001000_00000000u32,
+                        ],
+                        true,
+                    ),
+                ],
+            ),
         ]
         .into_iter()
         .enumerate()
