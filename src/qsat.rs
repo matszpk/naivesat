@@ -919,6 +919,21 @@ mod tests {
 "##,
             get_aggr_output_code_defs(256, 8, &str_to_quants("EEAEAEEE"))
         );
+        assert_eq!(
+            r##"#define TYPE_QUANT_REDUCE_QUANT_ALL (1)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define TYPE_QUANT_REDUCE_OP_5 &
+#define TYPE_QUANT_REDUCE_OP_6 |
+#define TYPE_QUANT_REDUCE_OP_7 &
+#define WORK_WORD_NUM_BITS (0)
+#define WORK_HAVE_FIRST_QUANT
+"##,
+            get_aggr_output_code_defs(256, 8, &str_to_quants("AEAEAEEE"))
+        );
     }
 
     use gatenative::clang_writer::*;
