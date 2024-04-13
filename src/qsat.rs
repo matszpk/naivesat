@@ -321,6 +321,145 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #endif // WORK_QUANT_REDUCE_INIT_DATA
 }"##;
 
+const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
+    uint i;
+    size_t lidx = get_local_id(0);
+    uint temp[TYPE_LEN >> 5];
+    global uint* out = (global uint*)output;
+    uint work_bit;
+    uint mod_idx = idx;
+    local uint local_results[GROUP_LEN];
+    GET_U32_ALL(temp, o0);
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_0 (temp[i] >> 1);
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_1 (temp[i] >> 2);
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_2 (temp[i] >> 4);
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_3 (temp[i] >> 8);
+    for (i = 0; i < (TYPE_LEN >> 5); i++)
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_4 (temp[i] >> 16);
+    // continue reduction on machine word
+#if TYPE_LEN > 32
+    for (i = 0; i < (TYPE_LEN >> 5); i += 2) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_5 temp[i + 1];
+    }
+#endif
+#if TYPE_LEN > 64
+    for (i = 0; i < (TYPE_LEN >> 5); i += 4) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_6 temp[i + 2];
+    }
+#endif
+#if TYPE_LEN > 128
+    for (i = 0; i < (TYPE_LEN >> 5); i += 8) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_7 temp[i + 4];
+    }
+#endif
+#if TYPE_LEN > 256
+    for (i = 0; i < (TYPE_LEN >> 5); i += 16) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_8 temp[i + 8];
+    }
+#endif
+#if TYPE_LEN > 512
+    for (i = 0; i < (TYPE_LEN >> 5); i += 32) {
+        temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_9 temp[i + 16];
+    }
+#endif
+
+    work_bit = (temp[0] & 1);
+    local_results[lidx] = work_bit;
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+#if GROUP_LEN >= 2
+    if (lidx + 1 < GROUP_LEN && lidx + 1 < n && (lidx & 1) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_0
+            local_results[lidx + 1];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 4
+    if (lidx + 2 < GROUP_LEN && lidx + 2 < n && (lidx & 3) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_1
+            local_results[lidx + 2];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 8
+    if (lidx + 4 < GROUP_LEN && lidx + 4 < n && (lidx & 7) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_2
+            local_results[lidx + 4];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 16
+    if (lidx + 8 < GROUP_LEN && lidx + 8 < n && (lidx & 15) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_3
+            local_results[lidx + 8];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 32
+    if (lidx + 16 < GROUP_LEN && lidx + 16 < n && (lidx & 31) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_4
+            local_results[lidx + 16];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 64
+    if (lidx + 32 < GROUP_LEN && lidx + 32 < n && (lidx & 63) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_5
+            local_results[lidx + 32];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 128
+    if (lidx + 64 < GROUP_LEN && lidx + 64 < n && (lidx & 127) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_6
+            local_results[lidx + 64];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 256
+    if (lidx + 128 < GROUP_LEN && lidx + 128 < n && (lidx & 255) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_7
+            local_results[lidx + 128];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 512
+    if (lidx + 256 < GROUP_LEN && lidx + 256 < n && (lidx & 511) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_8
+            local_results[lidx + 256];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 1024
+    if (lidx + 512 < GROUP_LEN && lidx + 512 < n && (lidx & 1023) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_9
+            local_results[lidx + 512];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 2048
+    if (lidx + 1024 < GROUP_LEN && lidx + 1024 < n && (lidx & 2047) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_10
+            local_results[lidx + 1024];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+#if GROUP_LEN >= 4096
+    if (lidx + 2048 < GROUP_LEN && lidx + 2048 < n && (lidx & 4095) == 0) {
+        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_11
+            local_results[lidx + 2048];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+#endif
+    if (lidx == 0)
+        atomic_or(out + (idx >> (GROUP_LEN_BITS + 5)), local_results[0]);
+}
+"##;
+
 fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]) -> String {
     let first_quant = quants[0];
     // determine first quantifier length (bits)
