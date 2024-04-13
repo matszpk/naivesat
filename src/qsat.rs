@@ -1753,6 +1753,28 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_get_aggr_output_opencl_code_defs() {
+        assert_eq!(
+            r##"#define GROUP_LEN (256)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define LOCAL_QUANT_REDUCE_OP_0 &
+#define LOCAL_QUANT_REDUCE_OP_1 |
+#define LOCAL_QUANT_REDUCE_OP_2 |
+#define LOCAL_QUANT_REDUCE_OP_3 &
+#define LOCAL_QUANT_REDUCE_OP_4 &
+#define LOCAL_QUANT_REDUCE_OP_5 &
+#define LOCAL_QUANT_REDUCE_OP_6 &
+#define LOCAL_QUANT_REDUCE_OP_7 |
+"##,
+            get_aggr_output_opencl_code_defs(32, 256, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
+        );
+    }
 }
 
 fn main() {
