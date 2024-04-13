@@ -321,9 +321,8 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #endif // WORK_QUANT_REDUCE_INIT_DATA
 }"##;
 
-const INIT_OPENCL_CODE: &str = "local uint local_results[GROUP_LEN];";
-
-const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
+const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
+{
     uint i;
     size_t lidx = get_local_id(0);
     uint temp[TYPE_LEN >> 5];
@@ -1810,7 +1809,6 @@ mod tests {
                 "formula",
                 circuit.clone(),
                 CodeConfig::new()
-                    .init_code(Some(&INIT_OPENCL_CODE))
                     .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
                     .aggr_output_len(Some(1)),
             );
