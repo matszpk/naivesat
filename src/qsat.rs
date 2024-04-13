@@ -326,9 +326,9 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     uint i;
     size_t lidx = get_local_id(0);
     uint temp[TYPE_LEN >> 5];
-    global uint* out = (global uint*)output;
+    global ushort* out = (global ushort*)output;
     uint work_bit;
-    uint mod_idx = idx;
+    uint result1, result2;
     GET_U32_ALL(temp, o0);
     for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_0 (temp[i] >> 1);
@@ -368,97 +368,156 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #endif
 
     work_bit = (temp[0] & 1);
-    local_results[lidx] = work_bit;
+    local_results[lidx] = (work_bit << 15) | lidx;
     barrier(CLK_LOCAL_MEM_FENCE);
 
     // it only check lidx + x n, because GROUP_LEN and same 'n' are power of two.
 #if GROUP_LEN >= 2
     if (lidx + 1 < GROUP_LEN && lidx + 1 < n && (lidx & 1) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_0
-            local_results[lidx + 1];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 1];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_0 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_0)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 4
     if (lidx + 2 < GROUP_LEN && lidx + 2 < n && (lidx & 3) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_1
-            local_results[lidx + 2];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 2];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_1 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_1)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 8
     if (lidx + 4 < GROUP_LEN && lidx + 4 < n && (lidx & 7) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_2
-            local_results[lidx + 4];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 4];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_2 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_2)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 16
     if (lidx + 8 < GROUP_LEN && lidx + 8 < n && (lidx & 15) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_3
-            local_results[lidx + 8];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 8];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_3 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_3)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 32
     if (lidx + 16 < GROUP_LEN && lidx + 16 < n && (lidx & 31) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_4
-            local_results[lidx + 16];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 16];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_4 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_4)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 64
     if (lidx + 32 < GROUP_LEN && lidx + 32 < n && (lidx & 63) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_5
-            local_results[lidx + 32];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 32];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_5 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_5)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 128
     if (lidx + 64 < GROUP_LEN && lidx + 64 < n && (lidx & 127) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_6
-            local_results[lidx + 64];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 64];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_6 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_6)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 256
     if (lidx + 128 < GROUP_LEN && lidx + 128 < n && (lidx & 255) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_7
-            local_results[lidx + 128];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 128];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_7 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_7)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 512
     if (lidx + 256 < GROUP_LEN && lidx + 256 < n && (lidx & 511) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_8
-            local_results[lidx + 256];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 256];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_8 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_8)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 1024
     if (lidx + 512 < GROUP_LEN && lidx + 512 < n && (lidx & 1023) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_9
-            local_results[lidx + 512];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 512];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_9 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_9)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 2048
     if (lidx + 1024 < GROUP_LEN && lidx + 1024 < n && (lidx & 2047) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_10
-            local_results[lidx + 1024];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 1024];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_10 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_10)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 #if GROUP_LEN >= 4096
     if (lidx + 2048 < GROUP_LEN && lidx + 2048 < n && (lidx & 4095) == 0) {
-        local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_11
-            local_results[lidx + 2048];
+        result1 = local_results[lidx];
+        result2 = local_results[lidx + 2048];
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_11 result2) & 0x8000;
+        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_11)
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
+        else
+            local_results[lidx] = work_bit | 0x7fff;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
     if (lidx == 0)
-        atomic_or(out + (idx >> (GROUP_LEN_BITS + 5)),
-            local_results[0] << ((idx >> GROUP_LEN_BITS) & 31));
+        out[idx >> GROUP_LEN_BITS] = local_results[0];
 }
 "##;
 
@@ -554,6 +613,16 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
             match quants[quants_len - type_len_bits - i - 1] {
                 Quant::Exists => '|',
                 Quant::All => '&',
+            }
+        )
+        .unwrap();
+        writeln!(
+            defs,
+            "#define LOCAL_QUANT_REDUCE_CHECK_{} ({})",
+            i,
+            match quants[quants_len - type_len_bits - i - 1] {
+                Quant::Exists => 0x8000,
+                Quant::All => 0,
             }
         )
         .unwrap();
@@ -1766,13 +1835,21 @@ mod tests {
 #define TYPE_QUANT_REDUCE_OP_3 &
 #define TYPE_QUANT_REDUCE_OP_4 |
 #define LOCAL_QUANT_REDUCE_OP_0 &
+#define LOCAL_QUANT_REDUCE_CHECK_0 (0)
 #define LOCAL_QUANT_REDUCE_OP_1 |
+#define LOCAL_QUANT_REDUCE_CHECK_1 (32768)
 #define LOCAL_QUANT_REDUCE_OP_2 |
+#define LOCAL_QUANT_REDUCE_CHECK_2 (32768)
 #define LOCAL_QUANT_REDUCE_OP_3 &
+#define LOCAL_QUANT_REDUCE_CHECK_3 (0)
 #define LOCAL_QUANT_REDUCE_OP_4 &
+#define LOCAL_QUANT_REDUCE_CHECK_4 (0)
 #define LOCAL_QUANT_REDUCE_OP_5 &
+#define LOCAL_QUANT_REDUCE_CHECK_5 (0)
 #define LOCAL_QUANT_REDUCE_OP_6 &
+#define LOCAL_QUANT_REDUCE_CHECK_6 (0)
 #define LOCAL_QUANT_REDUCE_OP_7 |
+#define LOCAL_QUANT_REDUCE_CHECK_7 (32768)
 "##,
             get_aggr_output_opencl_code_defs(32, 256, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
         );
@@ -1829,7 +1906,7 @@ mod tests {
             for (j, (data, result)) in testcases.into_iter().enumerate() {
                 let input = execs[0].new_data_from_vec(data);
                 let output = execs[0].execute(&input, 0).unwrap().release();
-                assert_eq!(result, output[0] != 0, "{} {}", i, j);
+                assert_eq!(result, (output[0] >> 15) != 0, "{} {}", i, j);
             }
         }
     }
