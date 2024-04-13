@@ -371,6 +371,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
     local_results[lidx] = work_bit;
     barrier(CLK_LOCAL_MEM_FENCE);
 
+    // it only check lidx + x n, because GROUP_LEN and same 'n' are power of two.
 #if GROUP_LEN >= 2
     if (lidx + 1 < GROUP_LEN && lidx + 1 < n && (lidx & 1) == 0) {
         local_results[lidx] = local_results[lidx] LOCAL_QUANT_REDUCE_OP_0
