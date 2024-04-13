@@ -1784,7 +1784,7 @@ mod tests {
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
         for (i, (quants, testcases)) in [
             (
-                &str_to_quants("AEAEA"),
+                &str_to_quants("EAA_AEAEA"),
                 vec![
                     (vec![0b00000000_00000000_00000000_00000000u32], false),
                     (vec![0b00100000_00100000_00010000_00100010u32], false),
@@ -1794,7 +1794,7 @@ mod tests {
                 ],
             ),
             (
-                &str_to_quants("EAAEE"),
+                &str_to_quants("AAE_EAAEE"),
                 vec![
                     (vec![0b00000000_00000000_00000000_00000000u32], false),
                     (vec![0b00100000_00100001_00010000_00100010u32], false),
