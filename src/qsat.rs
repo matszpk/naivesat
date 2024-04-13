@@ -456,7 +456,8 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
     if (lidx == 0)
-        atomic_or(out + (idx >> (GROUP_LEN_BITS + 5)), local_results[0]);
+        atomic_or(out + (idx >> (GROUP_LEN_BITS + 5)),
+            local_results[0] << ((idx >> GROUP_LEN_BITS) & 31));
 }
 "##;
 
