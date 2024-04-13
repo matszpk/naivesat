@@ -379,7 +379,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     barrier(CLK_LOCAL_MEM_FENCE);
 
 #define LOCAL_QUANT_UPDATE_FIRST_QUANT \
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_0 result2) & 0x8000; \
+        work_bit = work_bit & 0x8000; \
         if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK) \
             local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff)); \
         else \
@@ -387,11 +387,10 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 
 #if LOCAL_FIRST_QUANT_LEVEL <= 12
 #define LOCAL_QUANT_UPDATE \
-        local_results[lidx] = ((result1 LOCAL_QUANT_REDUCE_OP_0 result2) & 0x8000) | \
-            (result1 & 0x7fff);
+        local_results[lidx] = (work_bit & 0x8000) | (result1 & 0x7fff);
 #else
 #define LOCAL_QUANT_UPDATE \
-        local_results[lidx] = result1 LOCAL_QUANT_REDUCE_OP_0 result2;
+        local_results[lidx] = work_bit;
 #endif
 
     // it only check lidx + x n, because GROUP_LEN and same 'n' are power of two.
@@ -399,6 +398,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 1 < GROUP_LEN && lidx + 1 < n && (lidx & 1) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 1];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_0 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 0
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -411,6 +411,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 2 < GROUP_LEN && lidx + 2 < n && (lidx & 3) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 2];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_1 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 1
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -423,6 +424,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 4 < GROUP_LEN && lidx + 4 < n && (lidx & 7) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 4];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_2 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 2
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -435,6 +437,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 8 < GROUP_LEN && lidx + 8 < n && (lidx & 15) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 8];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_3 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 3
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -447,6 +450,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 16 < GROUP_LEN && lidx + 16 < n && (lidx & 31) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 16];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_4 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 4
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -459,6 +463,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 32 < GROUP_LEN && lidx + 32 < n && (lidx & 63) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 32];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_5 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 5
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -471,6 +476,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 64 < GROUP_LEN && lidx + 64 < n && (lidx & 127) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 64];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_6 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 6
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -483,6 +489,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 128 < GROUP_LEN && lidx + 128 < n && (lidx & 255) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 128];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_7 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 7
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -495,6 +502,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 256 < GROUP_LEN && lidx + 256 < n && (lidx & 511) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 256];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_8 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 8
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -507,6 +515,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 512 < GROUP_LEN && lidx + 512 < n && (lidx & 1023) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 512];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_9 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 9
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -519,6 +528,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 1024 < GROUP_LEN && lidx + 1024 < n && (lidx & 2047) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 1024];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_10 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 10
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
@@ -531,6 +541,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 2048 < GROUP_LEN && lidx + 2048 < n && (lidx & 4095) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 2048];
+        work_bit = result1 LOCAL_QUANT_REDUCE_OP_11 result2;
 #if LOCAL_FIRST_QUANT_LEVEL <= 11
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
