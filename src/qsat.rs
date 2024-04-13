@@ -321,6 +321,8 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #endif // WORK_QUANT_REDUCE_INIT_DATA
 }"##;
 
+const INIT_OPENCL_CODE: &str = "local uint local_results[GROUP_LEN];";
+
 const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
     uint i;
     size_t lidx = get_local_id(0);
@@ -328,7 +330,6 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"{
     global uint* out = (global uint*)output;
     uint work_bit;
     uint mod_idx = idx;
-    local uint local_results[GROUP_LEN];
     GET_U32_ALL(temp, o0);
     for (i = 0; i < (TYPE_LEN >> 5); i++)
         temp[i] = temp[i] TYPE_QUANT_REDUCE_OP_0 (temp[i] >> 1);
@@ -533,6 +534,7 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
     let quants_len = quants.len();
     let mut defs = String::new();
     writeln!(defs, "#define GROUP_LEN ({})", group_len).unwrap();
+    writeln!(defs, "#define GROUP_LEN_BITS ({})", group_len_bits).unwrap();
     for i in 0..type_len_bits {
         writeln!(
             defs,
@@ -1758,6 +1760,7 @@ mod tests {
     fn test_get_aggr_output_opencl_code_defs() {
         assert_eq!(
             r##"#define GROUP_LEN (256)
+#define GROUP_LEN_BITS (8)
 #define TYPE_QUANT_REDUCE_OP_0 |
 #define TYPE_QUANT_REDUCE_OP_1 |
 #define TYPE_QUANT_REDUCE_OP_2 |
@@ -1774,6 +1777,51 @@ mod tests {
 "##,
             get_aggr_output_opencl_code_defs(32, 256, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
         );
+    }
+
+    #[test]
+    fn test_get_aggr_output_opencl_code() {
+        let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        for (i, (quants, testcases)) in [(
+            &str_to_quants("AEAEA"),
+            vec![
+                (vec![0b00000000_00000000_00000000_00000000u32], false),
+                (vec![0b00100000_00100000_00010000_00100010u32], false),
+                (vec![0b00100000_00111100_00010000_00100010u32], false),
+                (vec![0b00100000_00111100_00111100_00100010u32], true),
+                (vec![0b00100000_00111100_11010011_00100010u32], true),
+            ],
+        )]
+        .into_iter()
+        .enumerate()
+        {
+            let defs = get_aggr_output_opencl_code_defs(1 << quants.len(), 1, &quants);
+            let mut builder = OpenCLBuilder::new(
+                &device,
+                Some(OpenCLBuilderConfig {
+                    optimize_negs: true,
+                    group_vec: false,
+                    group_len: Some(1),
+                }),
+            );
+            builder.user_defs(&defs);
+            builder.add_with_config(
+                "formula",
+                circuit.clone(),
+                CodeConfig::new()
+                    .init_code(Some(&INIT_OPENCL_CODE))
+                    .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+                    .aggr_output_len(Some(1)),
+            );
+            let mut execs = builder.build().unwrap();
+            println!("Run {}", i);
+            for (j, (data, result)) in testcases.into_iter().enumerate() {
+                let input = execs[0].new_data_from_vec(data);
+                let output = execs[0].execute(&input, 0).unwrap().release();
+                assert_eq!(result, output[0] != 0, "{} {}", i, j);
+            }
+        }
     }
 }
 
