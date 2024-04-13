@@ -383,9 +383,16 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK) \
             local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff)); \
         else \
-            local_results[lidx] = work_bit | 0x7fff; \
+            local_results[lidx] = work_bit | 0x7fff;
+
+#if LOCAL_FIRST_QUANT_LEVEL >= 12
+#define LOCAL_QUANT_UPDATE \
+        local_results[lidx] = ((result1 LOCAL_QUANT_REDUCE_OP_0 result2) & 0x8000) | \
+            (result1 & 0x7fff);
+#else
 #define LOCAL_QUANT_UPDATE \
         local_results[lidx] = result1 LOCAL_QUANT_REDUCE_OP_0 result2;
+#endif
 
     // it only check lidx + x n, because GROUP_LEN and same 'n' are power of two.
 #if GROUP_LEN >= 2
