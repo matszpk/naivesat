@@ -1782,16 +1782,28 @@ mod tests {
     fn test_get_aggr_output_opencl_code() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
-        for (i, (quants, testcases)) in [(
-            &str_to_quants("AEAEA"),
-            vec![
-                (vec![0b00000000_00000000_00000000_00000000u32], false),
-                (vec![0b00100000_00100000_00010000_00100010u32], false),
-                (vec![0b00100000_00111100_00010000_00100010u32], false),
-                (vec![0b00100000_00111100_00111100_00100010u32], true),
-                (vec![0b00100000_00111100_11010011_00100010u32], true),
-            ],
-        )]
+        for (i, (quants, testcases)) in [
+            (
+                &str_to_quants("AEAEA"),
+                vec![
+                    (vec![0b00000000_00000000_00000000_00000000u32], false),
+                    (vec![0b00100000_00100000_00010000_00100010u32], false),
+                    (vec![0b00100000_00111100_00010000_00100010u32], false),
+                    (vec![0b00100000_00111100_00111100_00100010u32], true),
+                    (vec![0b00100000_00111100_11010011_00100010u32], true),
+                ],
+            ),
+            (
+                &str_to_quants("EAAEE"),
+                vec![
+                    (vec![0b00000000_00000000_00000000_00000000u32], false),
+                    (vec![0b00100000_00100001_00010000_00100010u32], false),
+                    (vec![0b01000000_00100100_00010010_00100000u32], false),
+                    (vec![0b00101000_00111100_00111100_00000010u32], true),
+                    (vec![0b01100100_00100100_01010010_00100001u32], true),
+                ],
+            ),
+        ]
         .into_iter()
         .enumerate()
         {
