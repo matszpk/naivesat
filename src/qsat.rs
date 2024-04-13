@@ -610,22 +610,27 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
         .unwrap();
     }
     if group_len_bits != 0 {
-        for i in 0..group_len_bits {
-            writeln!(
-                defs,
-                "#define LOCAL_QUANT_REDUCE_OP_{} {}",
-                i,
-                match quants[quants_len - type_len_bits - i - 1] {
-                    Quant::Exists => '|',
-                    Quant::All => '&',
-                }
-            )
-            .unwrap();
+        for i in 0..group_len_bits + 1 {
+            let quant = quants
+                .get(quants_len - type_len_bits - i - 1)
+                .unwrap_or(quants.first().unwrap());
+            if i < group_len_bits {
+                writeln!(
+                    defs,
+                    "#define LOCAL_QUANT_REDUCE_OP_{} {}",
+                    i,
+                    match quant {
+                        Quant::Exists => '|',
+                        Quant::All => '&',
+                    }
+                )
+                .unwrap();
+            }
             writeln!(
                 defs,
                 "#define LOCAL_QUANT_PROPAGATE_CHECK_{} ({})",
                 i,
-                match quants[quants_len - type_len_bits - i - 1] {
+                match quant {
                     Quant::Exists => 0x8000,
                     Quant::All => 0,
                 }
@@ -1858,6 +1863,7 @@ mod tests {
 #define LOCAL_QUANT_PROPAGATE_CHECK_6 (0)
 #define LOCAL_QUANT_REDUCE_OP_7 |
 #define LOCAL_QUANT_PROPAGATE_CHECK_7 (32768)
+#define LOCAL_QUANT_PROPAGATE_CHECK_8 (32768)
 "##,
             get_aggr_output_opencl_code_defs(32, 256, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
         );
