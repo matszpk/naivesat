@@ -1087,6 +1087,7 @@ impl OpenCLHashMapInfo {
     ) -> Self {
         let device = Device::new(context.devices()[0]);
         let group_len = usize::try_from(device.max_work_group_size().unwrap()).unwrap();
+        let group_len = std::cmp::min(group_len, hashmap_len);
         let defs = format!(
             "-DSTATE_LEN=({}) -DHASHMAP_LEN=({}) -DUNKNOWN_BITS=({})",
             state_len, hashmap_len, unknown_bits,

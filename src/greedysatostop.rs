@@ -933,6 +933,7 @@ impl OpenCLKernels {
     ) -> Result<Self, ClGeneralError> {
         let device = Device::new(context.devices()[0]);
         let group_len = usize::try_from(device.max_work_group_size()?).unwrap();
+        let group_len = std::cmp::min(group_len, 1 << state_len);
         let defs = format!("-DSTATE_LEN=({}) -DUNKNOWNS=({})", state_len, unknowns);
         let program = Program::create_and_build_from_source(&context, KERNELS_OPENCL_CODE, &defs)?;
         let mut stop_buffer =
