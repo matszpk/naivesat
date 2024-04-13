@@ -525,6 +525,41 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
     defs
 }
 
+fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &[Quant]) -> String {
+    assert_eq!(type_len.count_ones(), 1);
+    let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
+    assert_eq!(group_len.count_ones(), 1);
+    let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
+    let quants_len = quants.len();
+    let mut defs = String::new();
+    writeln!(defs, "#define GROUP_LEN ({})", group_len).unwrap();
+    for i in 0..type_len_bits {
+        writeln!(
+            defs,
+            "#define TYPE_QUANT_REDUCE_OP_{} {}",
+            i,
+            match quants[quants_len - i - 1] {
+                Quant::Exists => '|',
+                Quant::All => '&',
+            }
+        )
+        .unwrap();
+    }
+    for i in 0..group_len_bits {
+        writeln!(
+            defs,
+            "#define LOCAL_QUANT_REDUCE_OP_{} {}",
+            i,
+            match quants[quants_len - type_len_bits - i - 1] {
+                Quant::Exists => '|',
+                Quant::All => '&',
+            }
+        )
+        .unwrap();
+    }
+    defs
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
