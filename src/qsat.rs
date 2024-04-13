@@ -367,7 +367,6 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     }
 #endif
 
-    // TODO: Rewrite for real local idx solution
     work_bit = (temp[0] & 1) << 15;
 #if LOCAL_FIRST_QUANT_LEVEL == 0
     if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK)
@@ -626,7 +625,6 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
         )
         .unwrap();
     }
-    // TODO: Rewrite for real local idx solution
     for i in 0..group_len_bits {
         writeln!(
             defs,
