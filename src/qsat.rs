@@ -369,22 +369,35 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 
     // TODO: Rewrite for real local idx solution
     work_bit = (temp[0] & 1) << 15;
-    if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_0)
+#if LOCAL_FIRST_QUANT_LEVEL == 0
+    if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK)
         local_results[lidx] = work_bit | lidx;
     else
         local_results[lidx] = work_bit | 0x7fff;
+#else
+    local_results[lidx] = work_bit | lidx;
+#endif
     barrier(CLK_LOCAL_MEM_FENCE);
+
+#define LOCAL_QUANT_UPDATE_FIRST_QUANT \
+        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_0 result2) & 0x8000; \
+        if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK) \
+            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff)); \
+        else \
+            local_results[lidx] = work_bit | 0x7fff; \
+#define LOCAL_QUANT_UPDATE \
+        local_results[lidx] = result1 LOCAL_QUANT_REDUCE_OP_0 result2;
 
     // it only check lidx + x n, because GROUP_LEN and same 'n' are power of two.
 #if GROUP_LEN >= 2
     if (lidx + 1 < GROUP_LEN && lidx + 1 < n && (lidx & 1) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 1];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_0 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_1)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 0
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -392,11 +405,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 2 < GROUP_LEN && lidx + 2 < n && (lidx & 3) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 2];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_1 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_2)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 1
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -404,11 +417,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 4 < GROUP_LEN && lidx + 4 < n && (lidx & 7) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 4];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_2 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_3)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 2
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -416,11 +429,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 8 < GROUP_LEN && lidx + 8 < n && (lidx & 15) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 8];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_3 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_4)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 3
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -428,11 +441,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 16 < GROUP_LEN && lidx + 16 < n && (lidx & 31) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 16];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_4 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_5)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 4
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -440,11 +453,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 32 < GROUP_LEN && lidx + 32 < n && (lidx & 63) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 32];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_5 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_6)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 5
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -452,11 +465,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 64 < GROUP_LEN && lidx + 64 < n && (lidx & 127) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 64];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_6 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_7)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 6
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -464,11 +477,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 128 < GROUP_LEN && lidx + 128 < n && (lidx & 255) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 128];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_7 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_8)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 7
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -476,11 +489,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 256 < GROUP_LEN && lidx + 256 < n && (lidx & 511) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 256];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_8 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_9)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 8
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -488,11 +501,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 512 < GROUP_LEN && lidx + 512 < n && (lidx & 1023) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 512];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_9 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_10)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 9
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -500,11 +513,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 1024 < GROUP_LEN && lidx + 1024 < n && (lidx & 2047) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 1024];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_10 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_11)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 10
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
@@ -512,14 +525,15 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx + 2048 < GROUP_LEN && lidx + 2048 < n && (lidx & 4095) == 0) {
         result1 = local_results[lidx];
         result2 = local_results[lidx + 2048];
-        work_bit = (result1 LOCAL_QUANT_REDUCE_OP_11 result2) & 0x8000;
-        if (work_bit == LOCAL_QUANT_PROPAGATE_CHECK_12)
-            local_results[lidx] = work_bit | (min(result1 & 0x7fff, result2 & 0x7fff));
-        else
-            local_results[lidx] = work_bit | 0x7fff;
+#if LOCAL_FIRST_QUANT_LEVEL <= 11
+        LOCAL_QUANT_UPDATE_FIRST_QUANT;
+#else
+        LOCAL_QUANT_UPDATE;
+#endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 #endif
+
     if (lidx == 0)
         out[idx >> GROUP_LEN_BITS] = local_results[0];
 }
@@ -589,7 +603,10 @@ fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]
 }
 
 fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &[Quant]) -> String {
+    let first_quant = quants[0];
     assert_eq!(type_len.count_ones(), 1);
+    // determine first quantifier length (bits)
+    let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
     let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
     assert_eq!(group_len.count_ones(), 1);
     let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
@@ -597,7 +614,6 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
     let mut defs = String::new();
     writeln!(defs, "#define GROUP_LEN ({})", group_len).unwrap();
     writeln!(defs, "#define GROUP_LEN_BITS ({})", group_len_bits).unwrap();
-    println!("GroupLenBits: {}", group_len_bits);
     for i in 0..type_len_bits {
         writeln!(
             defs,
@@ -610,37 +626,42 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
         )
         .unwrap();
     }
-    if group_len_bits != 0 {
-        // TODO: Rewrite for real local idx solution
-        for i in 0..group_len_bits + 1 {
-            let quant = quants
-                .get(quants_len - type_len_bits - i - 1)
-                .unwrap_or(quants.first().unwrap());
-            if i < group_len_bits {
-                writeln!(
-                    defs,
-                    "#define LOCAL_QUANT_REDUCE_OP_{} {}",
-                    i,
-                    match quant {
-                        Quant::Exists => '|',
-                        Quant::All => '&',
-                    }
-                )
-                .unwrap();
+    // TODO: Rewrite for real local idx solution
+    for i in 0..group_len_bits {
+        writeln!(
+            defs,
+            "#define LOCAL_QUANT_REDUCE_OP_{} {}",
+            i,
+            match quants[quants_len - type_len_bits - i - 1] {
+                Quant::Exists => '|',
+                Quant::All => '&',
             }
-            writeln!(
-                defs,
-                "#define LOCAL_QUANT_PROPAGATE_CHECK_{} ({})",
-                i,
-                match quant {
-                    Quant::Exists => 0x8000,
-                    Quant::All => 0,
-                }
-            )
-            .unwrap();
-        }
+        )
+        .unwrap();
+    }
+    if quants_len - type_len_bits - group_len_bits < first_quant_bits {
+        // if first quantifier in group_len quantifiers
+        writeln!(
+            defs,
+            "#define LOCAL_FIRST_QUANT_LEVEL ({})",
+            if quants_len - type_len_bits > first_quant_bits {
+                quants_len - type_len_bits - first_quant_bits
+            } else {
+                0
+            }
+        )
+        .unwrap();
+        writeln!(
+            defs,
+            "#define LOCAL_FIRST_QUANT_PROPAGATE_CHECK ({})",
+            match first_quant {
+                Quant::Exists => 0x8000,
+                Quant::All => 0,
+            }
+        )
+        .unwrap();
     } else {
-        writeln!(defs, "#define LOCAL_QUANT_PROPAGATE_CHECK_0 (0)",).unwrap();
+        writeln!(defs, "#define LOCAL_FIRST_QUANT_LEVEL (99999999)").unwrap();
     }
     defs
 }
@@ -1850,24 +1871,116 @@ mod tests {
 #define TYPE_QUANT_REDUCE_OP_3 &
 #define TYPE_QUANT_REDUCE_OP_4 |
 #define LOCAL_QUANT_REDUCE_OP_0 &
-#define LOCAL_QUANT_PROPAGATE_CHECK_0 (0)
 #define LOCAL_QUANT_REDUCE_OP_1 |
-#define LOCAL_QUANT_PROPAGATE_CHECK_1 (32768)
 #define LOCAL_QUANT_REDUCE_OP_2 |
-#define LOCAL_QUANT_PROPAGATE_CHECK_2 (32768)
 #define LOCAL_QUANT_REDUCE_OP_3 &
-#define LOCAL_QUANT_PROPAGATE_CHECK_3 (0)
 #define LOCAL_QUANT_REDUCE_OP_4 &
-#define LOCAL_QUANT_PROPAGATE_CHECK_4 (0)
 #define LOCAL_QUANT_REDUCE_OP_5 &
-#define LOCAL_QUANT_PROPAGATE_CHECK_5 (0)
 #define LOCAL_QUANT_REDUCE_OP_6 &
-#define LOCAL_QUANT_PROPAGATE_CHECK_6 (0)
 #define LOCAL_QUANT_REDUCE_OP_7 |
-#define LOCAL_QUANT_PROPAGATE_CHECK_7 (32768)
-#define LOCAL_QUANT_PROPAGATE_CHECK_8 (32768)
+#define LOCAL_FIRST_QUANT_LEVEL (99999999)
 "##,
             get_aggr_output_opencl_code_defs(32, 256, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
+        );
+        assert_eq!(
+            r##"#define GROUP_LEN (256)
+#define GROUP_LEN_BITS (8)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define LOCAL_QUANT_REDUCE_OP_0 &
+#define LOCAL_QUANT_REDUCE_OP_1 |
+#define LOCAL_QUANT_REDUCE_OP_2 |
+#define LOCAL_QUANT_REDUCE_OP_3 &
+#define LOCAL_QUANT_REDUCE_OP_4 &
+#define LOCAL_QUANT_REDUCE_OP_5 &
+#define LOCAL_QUANT_REDUCE_OP_6 &
+#define LOCAL_QUANT_REDUCE_OP_7 |
+#define LOCAL_FIRST_QUANT_LEVEL (7)
+#define LOCAL_FIRST_QUANT_PROPAGATE_CHECK (32768)
+"##,
+            get_aggr_output_opencl_code_defs(
+                32,
+                256,
+                &str_to_quants("EEEEEEEEEEEE_EAAAAEEA_EAEEE")
+            )
+        );
+        assert_eq!(
+            r##"#define GROUP_LEN (256)
+#define GROUP_LEN_BITS (8)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define LOCAL_QUANT_REDUCE_OP_0 &
+#define LOCAL_QUANT_REDUCE_OP_1 |
+#define LOCAL_QUANT_REDUCE_OP_2 |
+#define LOCAL_QUANT_REDUCE_OP_3 &
+#define LOCAL_QUANT_REDUCE_OP_4 |
+#define LOCAL_QUANT_REDUCE_OP_5 |
+#define LOCAL_QUANT_REDUCE_OP_6 |
+#define LOCAL_QUANT_REDUCE_OP_7 |
+#define LOCAL_FIRST_QUANT_LEVEL (4)
+#define LOCAL_FIRST_QUANT_PROPAGATE_CHECK (32768)
+"##,
+            get_aggr_output_opencl_code_defs(
+                32,
+                256,
+                &str_to_quants("EEEEEEEEEEEE_EEEEAEEA_EAEEE")
+            )
+        );
+        assert_eq!(
+            r##"#define GROUP_LEN (256)
+#define GROUP_LEN_BITS (8)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define LOCAL_QUANT_REDUCE_OP_0 |
+#define LOCAL_QUANT_REDUCE_OP_1 |
+#define LOCAL_QUANT_REDUCE_OP_2 |
+#define LOCAL_QUANT_REDUCE_OP_3 |
+#define LOCAL_QUANT_REDUCE_OP_4 |
+#define LOCAL_QUANT_REDUCE_OP_5 |
+#define LOCAL_QUANT_REDUCE_OP_6 |
+#define LOCAL_QUANT_REDUCE_OP_7 |
+#define LOCAL_FIRST_QUANT_LEVEL (0)
+#define LOCAL_FIRST_QUANT_PROPAGATE_CHECK (32768)
+"##,
+            get_aggr_output_opencl_code_defs(
+                32,
+                256,
+                &str_to_quants("EEEEEEEEEEEE_EEEEEEEE_EAEEE")
+            )
+        );
+        assert_eq!(
+            r##"#define GROUP_LEN (256)
+#define GROUP_LEN_BITS (8)
+#define TYPE_QUANT_REDUCE_OP_0 &
+#define TYPE_QUANT_REDUCE_OP_1 &
+#define TYPE_QUANT_REDUCE_OP_2 &
+#define TYPE_QUANT_REDUCE_OP_3 |
+#define TYPE_QUANT_REDUCE_OP_4 &
+#define LOCAL_QUANT_REDUCE_OP_0 |
+#define LOCAL_QUANT_REDUCE_OP_1 &
+#define LOCAL_QUANT_REDUCE_OP_2 &
+#define LOCAL_QUANT_REDUCE_OP_3 |
+#define LOCAL_QUANT_REDUCE_OP_4 &
+#define LOCAL_QUANT_REDUCE_OP_5 &
+#define LOCAL_QUANT_REDUCE_OP_6 &
+#define LOCAL_QUANT_REDUCE_OP_7 &
+#define LOCAL_FIRST_QUANT_LEVEL (4)
+#define LOCAL_FIRST_QUANT_PROPAGATE_CHECK (0)
+"##,
+            get_aggr_output_opencl_code_defs(
+                32,
+                256,
+                &str_to_quants("AAAAAAAAAAAA_AAAAEAAE_AEAAA")
+            )
         );
     }
 
@@ -1879,28 +1992,60 @@ mod tests {
             (
                 &str_to_quants("EAA_AEAEA"),
                 vec![
-                    (vec![0b00000000_00000000_00000000_00000000u32], false),
-                    (vec![0b00100000_00100000_00010000_00100010u32], false),
-                    (vec![0b00100000_00111100_00010000_00100010u32], false),
-                    (vec![0b00100000_00111100_00111100_00100010u32], true),
-                    (vec![0b00100000_00111100_11010011_00100010u32], true),
+                    (vec![0b00000000_00000000_00000000_00000000u32], false, 0),
+                    (vec![0b00100000_00100000_00010000_00100010u32], false, 0),
+                    (vec![0b00100000_00111100_00010000_00100010u32], false, 0),
+                    (vec![0b00100000_00111100_00111100_00100010u32], true, 0),
+                    (vec![0b00100000_00111100_11010011_00100010u32], true, 0),
                 ],
             ),
             (
                 &str_to_quants("AAE_EAAEE"),
                 vec![
-                    (vec![0b00000000_00000000_00000000_00000000u32], false),
-                    (vec![0b00100000_00100001_00010000_00100010u32], false),
-                    (vec![0b01000000_00100100_00010010_00100000u32], false),
-                    (vec![0b00101000_00111100_00111100_00000010u32], true),
-                    (vec![0b01100100_00100100_01010010_00100001u32], true),
+                    (vec![0b00000000_00000000_00000000_00000000u32], false, 0),
+                    (vec![0b00100000_00100001_00010000_00100010u32], false, 0),
+                    (vec![0b01000000_00100100_00010010_00100000u32], false, 0),
+                    (vec![0b00101000_00111100_00111100_00000010u32], true, 0),
+                    (vec![0b01100100_00100100_01010010_00100001u32], true, 0),
+                ],
+            ),
+            (
+                &str_to_quants("AAA_AEAEA"),
+                vec![
+                    (vec![0b00000000_00000000_00000000_00000000u32], false, 0),
+                    (vec![0b00100000_00100000_00010000_00100010u32], false, 0),
+                    (vec![0b00100000_00111100_00010000_00100010u32], false, 0),
+                    (vec![0b00100000_00111100_00111100_00100010u32], true, 0x7fff),
+                    (vec![0b00100000_00111100_11010011_00100010u32], true, 0x7fff),
+                ],
+            ),
+            (
+                &str_to_quants("EEE_EAAEE"),
+                vec![
+                    (
+                        vec![0b00000000_00000000_00000000_00000000u32],
+                        false,
+                        0x7fff,
+                    ),
+                    (
+                        vec![0b00100000_00100001_00010000_00100010u32],
+                        false,
+                        0x7fff,
+                    ),
+                    (
+                        vec![0b01000000_00100100_00010010_00100000u32],
+                        false,
+                        0x7fff,
+                    ),
+                    (vec![0b00101000_00111100_00111100_00000010u32], true, 0),
+                    (vec![0b01100100_00100100_01010010_00100001u32], true, 0),
                 ],
             ),
         ]
         .into_iter()
         .enumerate()
         {
-            let defs = get_aggr_output_opencl_code_defs(1 << quants.len(), 1, &quants);
+            let defs = get_aggr_output_opencl_code_defs(32, 1, &quants);
             let mut builder = OpenCLBuilder::new(
                 &device,
                 Some(OpenCLBuilderConfig {
@@ -1909,7 +2054,9 @@ mod tests {
                     group_len: Some(1),
                 }),
             );
+            assert_eq!(builder.type_len(), 32);
             builder.user_defs(&defs);
+            //println!("Defs: {}", defs);
             builder.add_with_config(
                 "formula",
                 circuit.clone(),
@@ -1919,10 +2066,11 @@ mod tests {
             );
             let mut execs = builder.build().unwrap();
             println!("Run {}", i);
-            for (j, (data, result)) in testcases.into_iter().enumerate() {
+            for (j, (data, result, lidx)) in testcases.into_iter().enumerate() {
                 let input = execs[0].new_data_from_vec(data);
                 let output = execs[0].execute(&input, 0).unwrap().release();
                 assert_eq!(result, (output[0] >> 15) != 0, "{} {}", i, j);
+                assert_eq!(lidx, (output[0] & 0x7fff), "{} {}", i, j);
             }
         }
     }
