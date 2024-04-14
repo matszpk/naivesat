@@ -2177,6 +2177,24 @@ mod tests {
                     (vec![0, 1, 1, 0, 0, 1, 0, 0], false, Some(6)),
                 ],
             ),
+            (
+                &str_to_quants("AE_EEA_EEEEE"),
+                8,
+                vec![
+                    (vec![0, 0, 0, 0, 0, 0, 0, 0], false, None),
+                    (vec![0, 0, 0, 1, 0, 0, 0, 0], false, None),
+                    (vec![0, 0, 1, 1, 0, 0, 0, 0], true, None),
+                ],
+            ),
+            (
+                &str_to_quants("EA_AAE_EEEEE"),
+                8,
+                vec![
+                    (vec![1, 1, 1, 1, 1, 1, 1, 1], true, None),
+                    (vec![0, 1, 1, 0, 1, 0, 0, 1], true, None),
+                    (vec![0, 1, 0, 0, 1, 0, 0, 1], false, None),
+                ],
+            ),
         ]
         .into_iter()
         .enumerate()
