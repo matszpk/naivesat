@@ -2155,7 +2155,14 @@ mod tests {
         for (i, (quants, group_len, testcases)) in [(
             &str_to_quants("EE_EEA_EEEEE"),
             8,
-            vec![(vec![0, 0, 0, 0, 0, 0, 0, 0], false, Some(0x7fff))],
+            vec![
+                (vec![0, 0, 0, 0, 0, 0, 0, 0], false, Some(0x7fff)),
+                (vec![0, 0, 0, 1, 0, 0, 0, 0], false, Some(0x7fff)),
+                (vec![0, 0, 1, 1, 0, 0, 0, 0], true, Some(2)),
+                (vec![0, 0, 0, 1, 1, 2, 0, 0], true, Some(4)),
+                (vec![0, 0, 0, 1, 1, 2, 3, 5], true, Some(4)),
+                (vec![0, 0, 0, 1, 1, 0, 3, 5], true, Some(6)),
+            ],
         )]
         .into_iter()
         .enumerate()
