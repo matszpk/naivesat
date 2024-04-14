@@ -2152,47 +2152,51 @@ mod tests {
     fn test_aggr_output_opencl_code_2() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
-        for (i, (quants, group_len, testcases)) in [
+        for (i, (quants, group_len, reduce_len, testcases)) in [
             (
                 &str_to_quants("EE_EEA_EEEEE"),
                 8,
+                1,
                 vec![
-                    (vec![0, 0, 0, 0, 0, 0, 0, 0], false, Some(0x7fff)),
-                    (vec![0, 0, 0, 1, 0, 0, 0, 0], false, Some(0x7fff)),
-                    (vec![0, 0, 1, 1, 0, 0, 0, 0], true, Some(2)),
-                    (vec![0, 0, 0, 1, 1, 2, 0, 0], true, Some(4)),
-                    (vec![0, 0, 0, 1, 1, 2, 3, 5], true, Some(4)),
-                    (vec![0, 0, 0, 1, 1, 0, 3, 5], true, Some(6)),
+                    (vec![0, 0, 0, 0, 0, 0, 0, 0], vec![(false, Some(0x7fff))]),
+                    (vec![0, 0, 0, 1, 0, 0, 0, 0], vec![(false, Some(0x7fff))]),
+                    (vec![0, 0, 1, 1, 0, 0, 0, 0], vec![(true, Some(2))]),
+                    (vec![0, 0, 0, 1, 1, 2, 0, 0], vec![(true, Some(4))]),
+                    (vec![0, 0, 0, 1, 1, 2, 3, 5], vec![(true, Some(4))]),
+                    (vec![0, 0, 0, 1, 1, 0, 3, 5], vec![(true, Some(6))]),
                 ],
             ),
             (
                 &str_to_quants("AA_AAE_EEEEE"),
                 8,
+                1,
                 vec![
-                    (vec![1, 1, 1, 1, 1, 1, 1, 1], true, Some(0x7fff)),
-                    (vec![0, 1, 1, 0, 1, 0, 0, 1], true, Some(0x7fff)),
-                    (vec![0, 1, 0, 0, 1, 0, 0, 1], false, Some(2)),
-                    (vec![0, 1, 1, 0, 0, 0, 0, 1], false, Some(4)),
-                    (vec![0, 1, 1, 0, 0, 0, 0, 0], false, Some(4)),
-                    (vec![0, 1, 1, 0, 0, 1, 0, 0], false, Some(6)),
+                    (vec![1, 1, 1, 1, 1, 1, 1, 1], vec![(true, Some(0x7fff))]),
+                    (vec![0, 1, 1, 0, 1, 0, 0, 1], vec![(true, Some(0x7fff))]),
+                    (vec![0, 1, 0, 0, 1, 0, 0, 1], vec![(false, Some(2))]),
+                    (vec![0, 1, 1, 0, 0, 0, 0, 1], vec![(false, Some(4))]),
+                    (vec![0, 1, 1, 0, 0, 0, 0, 0], vec![(false, Some(4))]),
+                    (vec![0, 1, 1, 0, 0, 1, 0, 0], vec![(false, Some(6))]),
                 ],
             ),
             (
                 &str_to_quants("AE_EEA_EEEEE"),
                 8,
+                1,
                 vec![
-                    (vec![0, 0, 0, 0, 0, 0, 0, 0], false, None),
-                    (vec![0, 0, 0, 1, 0, 0, 0, 0], false, None),
-                    (vec![0, 0, 1, 1, 0, 0, 0, 0], true, None),
+                    (vec![0, 0, 0, 0, 0, 0, 0, 0], vec![(false, None)]),
+                    (vec![0, 0, 0, 1, 0, 0, 0, 0], vec![(false, None)]),
+                    (vec![0, 0, 1, 1, 0, 0, 0, 0], vec![(true, None)]),
                 ],
             ),
             (
                 &str_to_quants("EA_AAE_EEEEE"),
                 8,
+                1,
                 vec![
-                    (vec![1, 1, 1, 1, 1, 1, 1, 1], true, None),
-                    (vec![0, 1, 1, 0, 1, 0, 0, 1], true, None),
-                    (vec![0, 1, 0, 0, 1, 0, 0, 1], false, None),
+                    (vec![1, 1, 1, 1, 1, 1, 1, 1], vec![(true, None)]),
+                    (vec![0, 1, 1, 0, 1, 0, 0, 1], vec![(true, None)]),
+                    (vec![0, 1, 0, 0, 1, 0, 0, 1], vec![(false, None)]),
                 ],
             ),
         ]
@@ -2216,16 +2220,21 @@ mod tests {
                 circuit.clone(),
                 CodeConfig::new()
                     .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
-                    .aggr_output_len(Some(1)),
+                    .aggr_output_len(Some((reduce_len + 1) >> 1)),
             );
             let mut execs = builder.build().unwrap();
             println!("Run {}", i);
-            for (j, (data, result, lidx)) in testcases.into_iter().enumerate() {
+            for (j, (data, results)) in testcases.into_iter().enumerate() {
                 let input = execs[0].new_data_from_vec(data);
                 let output = execs[0].execute(&input, 0).unwrap().release();
-                assert_eq!(result, (output[0] >> 15) != 0, "{} {}", i, j);
-                if let Some(lidx) = lidx {
-                    assert_eq!(lidx, (output[0] & 0x7fff), "{} {}", i, j);
+                assert_eq!(results.len(), reduce_len);
+                for k in 0..reduce_len {
+                    let reduced = output[k >> 1] >> ((k & 1) << 4);
+                    let (result, lidx) = results[k];
+                    assert_eq!(result, (reduced >> 15) != 0, "{} {}", i, j);
+                    if let Some(lidx) = lidx {
+                        assert_eq!(lidx, (reduced & 0x7fff), "{} {}", i, j);
+                    }
                 }
             }
         }
