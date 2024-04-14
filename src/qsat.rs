@@ -614,6 +614,9 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     if (lidx == 0)
         out[idx >> GROUP_LEN_BITS] = local_results[0];
 }
+#undef LOCAL_BEFORE_FIRST_QUANT_LEVEL
+#undef LOCAL_QUANT_UPDATE_FIRST_QUANT
+#undef LOCAL_QUANT_UPDATE
 "##;
 
 fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]) -> String {
