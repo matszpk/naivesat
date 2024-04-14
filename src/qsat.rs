@@ -1302,7 +1302,7 @@ mod tests {
     use gatenative::clang_writer::*;
 
     #[test]
-    fn test_get_aggr_output_cpu_code() {
+    fn test_aggr_output_cpu_code() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         for (i, (cpu_exts, clang_writer, quants, testcases)) in [
             (
@@ -1510,7 +1510,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_aggr_output_cpu_code_2() {
+    fn test_aggr_output_cpu_code_2() {
         // info: index of solution is not reversed index of machine word in work.
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         for (i, (elem_bits, quants, testcases)) in [
@@ -2058,7 +2058,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_aggr_output_opencl_code() {
+    fn test_aggr_output_opencl_code() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
         for (i, (quants, testcases)) in [
@@ -2149,7 +2149,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_aggr_output_opencl_code_2() {
+    fn test_aggr_output_opencl_code_2() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
         for (i, (quants, group_len, testcases)) in [(
