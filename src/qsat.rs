@@ -368,16 +368,28 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #endif
 
     work_bit = (temp[0] & 1) << 15;
+
 #if LOCAL_FIRST_QUANT_LEVEL == 0
+    // routine performs before first quantifier bit - performs filtering of local index
     if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK)
         local_results[lidx] = work_bit | lidx;
     else
         local_results[lidx] = work_bit | 0x7fff;
 #else
+    // just copy result and local index from work item
     local_results[lidx] = work_bit | lidx;
 #endif
     barrier(CLK_LOCAL_MEM_FENCE);
 
+// routine performs before first quantifier bit - performs filtering of local index
+#define LOCAL_BEFORE_QUANT_LEVEL \
+    work_bit = work_bit & 0x8000; \
+    if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK) \
+        local_results[lidx] = work_bit | lidx; \
+    else \
+        local_results[lidx] = work_bit | 0x7fff;
+
+// peforms joining two results in first quantifier bits
 #define LOCAL_QUANT_UPDATE_FIRST_QUANT \
         work_bit = work_bit & 0x8000; \
         if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK) \
@@ -386,9 +398,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
             local_results[lidx] = work_bit | 0x7fff;
 
 #if LOCAL_FIRST_QUANT_LEVEL <= 12
+// perform join result bit and keep local index in work item
 #define LOCAL_QUANT_UPDATE \
         local_results[lidx] = (work_bit & 0x8000) | (result1 & 0x7fff);
 #else
+// just join result bit without keeping local index becuase is unnecessary
 #define LOCAL_QUANT_UPDATE \
         local_results[lidx] = work_bit;
 #endif
@@ -402,7 +416,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 0
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 1
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -415,7 +433,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 1
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 2
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -428,7 +450,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 2
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 3
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -441,7 +467,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 3
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 4
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -454,7 +484,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 4
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 5
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -467,7 +501,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 5
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 6
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -480,7 +518,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 6
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 7
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -493,7 +535,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 7
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 8
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -506,7 +552,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 8
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 9
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -519,7 +569,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 9
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 10
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -532,7 +586,11 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #if LOCAL_FIRST_QUANT_LEVEL <= 10
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
+#if LOCAL_FIRST_QUANT_LEVEL == 11
+        LOCAL_BEFORE_QUANT_LEVEL;
+#else
         LOCAL_QUANT_UPDATE;
+#endif
 #endif
     }
     barrier(CLK_LOCAL_MEM_FENCE);
