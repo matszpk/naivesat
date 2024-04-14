@@ -2208,6 +2208,24 @@ mod tests {
                     vec![(false, Some(0x7fff)), (true, Some(6))],
                 )],
             ),
+            (
+                &str_to_quants("EE_EEA_EEEEE"),
+                8,
+                5,
+                vec![(
+                    vec![
+                        0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 0, 0, 0,
+                        0, 0, 1, 1, 2, 3, 5, 0, 0, 0, 1, 1, 0, 3, 5,
+                    ],
+                    vec![
+                        (false, Some(0x7fff)),
+                        (true, Some(2)),
+                        (true, Some(4)),
+                        (true, Some(4)),
+                        (true, Some(6)),
+                    ],
+                )],
+            ),
         ]
         .into_iter()
         .enumerate()
@@ -2234,6 +2252,7 @@ mod tests {
             let mut execs = builder.build().unwrap();
             println!("Run {}", i);
             for (j, (data, results)) in testcases.into_iter().enumerate() {
+                assert_eq!(data.len(), group_len * reduce_len);
                 let input = execs[0].new_data_from_vec(data);
                 let output = execs[0].execute(&input, 0).unwrap().release();
                 assert_eq!(results.len(), reduce_len);
