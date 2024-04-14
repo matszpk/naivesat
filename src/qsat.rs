@@ -378,8 +378,8 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     else
         local_results[lidx] = work_bit | 0x7fff;
 #else
-    // just copy result and local index from work item
-    local_results[lidx] = work_bit | lidx;
+    // just copy result
+    local_results[lidx] = work_bit;
 #endif
     barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -399,15 +399,9 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         else \
             local_results[lidx] = work_bit | 0x7fff;
 
-#if LOCAL_FIRST_QUANT_LEVEL <= 12
-// perform join result bit and keep local index in work item
-#define LOCAL_QUANT_UPDATE \
-        local_results[lidx] = (work_bit & 0x8000) | (result1 & 0x7fff);
-#else
 // just join result bit without keeping local index becuase is unnecessary
 #define LOCAL_QUANT_UPDATE \
         local_results[lidx] = work_bit;
-#endif
 
     // it only check lidx + x n, because GROUP_LEN and same 'n' are power of two.
 #if GROUP_LEN >= 2
