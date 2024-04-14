@@ -2229,7 +2229,7 @@ mod tests {
                 let output = execs[0].execute(&input, 0).unwrap().release();
                 assert_eq!(results.len(), reduce_len);
                 for k in 0..reduce_len {
-                    let reduced = output[k >> 1] >> ((k & 1) << 4);
+                    let reduced = (output[k >> 1] >> ((k & 1) << 4)) & 0xffff;
                     let (result, lidx) = results[k];
                     assert_eq!(result, (reduced >> 15) != 0, "{} {}", i, j);
                     if let Some(lidx) = lidx {
