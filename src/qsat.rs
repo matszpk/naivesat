@@ -2147,6 +2147,50 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_get_aggr_output_opencl_code_2() {
+        let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        for (i, (quants, group_len, testcases)) in [(
+            &str_to_quants("EE_EEA_EEEEE"),
+            8,
+            vec![(vec![0, 0, 0, 0, 0, 0, 0, 0], false, Some(0x7fff))],
+        )]
+        .into_iter()
+        .enumerate()
+        {
+            let defs = get_aggr_output_opencl_code_defs(32, group_len, &quants);
+            let mut builder = OpenCLBuilder::new(
+                &device,
+                Some(OpenCLBuilderConfig {
+                    optimize_negs: true,
+                    group_vec: false,
+                    group_len: Some(group_len),
+                }),
+            );
+            assert_eq!(builder.type_len(), 32);
+            builder.user_defs(&defs);
+            //println!("Defs: {}", defs);
+            builder.add_with_config(
+                "formula",
+                circuit.clone(),
+                CodeConfig::new()
+                    .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+                    .aggr_output_len(Some(1)),
+            );
+            let mut execs = builder.build().unwrap();
+            println!("Run {}", i);
+            for (j, (data, result, lidx)) in testcases.into_iter().enumerate() {
+                let input = execs[0].new_data_from_vec(data);
+                let output = execs[0].execute(&input, 0).unwrap().release();
+                assert_eq!(result, (output[0] >> 15) != 0, "{} {}", i, j);
+                if let Some(lidx) = lidx {
+                    assert_eq!(lidx, (output[0] & 0x7fff), "{} {}", i, j);
+                }
+            }
+        }
+    }
 }
 
 fn main() {
