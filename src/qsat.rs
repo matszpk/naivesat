@@ -384,7 +384,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
     barrier(CLK_LOCAL_MEM_FENCE);
 
 // routine performs before first quantifier bit - performs filtering of local index
-#define LOCAL_BEFORE_QUANT_LEVEL \
+#define LOCAL_BEFORE_FIRST_QUANT_LEVEL \
     work_bit = work_bit & 0x8000; \
     if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK) \
         local_results[lidx] = work_bit | lidx; \
@@ -419,7 +419,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 1
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -436,7 +436,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 2
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -453,7 +453,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 3
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -470,7 +470,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 4
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -487,7 +487,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 5
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -504,7 +504,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 6
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -521,7 +521,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 7
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -538,7 +538,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 8
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -555,7 +555,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 9
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -572,7 +572,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 10
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
@@ -589,7 +589,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
         LOCAL_QUANT_UPDATE_FIRST_QUANT;
 #else
 #if LOCAL_FIRST_QUANT_LEVEL == 11
-        LOCAL_BEFORE_QUANT_LEVEL;
+        LOCAL_BEFORE_FIRST_QUANT_LEVEL;
 #else
         LOCAL_QUANT_UPDATE;
 #endif
