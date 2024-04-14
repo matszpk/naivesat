@@ -2199,6 +2199,15 @@ mod tests {
                     (vec![0, 1, 0, 0, 1, 0, 0, 1], vec![(false, None)]),
                 ],
             ),
+            (
+                &str_to_quants("EE_EEA_EEEEE"),
+                8,
+                2,
+                vec![(
+                    vec![0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 3, 5],
+                    vec![(false, Some(0x7fff)), (true, Some(6))],
+                )],
+            ),
         ]
         .into_iter()
         .enumerate()
