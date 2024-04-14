@@ -369,6 +369,8 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 
     work_bit = (temp[0] & 1) << 15;
 
+// value on bits of local index (0-14 bits):
+// 0-0x7ffe - local index if solution, 0x7fff - no local index if no solution
 #if LOCAL_FIRST_QUANT_LEVEL == 0
     // routine performs before first quantifier bit - performs filtering of local index
     if (work_bit == LOCAL_FIRST_QUANT_PROPAGATE_CHECK)
