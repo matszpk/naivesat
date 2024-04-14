@@ -2152,18 +2152,32 @@ mod tests {
     fn test_aggr_output_opencl_code_2() {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
-        for (i, (quants, group_len, testcases)) in [(
-            &str_to_quants("EE_EEA_EEEEE"),
-            8,
-            vec![
-                (vec![0, 0, 0, 0, 0, 0, 0, 0], false, Some(0x7fff)),
-                (vec![0, 0, 0, 1, 0, 0, 0, 0], false, Some(0x7fff)),
-                (vec![0, 0, 1, 1, 0, 0, 0, 0], true, Some(2)),
-                (vec![0, 0, 0, 1, 1, 2, 0, 0], true, Some(4)),
-                (vec![0, 0, 0, 1, 1, 2, 3, 5], true, Some(4)),
-                (vec![0, 0, 0, 1, 1, 0, 3, 5], true, Some(6)),
-            ],
-        )]
+        for (i, (quants, group_len, testcases)) in [
+            (
+                &str_to_quants("EE_EEA_EEEEE"),
+                8,
+                vec![
+                    (vec![0, 0, 0, 0, 0, 0, 0, 0], false, Some(0x7fff)),
+                    (vec![0, 0, 0, 1, 0, 0, 0, 0], false, Some(0x7fff)),
+                    (vec![0, 0, 1, 1, 0, 0, 0, 0], true, Some(2)),
+                    (vec![0, 0, 0, 1, 1, 2, 0, 0], true, Some(4)),
+                    (vec![0, 0, 0, 1, 1, 2, 3, 5], true, Some(4)),
+                    (vec![0, 0, 0, 1, 1, 0, 3, 5], true, Some(6)),
+                ],
+            ),
+            (
+                &str_to_quants("AA_AAE_EEEEE"),
+                8,
+                vec![
+                    (vec![1, 1, 1, 1, 1, 1, 1, 1], true, Some(0x7fff)),
+                    (vec![0, 1, 1, 0, 1, 0, 0, 1], true, Some(0x7fff)),
+                    (vec![0, 1, 0, 0, 1, 0, 0, 1], false, Some(2)),
+                    (vec![0, 1, 1, 0, 0, 0, 0, 1], false, Some(4)),
+                    (vec![0, 1, 1, 0, 0, 0, 0, 0], false, Some(4)),
+                    (vec![0, 1, 1, 0, 0, 1, 0, 0], false, Some(6)),
+                ],
+            ),
+        ]
         .into_iter()
         .enumerate()
         {
