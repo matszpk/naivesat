@@ -2932,7 +2932,7 @@ mod tests {
                 Some(FinalResult {
                     reversed: false,
                     solution_bits: 15,
-                    solution: Some(0b11010_1110000110)
+                    solution: Some(0b00011010_1110000110)
                 }),
                 true
             ),
