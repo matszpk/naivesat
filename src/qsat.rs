@@ -2153,6 +2153,22 @@ mod tests {
                 &str_to_quants("AAAAAAAAAAAA_AAAAEAAE_AEAAA")
             )
         );
+        assert_eq!(
+            r##"#define GROUP_LEN (256)
+#define GROUP_LEN_BITS (8)
+#define LOCAL_QUANT_REDUCE_OP_0 |
+#define LOCAL_QUANT_REDUCE_OP_1 &
+#define LOCAL_QUANT_REDUCE_OP_2 &
+#define LOCAL_QUANT_REDUCE_OP_3 |
+#define LOCAL_QUANT_REDUCE_OP_4 &
+#define LOCAL_QUANT_REDUCE_OP_5 &
+#define LOCAL_QUANT_REDUCE_OP_6 &
+#define LOCAL_QUANT_REDUCE_OP_7 &
+#define LOCAL_FIRST_QUANT_LEVEL (4)
+#define LOCAL_FIRST_QUANT_PROPAGATE_CHECK (0)
+"##,
+            get_aggr_output_opencl_code_defs(1, 256, &str_to_quants("AAAAAAAAAAAA_AAAAEAAE"))
+        );
     }
 
     #[test]
