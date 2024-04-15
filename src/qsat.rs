@@ -801,7 +801,8 @@ struct OpenCLQuantReducer {
     group_len: usize,
     group_len_bits: usize,
     kernels: Vec<Kernel>,
-    outputs: Vec<Buffer<u16>>,
+    input_len: usize,
+    outputs: Vec<(Buffer<u16>, usize)>,
 }
 
 impl OpenCLQuantReducer {
@@ -843,6 +844,7 @@ impl OpenCLQuantReducer {
             cmd_queue: cmd_queue.clone(),
             group_len,
             group_len_bits,
+            input_len: 1 << quants_len,
             kernels: (0..kernel_num)
                 .map(|ki| {
                     Kernel::create(
@@ -853,14 +855,20 @@ impl OpenCLQuantReducer {
                 })
                 .collect::<Vec<_>>(),
             outputs: (0..kernel_num)
-                .map(|ki| unsafe {
-                    Buffer::create(
-                        &context,
-                        CL_MEM_READ_WRITE,
-                        1usize << (ki * group_len_bits),
-                        std::ptr::null_mut(),
+                .map(|ki| {
+                    let output_len = 1usize << (quant_start_pos + ki * group_len_bits);
+                    (
+                        unsafe {
+                            Buffer::create(
+                                &context,
+                                CL_MEM_READ_WRITE,
+                                output_len,
+                                std::ptr::null_mut(),
+                            )
+                            .unwrap()
+                        },
+                        output_len,
                     )
-                    .unwrap()
                 })
                 .collect::<Vec<_>>(),
         }
