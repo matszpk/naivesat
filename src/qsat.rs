@@ -6,12 +6,20 @@ use gatenative::*;
 use gatesim::*;
 
 use clap::Parser;
+use opencl3::command_queue::CommandQueue;
+use opencl3::context::Context;
 use opencl3::device::{get_all_devices, Device, CL_DEVICE_TYPE_GPU};
+use opencl3::kernel::{ExecuteKernel, Kernel};
+use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
+use opencl3::program::Program;
+use opencl3::types::{cl_ulong, CL_BLOCKING};
+
 
 use std::collections::BinaryHeap;
 use std::fmt::{Display, Formatter, Write};
 use std::fs;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::SystemTime;
 
 // IDEA HOW TO WRITE REDUCTION:
@@ -331,6 +339,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"
 kernel void quant_reducer(unsigned long n, const global ushort* input, global ushort* output) {
     local uint local_results[GROUP_LEN];
     size_t idx = get_global_id(0);
+    if (idx >= n) return;
     size_t lidx = get_local_id(0);
     global ushort* out = (global ushort*)output;
     uint work_bit;
@@ -768,7 +777,20 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
     defs
 }
 
-struct OpenCLQuant {}
+struct OpenCLQuantReducer {
+    cmd_queue: Arc<CommandQueue>,
+    group_len: usize,
+    group_len_bits: usize,
+    kernels: Vec<Kernel>,
+    outputs: Vec<Buffer<u16>>,
+}
+
+impl OpenCLQuantReducer {
+//     fn new(group_len: usize, quants: &[Quant], context: Arc<Context>,
+//         cmd_queue: Arc<CommandQueue>) -> Self {
+//         
+//     }
+}
 
 #[cfg(test)]
 mod tests {
