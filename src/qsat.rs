@@ -803,14 +803,16 @@ fn get_final_results_from_cpu_outputs(
     elem_bits: usize,
     quants: &[Quant],
     outputs: &[u32],
-) -> Option<FinalResult> {
+) -> (Option<FinalResult>, bool) {
     let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
     let out_base = type_len >> 5;
     let quants_len = quants.len();
+    let first_quant = *quants.first().unwrap();
+    let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+    let work_first_bit = quants_len - elem_bits;
+    let work_result = outputs[out_base] != 0;
     if outputs[out_base + 1] == 1 {
-        let first_quant = *quants.first().unwrap();
-        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
-        let work_first_bit = quants_len - elem_bits;
+        // if solution found
         let first_quant_bits_in_work = std::cmp::min(first_quant_bits - work_first_bit, elem_bits);
         let work_idx = (outputs[out_base + 2] as u64) | ((outputs[out_base + 3] as u64) << 32);
         let work_rev_idx = work_idx.reverse_bits() >> (64 - first_quant_bits_in_work);
@@ -827,13 +829,27 @@ fn get_final_results_from_cpu_outputs(
         } else {
             work_rev_idx
         };
-        Some(FinalResult {
-            solution_bits: first_quant_bits - work_first_bit,
-            solution: Some(work_rev_idx as u128),
-            reversed: first_quant == Quant::All,
-        })
+        (
+            Some(FinalResult {
+                solution_bits: first_quant_bits - work_first_bit,
+                solution: Some(work_rev_idx as u128),
+                reversed: first_quant == Quant::All,
+            }),
+            work_result,
+        )
+    } else if first_quant_bits > work_first_bit {
+        // if first quantifier in work
+        (
+            Some(FinalResult {
+                solution_bits: first_quant_bits - work_first_bit,
+                solution: None,
+                reversed: first_quant == Quant::All,
+            }),
+            work_result,
+        )
     } else {
-        None
+        // no solution
+        (None, work_result)
     }
 }
 
