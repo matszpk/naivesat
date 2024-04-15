@@ -821,14 +821,17 @@ impl OpenCLQuantReducer {
         } else {
             group_len
         };
-        let kernel_num = (quants.len() + group_len_bits - 1) / group_len_bits;
+        let quants_len = quants.len();
+        let kernel_num = quants_len / group_len_bits;
+        let quant_start_pos = quants_len - kernel_num * group_len_bits;
         let mut source_code = "#define QUANT_REDUCER 1".to_string();
 
         let first_quant = quants[0];
         // determine first quantifier length (bits)
         let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
         for ki in 0..kernel_num {
-            let quant_pos_end = ki * group_len_bits;
+            let quant_pos_end =
+                std::cmp::min(quants_len, quant_start_pos + (ki + 1) * group_len_bits);
             let defs = get_aggr_output_opencl_code_defs(1, group_len, &quants[0..quant_pos_end]);
             source_code += &format!("#define QUANT_REDUCER_NAME quant_reducer_{}", ki);
             source_code += &defs;
@@ -851,15 +854,10 @@ impl OpenCLQuantReducer {
                 .collect::<Vec<_>>(),
             outputs: (0..kernel_num)
                 .map(|ki| unsafe {
-                    let shift = if quants.len() > (ki + 1) * group_len_bits {
-                        quants.len() - ki * group_len_bits
-                    } else {
-                        0
-                    };
                     Buffer::create(
                         &context,
                         CL_MEM_READ_WRITE,
-                        1usize << shift,
+                        1usize << (ki * group_len_bits),
                         std::ptr::null_mut(),
                     )
                     .unwrap()
