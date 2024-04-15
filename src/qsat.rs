@@ -14,7 +14,6 @@ use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
 use opencl3::program::Program;
 use opencl3::types::{cl_ulong, CL_BLOCKING};
 
-
 use std::collections::BinaryHeap;
 use std::fmt::{Display, Formatter, Write};
 use std::fs;
@@ -336,7 +335,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"
 #ifdef QUANT_REDUCER
 
 // OpenCL Quant Reducer kernel code
-kernel void quant_reducer(unsigned long n, const global ushort* input, global ushort* output) {
+kernel void QUANT_REDUCER_NAME(unsigned long n, const global ushort* input, global ushort* output) {
     local uint local_results[GROUP_LEN];
     size_t idx = get_global_id(0);
     if (idx >= n) return;
@@ -777,6 +776,26 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
     defs
 }
 
+const QUANT_REDUCER_OPENCL_UNDEFS_CODE: &str = r##"
+#undef GROUP_LEN
+#undef GROUP_LEN_BITS
+#undef LOCAL_QUANT_REDUCE_OP_0
+#undef LOCAL_QUANT_REDUCE_OP_1
+#undef LOCAL_QUANT_REDUCE_OP_2
+#undef LOCAL_QUANT_REDUCE_OP_3
+#undef LOCAL_QUANT_REDUCE_OP_4
+#undef LOCAL_QUANT_REDUCE_OP_5
+#undef LOCAL_QUANT_REDUCE_OP_6
+#undef LOCAL_QUANT_REDUCE_OP_7
+#undef LOCAL_QUANT_REDUCE_OP_8
+#undef LOCAL_QUANT_REDUCE_OP_9
+#undef LOCAL_QUANT_REDUCE_OP_10
+#undef LOCAL_QUANT_REDUCE_OP_11
+#undef LOCAL_FIRST_QUANT_LEVEL
+#undef LOCAL_FIRST_QUANT_PROPAGATE_CHECK
+#undef QUANT_REDUCER_NAME
+"##;
+
 struct OpenCLQuantReducer {
     cmd_queue: Arc<CommandQueue>,
     group_len: usize,
@@ -786,10 +805,68 @@ struct OpenCLQuantReducer {
 }
 
 impl OpenCLQuantReducer {
-//     fn new(group_len: usize, quants: &[Quant], context: Arc<Context>,
-//         cmd_queue: Arc<CommandQueue>) -> Self {
-//         
-//     }
+    fn new(
+        quants: &[Quant],
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+        group_len: Option<usize>,
+    ) -> Self {
+        let device = Device::new(context.devices()[0]);
+        let group_len: usize =
+            group_len.unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
+        let group_len = std::cmp::min(group_len, 4096);
+        let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
+        let group_len = if group_len.count_ones() != 1 {
+            1usize << group_len_bits
+        } else {
+            group_len
+        };
+        let kernel_num = (quants.len() + group_len_bits - 1) / group_len_bits;
+        let mut source_code = "#define QUANT_REDUCER 1".to_string();
+
+        let first_quant = quants[0];
+        // determine first quantifier length (bits)
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+        for ki in 0..kernel_num {
+            let quant_pos_end = ki * group_len_bits;
+            let defs = get_aggr_output_opencl_code_defs(1, group_len, &quants[0..quant_pos_end]);
+            source_code += &format!("#define QUANT_REDUCER_NAME quant_reducer_{}", ki);
+            source_code += &defs;
+            source_code += AGGR_OUTPUT_OPENCL_CODE;
+            source_code += QUANT_REDUCER_OPENCL_UNDEFS_CODE;
+        }
+        let program = Program::create_and_build_from_source(&context, &source_code, "").unwrap();
+        Self {
+            cmd_queue: cmd_queue.clone(),
+            group_len,
+            group_len_bits,
+            kernels: (0..kernel_num)
+                .map(|ki| {
+                    Kernel::create(
+                        &program,
+                        &format!("#define QUANT_REDUCER_NAME quant_reducer_{}", ki),
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>(),
+            outputs: (0..kernel_num)
+                .map(|ki| unsafe {
+                    let shift = if quants.len() > (ki + 1) * group_len_bits {
+                        quants.len() - ki * group_len_bits
+                    } else {
+                        0
+                    };
+                    Buffer::create(
+                        &context,
+                        CL_MEM_READ_WRITE,
+                        1usize << shift,
+                        std::ptr::null_mut(),
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>(),
+        }
+    }
 }
 
 #[cfg(test)]
