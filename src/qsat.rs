@@ -634,6 +634,7 @@ fn get_aggr_output_cpu_code_defs(type_len: usize, elem_bits: usize, quants: &[Qu
         )
         .unwrap();
         if first_quant_bits > quants_len - elem_bits {
+            let first_quant_bits = std::cmp::min(first_quant_bits, quants_len - type_len_bits);
             let rest_first_bits = first_quant_bits - (quants_len - elem_bits);
             writeln!(
                 defs,
@@ -1296,6 +1297,70 @@ mod tests {
 #define WORK_HAVE_FIRST_QUANT
 "##,
             get_aggr_output_cpu_code_defs(256, 8, &str_to_quants("AEAEAEEE"))
+        );
+        assert_eq!(
+            r##"#define WORK_QUANT_REDUCE_INIT_DATA (0ULL)
+#define OTHER_MASK (0ULL)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 &
+#define TYPE_QUANT_REDUCE_OP_5 &
+#define TYPE_QUANT_REDUCE_OP_6 &
+#define TYPE_QUANT_REDUCE_OP_7 &
+#define WORK_WORD_NUM_BITS (10)
+#define WORK_HAVE_FIRST_QUANT
+"##,
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("EEEEEEEEEEEEEEEEEAAAAAEEE"))
+        );
+        assert_eq!(
+            r##"#define WORK_QUANT_REDUCE_INIT_DATA (0ULL)
+#define OTHER_MASK (0ULL)
+#define TYPE_QUANT_REDUCE_OP_0 |
+#define TYPE_QUANT_REDUCE_OP_1 |
+#define TYPE_QUANT_REDUCE_OP_2 |
+#define TYPE_QUANT_REDUCE_OP_3 &
+#define TYPE_QUANT_REDUCE_OP_4 &
+#define TYPE_QUANT_REDUCE_OP_5 |
+#define TYPE_QUANT_REDUCE_OP_6 |
+#define TYPE_QUANT_REDUCE_OP_7 |
+#define WORK_WORD_NUM_BITS (10)
+#define WORK_HAVE_FIRST_QUANT
+"##,
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("EEEEEEEEEEEEEEEEEEEEAAEEE"))
+        );
+        assert_eq!(
+            r##"#define WORK_QUANT_REDUCE_INIT_DATA (1023ULL)
+#define OTHER_MASK (0ULL)
+#define TYPE_QUANT_REDUCE_OP_0 &
+#define TYPE_QUANT_REDUCE_OP_1 &
+#define TYPE_QUANT_REDUCE_OP_2 &
+#define TYPE_QUANT_REDUCE_OP_3 |
+#define TYPE_QUANT_REDUCE_OP_4 |
+#define TYPE_QUANT_REDUCE_OP_5 |
+#define TYPE_QUANT_REDUCE_OP_6 |
+#define TYPE_QUANT_REDUCE_OP_7 |
+#define WORK_WORD_NUM_BITS (10)
+#define WORK_HAVE_FIRST_QUANT
+"##,
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("AAAAAAAAAAAAAAAAAEEEEEAAA"))
+        );
+        assert_eq!(
+            r##"#define WORK_QUANT_REDUCE_INIT_DATA (1023ULL)
+#define OTHER_MASK (0ULL)
+#define TYPE_QUANT_REDUCE_OP_0 &
+#define TYPE_QUANT_REDUCE_OP_1 &
+#define TYPE_QUANT_REDUCE_OP_2 &
+#define TYPE_QUANT_REDUCE_OP_3 |
+#define TYPE_QUANT_REDUCE_OP_4 &
+#define TYPE_QUANT_REDUCE_OP_5 &
+#define TYPE_QUANT_REDUCE_OP_6 &
+#define TYPE_QUANT_REDUCE_OP_7 &
+#define WORK_WORD_NUM_BITS (10)
+#define WORK_HAVE_FIRST_QUANT
+"##,
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("AAAAAAAAAAAAAAAAAAAAAEAAA"))
         );
     }
 
