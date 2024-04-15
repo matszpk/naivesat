@@ -2799,6 +2799,70 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_get_final_results_from_cpu_outputs() {
+        assert_eq!(
+            (None, false),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("AAEE_AAEEAEAAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][..]
+            )
+        );
+        assert_eq!(
+            (None, true),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("AAEE_AAEEAEAAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0][..]
+            )
+        );
+        assert_eq!(
+            (None, false),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("EEEE_AAEEAEAAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][..]
+            )
+        );
+        // with first quantifier
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: None
+                }),
+                false
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("EEEE_EEEAAEAAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0][..]
+            )
+        );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: true,
+                    solution_bits: 3,
+                    solution: None
+                }),
+                true
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("AAAA_AAAEEEAAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0][..]
+            )
+        );
+    }
 }
 
 fn main() {
