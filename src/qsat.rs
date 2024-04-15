@@ -613,7 +613,7 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #undef LOCAL_QUANT_UPDATE
 "##;
 
-fn get_aggr_output_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]) -> String {
+fn get_aggr_output_cpu_code_defs(type_len: usize, elem_bits: usize, quants: &[Quant]) -> String {
     let first_quant = quants[0];
     // determine first quantifier length (bits)
     let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
@@ -1206,7 +1206,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_aggr_output_code_defs() {
+    fn test_get_aggr_output_cpu_code_defs() {
         assert_eq!(
             r##"#define WORK_QUANT_REDUCE_INIT_DATA (399ULL)
 #define TYPE_QUANT_REDUCE_OP_0 |
@@ -1219,7 +1219,7 @@ mod tests {
 #define TYPE_QUANT_REDUCE_OP_7 |
 #define WORK_WORD_NUM_BITS (10)
 "##,
-            get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("EEEEAAAEAAEEEAAAAEEAEAEEE"))
         );
         assert_eq!(
             r##"#define WORK_QUANT_REDUCE_INIT_DATA (399ULL)
@@ -1235,7 +1235,7 @@ mod tests {
 #define WORK_WORD_NUM_BITS (10)
 #define WORK_HAVE_FIRST_QUANT
 "##,
-            get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEEEEEAAEEEAAAAEEAEAEEE"))
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("EEEEEEEEAAEEEAAAAEEAEAEEE"))
         );
         assert_eq!(
             r##"#define WORK_QUANT_REDUCE_INIT_DATA (15ULL)
@@ -1251,7 +1251,7 @@ mod tests {
 #define WORK_WORD_NUM_BITS (10)
 #define WORK_HAVE_FIRST_QUANT
 "##,
-            get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEEEEEEEEEEAAAAEEAEAEEE"))
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("EEEEEEEEEEEEEAAAAEEAEAEEE"))
         );
         assert_eq!(
             r##"#define WORK_QUANT_REDUCE_INIT_DATA (911ULL)
@@ -1265,7 +1265,7 @@ mod tests {
 #define TYPE_QUANT_REDUCE_OP_7 |
 #define WORK_WORD_NUM_BITS (10)
 "##,
-            get_aggr_output_code_defs(256, 18, &str_to_quants("EEEEEEEAAAEEEAAAAEEAEAEEE"))
+            get_aggr_output_cpu_code_defs(256, 18, &str_to_quants("EEEEEEEAAAEEEAAAAEEAEAEEE"))
         );
         assert_eq!(
             r##"#define TYPE_QUANT_REDUCE_QUANT_ALL (0)
@@ -1280,7 +1280,7 @@ mod tests {
 #define WORK_WORD_NUM_BITS (0)
 #define WORK_HAVE_FIRST_QUANT
 "##,
-            get_aggr_output_code_defs(256, 8, &str_to_quants("EEAEAEEE"))
+            get_aggr_output_cpu_code_defs(256, 8, &str_to_quants("EEAEAEEE"))
         );
         assert_eq!(
             r##"#define TYPE_QUANT_REDUCE_QUANT_ALL (1)
@@ -1295,7 +1295,7 @@ mod tests {
 #define WORK_WORD_NUM_BITS (0)
 #define WORK_HAVE_FIRST_QUANT
 "##,
-            get_aggr_output_code_defs(256, 8, &str_to_quants("AEAEAEEE"))
+            get_aggr_output_cpu_code_defs(256, 8, &str_to_quants("AEAEAEEE"))
         );
     }
 
@@ -1480,7 +1480,7 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let defs = get_aggr_output_code_defs(1 << quants.len(), quants.len(), &quants);
+            let defs = get_aggr_output_cpu_code_defs(1 << quants.len(), quants.len(), &quants);
             if *cpu_exts.last().unwrap() != CPUExtension::NoExtension
                 && !cpu_exts.iter().any(|ext| *ext == *CPU_EXTENSION)
             {
@@ -1896,7 +1896,7 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let defs = get_aggr_output_code_defs(64, elem_bits, &quants);
+            let defs = get_aggr_output_cpu_code_defs(64, elem_bits, &quants);
             let mut builder = CPUBuilder::new_with_cpu_ext_and_clang_config(
                 CPUExtension::NoExtension,
                 &CLANG_WRITER_U64,
