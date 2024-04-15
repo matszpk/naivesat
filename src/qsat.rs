@@ -796,6 +796,49 @@ const QUANT_REDUCER_OPENCL_UNDEFS_CODE: &str = r##"
 #undef QUANT_REDUCER_NAME
 "##;
 
+//
+
+fn get_final_results_from_cpu_outputs(
+    type_len: usize,
+    elem_bits: usize,
+    quants: &[Quant],
+    outputs: &[u32],
+) -> Option<FinalResult> {
+    let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
+    let out_base = type_len >> 5;
+    let quants_len = quants.len();
+    if outputs[out_base + 1] == 1 {
+        let first_quant = *quants.first().unwrap();
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+        let work_first_bit = quants_len - elem_bits;
+        let first_quant_bits_in_work = std::cmp::min(first_quant_bits - work_first_bit, elem_bits);
+        let work_idx = (outputs[out_base + 2] as u64) | ((outputs[out_base + 3] as u64) << 32);
+        let work_rev_idx = work_idx.reverse_bits() >> (64 - first_quant_bits_in_work);
+        // join with values in type
+        let final_rev_idx = if first_quant_bits > quants_len - type_len {
+            let first_quant_bits_in_type = first_quant_bits - (quants_len - type_len);
+            let mut qr = QuantReducer::new(&quants[quants_len - type_len..]);
+            for idx in 0..type_len {
+                qr.push(idx as u64, ((outputs[idx >> 5] >> (idx & 31)) & 1) != 0);
+            }
+            let type_bit_rev_index =
+                u64::try_from(qr.final_result().unwrap().solution.unwrap()).unwrap();
+            work_rev_idx | (type_bit_rev_index << first_quant_bits_in_work)
+        } else {
+            work_rev_idx
+        };
+        Some(FinalResult {
+            solution_bits: first_quant_bits - work_first_bit,
+            solution: Some(work_rev_idx as u128),
+            reversed: first_quant == Quant::All,
+        })
+    } else {
+        None
+    }
+}
+
+// OpenCLQuantReducer
+
 struct OpenCLQuantReducer {
     cmd_queue: Arc<CommandQueue>,
     group_len: usize,
