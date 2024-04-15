@@ -813,13 +813,14 @@ fn get_final_results_from_cpu_outputs(
     let work_result = outputs[out_base] != 0;
     if outputs[out_base + 1] == 1 {
         // if solution found
-        let first_quant_bits_in_work = std::cmp::min(first_quant_bits - work_first_bit, elem_bits);
+        let first_quant_bits_in_work =
+            std::cmp::min(first_quant_bits - work_first_bit, elem_bits - type_len_bits);
         let work_idx = (outputs[out_base + 2] as u64) | ((outputs[out_base + 3] as u64) << 32);
         let work_rev_idx = work_idx.reverse_bits() >> (64 - first_quant_bits_in_work);
         // join with values in type
-        let final_rev_idx = if first_quant_bits > quants_len - type_len {
-            let first_quant_bits_in_type = first_quant_bits - (quants_len - type_len);
-            let mut qr = QuantReducer::new(&quants[quants_len - type_len..]);
+        let final_rev_idx = if first_quant_bits > quants_len - type_len_bits {
+            let first_quant_bits_in_type = first_quant_bits - (quants_len - type_len_bits);
+            let mut qr = QuantReducer::new(&quants[quants_len - type_len_bits..]);
             for idx in 0..type_len {
                 qr.push(idx as u64, ((outputs[idx >> 5] >> (idx & 31)) & 1) != 0);
             }
@@ -832,7 +833,7 @@ fn get_final_results_from_cpu_outputs(
         (
             Some(FinalResult {
                 solution_bits: first_quant_bits - work_first_bit,
-                solution: Some(work_rev_idx as u128),
+                solution: Some(final_rev_idx as u128),
                 reversed: first_quant == Quant::All,
             }),
             work_result,
@@ -2891,7 +2892,7 @@ mod tests {
                 256,
                 18,
                 &str_to_quants("EEEE_EEEAAEAAEE_EEAEAEEA"),
-                &[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 6, 0][..]
+                &[0, 0, 11, 770, 0, 110500, 0, 17, 1, 1, 6, 0][..]
             )
         );
         assert_eq!(
@@ -2907,7 +2908,39 @@ mod tests {
                 256,
                 18,
                 &str_to_quants("AAAA_AAAAAAEAEE_EEAEAEEA"),
-                &[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 41, 0][..]
+                &[0, 49, 0, 0, 456, 21200, 0, 133, 0, 1, 41, 0][..]
+            )
+        );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: false,
+                    solution_bits: 10,
+                    solution: Some(902)
+                }),
+                true
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("EEEE_EEEEEEEEEE_AEAEAEEA"),
+                &[0, 0, 11, 770, 0, 110500, 0, 17, 1, 1, 391, 0][..]
+            )
+        );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: false,
+                    solution_bits: 15,
+                    solution: Some(0b11010_1110000110)
+                }),
+                true
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("EEEE_EEEEEEEEEE_EEEEEAAA"),
+                &[0, 0, 0xff000000, 770, 0, 110500, 0, 17, 1, 1, 391, 0][..]
             )
         );
     }
