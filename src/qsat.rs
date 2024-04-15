@@ -321,7 +321,28 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 #endif // WORK_QUANT_REDUCE_INIT_DATA
 }"##;
 
-const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
+// aggr output code for OpenCL and OpenCL quant reducer code together
+// QUANT_REDUCER - enables OpenCL Quant Reducer kernel code.
+// major code is common.
+const AGGR_OUTPUT_OPENCL_CODE: &str = r##"
+#ifdef QUANT_REDUCER
+
+// OpenCL Quant Reducer kernel code
+kernel void quant_reducer(unsigned long n, const global ushort* input, global ushort* output) {
+    local uint local_results[GROUP_LEN];
+    size_t idx = get_global_id(0);
+    size_t lidx = get_local_id(0);
+    global ushort* out = (global ushort*)output;
+    uint work_bit;
+    uint result1, result2;
+
+    work_bit = input[idx] & 0x8000;
+
+    // end of part of Quant Reducer kernel code
+#else // QUANT_REDUCER
+
+// normal aggegated output code for OpenCL
+local uint local_results[GROUP_LEN];
 {
     uint i;
     size_t lidx = get_local_id(0);
@@ -368,6 +389,13 @@ const AGGR_OUTPUT_OPENCL_CODE: &str = r##"local uint local_results[GROUP_LEN];
 #endif
 
     work_bit = (temp[0] & 1) << 15;
+
+    // end of part of normal aggregated output code
+#endif // not QUANT_REDUCER
+
+///////////////////////////////////
+// common part of code
+///////////////////////////////////
 
 // value on bits of local index (0-14 bits):
 // 0-0x7ffe - local index if solution, 0x7fff - no local index if no solution
@@ -739,6 +767,8 @@ fn get_aggr_output_opencl_code_defs(type_len: usize, group_len: usize, quants: &
     }
     defs
 }
+
+struct OpenCLQuant {}
 
 #[cfg(test)]
 mod tests {
