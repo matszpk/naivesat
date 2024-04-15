@@ -2470,7 +2470,7 @@ mod tests {
                     vec![(true, Some(32)), (false, Some(0x7fff)), (true, Some(0))],
                 )],
             ),
-            // 8: greater group
+            // 11: greater group
             (
                 &str_to_quants("EEEAAEAA_EEEEE"),
                 256,
@@ -2517,6 +2517,30 @@ mod tests {
                             0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 15
                         ],
                         vec![(false, None)],
+                    ),
+                ],
+            ),
+            // 0
+            (
+                &str_to_quants("EE_EEE_EEAAA"),
+                8,
+                1,
+                vec![
+                    (vec![0, 0, 0, 0, 0, 0, 0, 0], vec![(false, Some(0x7fff))]),
+                    (vec![0, 0, 0, 1, 0, 0, 0, 0], vec![(false, Some(0x7fff))]),
+                    (vec![0, 0, 0xff00, 0, 0, 0, 0, 0], vec![(true, Some(2))]),
+                    (vec![0, 0, 0, 1, 0xff0000, 111, 0, 0], vec![(true, Some(4))]),
+                    (
+                        vec![0, 0, 0, 1, 0xfe00, 0x1ff10, 3, 5],
+                        vec![(true, Some(5))],
+                    ),
+                    (
+                        vec![0, 0, 0, 0xef, 0xee, 0, 0xeeff10, 5],
+                        vec![(true, Some(6))],
+                    ),
+                    (
+                        vec![0, 0, 0, 0xef, 0xee, 0, 0xeeff100, 5],
+                        vec![(false, Some(0x7fff))],
                     ),
                 ],
             ),
