@@ -865,12 +865,16 @@ struct OpenCLQuantReducer {
 }
 
 impl OpenCLQuantReducer {
+    // special info: quants - quantifiers from first input to bits that will be reduced.
+    // by default: quants are all quantifiers for all input bits.
     fn new(
+        reduce_bits: usize,
         quants: &[Quant],
         context: Arc<Context>,
         cmd_queue: Arc<CommandQueue>,
         group_len: Option<usize>,
     ) -> Self {
+        let quants = &quants[quants.len() - reduce_bits..];
         let device = Device::new(context.devices()[0]);
         let group_len: usize =
             group_len.unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
