@@ -2153,6 +2153,7 @@ mod tests {
         let circuit = Circuit::<usize>::new(1, [], [(0, false)]).unwrap();
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
         for (i, (quants, group_len, reduce_len, testcases)) in [
+            // 0
             (
                 &str_to_quants("EE_EEA_EEEEE"),
                 8,
@@ -2166,6 +2167,7 @@ mod tests {
                     (vec![0, 0, 0, 1, 1, 0, 3, 5], vec![(true, Some(6))]),
                 ],
             ),
+            // 1
             (
                 &str_to_quants("AA_AAE_EEEEE"),
                 8,
@@ -2179,6 +2181,7 @@ mod tests {
                     (vec![0, 1, 1, 0, 0, 1, 0, 0], vec![(false, Some(6))]),
                 ],
             ),
+            // 2
             (
                 &str_to_quants("AE_EEA_EEEEE"),
                 8,
@@ -2189,6 +2192,7 @@ mod tests {
                     (vec![0, 0, 1, 1, 0, 0, 0, 0], vec![(true, None)]),
                 ],
             ),
+            // 3
             (
                 &str_to_quants("EA_AAE_EEEEE"),
                 8,
@@ -2199,6 +2203,7 @@ mod tests {
                     (vec![0, 1, 0, 0, 1, 0, 0, 1], vec![(false, None)]),
                 ],
             ),
+            // 4
             (
                 &str_to_quants("EE_EEA_EEEEE"),
                 8,
@@ -2208,6 +2213,7 @@ mod tests {
                     vec![(false, Some(0x7fff)), (true, Some(6))],
                 )],
             ),
+            // 5: many OpenCL groups
             (
                 &str_to_quants("EE_EEA_EEEEE"),
                 8,
@@ -2225,6 +2231,111 @@ mod tests {
                         (true, Some(6)),
                     ],
                 )],
+            ),
+            // 6: various machine words quantifiers
+            (
+                &str_to_quants("EE_EEA_EAEAA"),
+                8,
+                1,
+                vec![
+                    (vec![0, 0, 0, 0, 0, 0, 0, 0], vec![(false, Some(0x7fff))]),
+                    (
+                        vec![
+                            0xf02344f1, 0x000eaf00, 0x13f94fe1, 0x1ef94fe1, 0xfaa240af, 0xaee0a11a,
+                            0xfa03441e, 0x123ff444,
+                        ],
+                        vec![(false, Some(0x7fff))],
+                    ),
+                    (
+                        vec![
+                            0xf02344f1, 0x000eaf00, 0x13f94fe1, 0x1ef94fe1, 0xfaaf40af, 0xaee0f1fa,
+                            0xfa03441e, 0x123ff444,
+                        ],
+                        vec![(true, Some(4))],
+                    ),
+                ],
+            ),
+            // 7: start quantifier only in work
+            (
+                &str_to_quants("EEA_EEEEE"),
+                8,
+                1,
+                vec![
+                    (vec![0, 0, 0, 0, 0, 0, 0, 0], vec![(false, Some(0x7fff))]),
+                    (vec![0, 0, 0, 1, 0, 0, 0, 0], vec![(false, Some(0x7fff))]),
+                    (vec![0, 0, 1, 1, 0, 0, 0, 0], vec![(true, Some(2))]),
+                    (vec![0, 0, 0, 1, 1, 2, 0, 0], vec![(true, Some(4))]),
+                    (vec![0, 0, 0, 1, 1, 2, 3, 5], vec![(true, Some(4))]),
+                    (vec![0, 0, 0, 1, 1, 0, 3, 5], vec![(true, Some(6))]),
+                ],
+            ),
+            // 8: greater group
+            (
+                &str_to_quants("EAAEAE_EEEEE"),
+                64,
+                1,
+                vec![
+                    (
+                        vec![
+                            0, 1, 1, 0, 0, 1, 0, 1, // 0
+                            0, 1, 0, 1, 0, 0, 0, 1, // 8
+                            0, 1, 0, 0, 0, 0, 0, 1, // 16   lack of 1
+                            1, 1, 0, 1, 1, 1, 0, 0, // 24
+                            0, 0, 0, 0, 1, 0, 1, 0, // 0
+                            0, 0, 0, 0, 1, 0, 0, 1, // 8
+                            0, 1, 1, 0, 0, 0, 0, 0, // 16
+                            0, 0, 0, 0, 1, 0, 0, 1, // 24
+                        ],
+                        vec![(true, Some(32))],
+                    ),
+                    (
+                        vec![
+                            0, 1, 1, 0, 0, 1, 0, 1, // 0
+                            0, 1, 0, 1, 0, 0, 0, 1, // 8
+                            1, 1, 0, 0, 0, 0, 1, 1, // 16   lack of 1
+                            1, 1, 0, 1, 1, 1, 0, 0, // 24
+                            1, 1, 0, 0, 0, 0, 1, 1, // 0    lacks in all eight-items
+                            0, 0, 1, 1, 1, 1, 0, 0, // 8
+                            1, 1, 0, 0, 1, 1, 0, 0, // 16
+                            0, 0, 1, 1, 0, 0, 1, 1, // 24
+                        ],
+                        vec![(false, Some(0x7fff))],
+                    ),
+                ],
+            ),
+            // 9: greater group
+            (
+                &str_to_quants("AAEAEE_EEEEE"),
+                64,
+                1,
+                vec![
+                    (
+                        vec![
+                            0, 0, 1, 0, 1, 0, 0, 0, // 0
+                            0, 0, 0, 0, 0, 0, 0, 0, // 8
+                            0, 0, 0, 0, 0, 0, 0, 0, // 16
+                            1, 0, 0, 0, 0, 0, 1, 0, // 24
+                            1, 0, 0, 0, 0, 1, 0, 0, // 32
+                            0, 0, 0, 0, 0, 0, 0, 0, // 40
+                            1, 0, 0, 0, 0, 0, 0, 0, // 48
+                            0, 0, 1, 0, 1, 0, 0, 0, // 56
+                        ],
+                        vec![(true, Some(0x7fff))],
+                    ),
+                    (
+                        vec![
+                            1, 1, 1, 1, 1, 1, 0, 1, // 0
+                            1, 0, 1, 0, 1, 1, 1, 1, // 8
+                            1, 1, 0, 1, 1, 1, 1, 1, // 16
+                            1, 1, 1, 1, 1, 0, 1, 1, // 24
+                            1, 1, 1, 1, 0, 0, 0, 0, // 32
+                            1, 1, 1, 1, 0, 0, 0, 0, // 40
+                            1, 1, 1, 1, 1, 1, 1, 1, // 48
+                            1, 0, 1, 1, 1, 1, 1, 1, // 56
+                        ],
+                        vec![(false, Some(32))],
+                    ),
+                ],
             ),
         ]
         .into_iter()
