@@ -2943,6 +2943,41 @@ mod tests {
                 &[0, 0, 0xff000000, 770, 0, 110500, 0, 17, 1, 1, 391, 0][..]
             )
         );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: true,
+                    solution_bits: 15,
+                    solution: Some(0b1001_1101000110)
+                }),
+                false
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("AAAA_AAAAAAAAAA_AAAAAEEE"),
+                &[
+                    0x02030607, 0x02030607, 0x02030607, 0x02030607, 0x02000607, 0x02030607,
+                    0x02030607, 0x02030607, 0, 1, 395, 0
+                ][..]
+            )
+        );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: false,
+                    solution_bits: 18,
+                    solution: Some(0b11011010_1110000110)
+                }),
+                true
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("EEEE_EEEEEEEEEE_EEEEEEEE"),
+                &[0, 0, 0xf8000000, 770, 0, 110500, 0, 17, 1, 1, 391, 0][..]
+            )
+        );
     }
 }
 
