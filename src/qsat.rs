@@ -2862,6 +2862,54 @@ mod tests {
                 &[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0][..]
             )
         );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(0)
+                }),
+                true
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("EEEE_EEEAAEAAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0][..]
+            )
+        );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: false,
+                    solution_bits: 3,
+                    solution: Some(3)
+                }),
+                true
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("EEEE_EEEAAEAAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 6, 0][..]
+            )
+        );
+        assert_eq!(
+            (
+                Some(FinalResult {
+                    reversed: true,
+                    solution_bits: 6,
+                    solution: Some(37)
+                }),
+                false
+            ),
+            get_final_results_from_cpu_outputs(
+                256,
+                18,
+                &str_to_quants("AAAA_AAAAAAEAEE_EEAEAEEA"),
+                &[0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 41, 0][..]
+            )
+        );
     }
 }
 
