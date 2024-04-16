@@ -918,6 +918,8 @@ impl OpenCLQuantReducer {
         cmd_queue: Arc<CommandQueue>,
         group_len: Option<usize>,
     ) -> Self {
+        assert!(reduce_start_bit < reduce_end_bit);
+        assert!(reduce_start_bit + reduce_end_bit + initial_input_group_len_bits <= quants.len());
         let is_first_quant_all = quants[0] == Quant::All;
         let quants_after = quants[reduce_end_bit..].to_vec();
         let total_reduce_bits = quants.len() - reduce_start_bit;
@@ -3191,6 +3193,15 @@ mod tests {
                 &[0, 0, 0xf8000000, 770, 0, 110500, 0, 17, 1, 1, 391, 0][..]
             )
         );
+    }
+    
+    #[test]
+    fn test_opencl_quant_reducer() {
+        // for (xxx) in [
+        // ]
+        // .into_iter().
+        // .enumerate() {
+        // }
     }
 }
 
