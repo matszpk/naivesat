@@ -3200,13 +3200,29 @@ mod tests {
         #[allow(deprecated)]
         let cmd_queue =
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
-        for (i, (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len)) in [(
-            2,
-            14,
-            7,
-            &str_to_quants("AE_AAAEAA_AEAEEA_EEAEEAE_AAEAA"),
-            64,
-        )]
+        for (i, (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len)) in [
+            (
+                2,
+                14,
+                7,
+                &str_to_quants("AE_AAAEAA_AEAEEA_EEAEEAE_AAEAA"),
+                64,
+            ),
+            (
+                3,
+                17,
+                4,
+                &str_to_quants("AEE_AA_AAAEAA_AEAEEA_EEAE_AAEAA"),
+                64,
+            ),
+            (
+                3,
+                23,
+                4,
+                &str_to_quants("AEE_AA_AAAEAA_AEAEEA_EEAAEA_EEAE_AAEAA"),
+                64,
+            ),
+        ]
         .into_iter()
         .enumerate()
         {
