@@ -1128,7 +1128,7 @@ impl OpenCLQuantReducer {
                             )
                             .unwrap();
                     }
-                    let idx = (input_out[0] >> ((idx & 1) >> 16)) & 0x7fff;
+                    let idx = (input_out[0] >> ((idx & 1) << 4)) & 0x7fff;
                     let rev_idx = idx.reverse_bits() >> (16 - self.group_len_bits);
                     if idx != 0x7fff {
                         new_sol |= (rev_idx as u128)
