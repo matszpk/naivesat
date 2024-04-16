@@ -124,53 +124,35 @@ struct QuantReducer {
 
 impl QuantReducer {
     fn new(quants: &[Quant]) -> Self {
-        if !quants.is_empty() {
-            let first_quant = quants[0];
-            // determine first quantifier length (bits)
-            let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
-            // to quants reversed and to bool:
-            // initialize bits by rule: All=1, Exists=0 (and requires 1, or requires 0)
-            let quants = quants
-                .iter()
-                .rev()
-                .map(|q| *q == Quant::All)
-                .collect::<Vec<_>>();
-            let all_mask = u64::try_from((1u128 << quants.len()) - 1).unwrap();
-            let first_mask = u64::try_from((1u128 << first_quant_bits) - 1).unwrap()
-                << (quants.len() - first_quant_bits);
-            Self {
-                quants: quants.clone(),
-                started: false,
-                start: 0,
-                all_mask,
-                first_mask,
-                other_mask: all_mask & !first_mask,
-                items: BinaryHeap::new(),
-                result: quants,
-                solution: None,
-            }
-        } else {
-            Self {
-                quants: vec![],
-                started: false,
-                start: 0,
-                all_mask: 0,
-                first_mask: 0,
-                other_mask: 0,
-                items: BinaryHeap::new(),
-                result: vec![],
-                solution: None,
-            }
+        let first_quant = quants[0];
+        // determine first quantifier length (bits)
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+        // to quants reversed and to bool:
+        // initialize bits by rule: All=1, Exists=0 (and requires 1, or requires 0)
+        let quants = quants
+            .iter()
+            .rev()
+            .map(|q| *q == Quant::All)
+            .collect::<Vec<_>>();
+        let all_mask = u64::try_from((1u128 << quants.len()) - 1).unwrap();
+        let first_mask = u64::try_from((1u128 << first_quant_bits) - 1).unwrap()
+            << (quants.len() - first_quant_bits);
+        Self {
+            quants: quants.clone(),
+            started: false,
+            start: 0,
+            all_mask,
+            first_mask,
+            other_mask: all_mask & !first_mask,
+            items: BinaryHeap::new(),
+            result: quants,
+            solution: None,
         }
     }
 
     #[inline]
     fn is_end(&self) -> bool {
-        if !self.quants.is_empty() {
-            self.started && (self.start & self.all_mask) == 0
-        } else {
-            self.started && self.start == 0
-        }
+        self.started && (self.start & self.all_mask) == 0
     }
 
     fn push(&mut self, index: u64, item: bool) {
@@ -211,28 +193,24 @@ impl QuantReducer {
         // if this all bits of other quantifiers are ones (last item in current value of first
         // quantifier) - then resolve solution -
         // result for first quantifier: all - last -> result=0, exists -> result=1
-        if !self.quants.is_empty() {
-            if self.solution.is_none()
-                && (self.start & self.other_mask) == self.other_mask
-                && (prev ^ self.quants.last().unwrap())
-            {
-                let first_bits = self.first_mask.count_ones() as usize;
-                // calculate solution in original order of bits.
-                self.solution = Some(
-                    (self.start >> (self.quants.len() - first_bits)).reverse_bits()
-                        >> (64 - first_bits),
-                );
-            }
-        } else {
-            self.solution = Some(0);
-        };
+        if self.solution.is_none()
+            && (self.start & self.other_mask) == self.other_mask
+            && (prev ^ self.quants.last().unwrap())
+        {
+            let first_bits = self.first_mask.count_ones() as usize;
+            // calculate solution in original order of bits.
+            self.solution = Some(
+                (self.start >> (self.quants.len() - first_bits)).reverse_bits()
+                    >> (64 - first_bits),
+            );
+        }
         self.start = self.start.overflowing_add(1).0;
     }
 
     fn final_result(&self) -> Option<FinalResult> {
         if self.is_end() || self.solution.is_some() {
             Some(FinalResult {
-                reversed: self.quants.last().copied().unwrap_or(false),
+                reversed: self.quants.last().copied().unwrap(),
                 solution_bits: self.first_mask.count_ones() as usize,
                 solution: self.solution.map(|x| x as u128),
             })
@@ -1587,18 +1565,6 @@ mod tests {
                     reversed: false,
                     solution_bits: 5,
                     solution: Some(0b11001),
-                },
-            ),
-            // 0
-            (
-                str_to_quants(""),
-                str_to_bools("0"),
-                vec![0],
-                None,
-                FinalResult {
-                    reversed: false,
-                    solution_bits: 0,
-                    solution: Some(0),
                 },
             ),
         ]
