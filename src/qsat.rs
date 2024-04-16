@@ -973,7 +973,7 @@ impl OpenCLQuantReducer {
         }
     }
 
-    fn execute(&mut self, input: &Buffer<u32>, found_sol: bool) -> (Option<FinalResult>, bool) {
+    fn execute(&mut self, input: &Buffer<u32>) -> (Option<FinalResult>, bool) {
         let mut input_len = self.input_len;
         let mut next_input_buf = None;
         // call kernels
@@ -1030,28 +1030,28 @@ impl OpenCLQuantReducer {
                 solution: Some(0),
             }
         };
-        if !found_sol {
-            let result = if !self.quant_start_pos != 0 {
-                // if some first processed by CPU (QuantReducer)
-                quants_start_final_result.solution.is_some() ^ self.is_first_quant_all
-            } else {
-                // get from last buffer
-                let mut buf_out = [0u16];
-                unsafe {
-                    self.cmd_queue
-                        .enqueue_read_buffer(
-                            &self.outputs.last().unwrap().0,
-                            CL_BLOCKING,
-                            0,
-                            &mut buf_out,
-                            &[],
-                        )
-                        .unwrap();
-                }
-                ((buf_out[0] >> 15) & 1) != 0
-            };
-            // if solution not found
-            return (None, result);
+        let result = if !self.quant_start_pos != 0 {
+            // if some first processed by CPU (QuantReducer)
+            quants_start_final_result.solution.is_some() ^ self.is_first_quant_all
+        } else {
+            // get from last buffer
+            let mut buf_out = [0u16];
+            unsafe {
+                self.cmd_queue
+                    .enqueue_read_buffer(
+                        &self.outputs.last().unwrap().0,
+                        CL_BLOCKING,
+                        0,
+                        &mut buf_out,
+                        &[],
+                    )
+                    .unwrap();
+            }
+            ((buf_out[0] >> 15) & 1) != 0
+        };
+        if !(self.is_first_quant_all ^ result) {
+            // if no solution found
+            (None, result)
         }
         // solution found
         let first_quant_bits_in_reducer_and_inital_input = std::cmp::min(
