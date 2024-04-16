@@ -1025,6 +1025,7 @@ impl OpenCLQuantReducer {
             }
             qr.final_result().unwrap()
         } else {
+            // generate final result with solution
             FinalResult {
                 reversed: self.is_first_quant_all,
                 solution_bits: 0,
@@ -1040,7 +1041,7 @@ impl OpenCLQuantReducer {
         };
         if !(self.is_first_quant_all ^ result) {
             // if no solution found
-            (None, result)
+            return (None, result);
         }
         // solution found
         let first_quant_bits_in_reducer_and_inital_input = std::cmp::min(
