@@ -3400,6 +3400,39 @@ mod tests {
                     ),
                 ],
             ),
+            // 7
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("AA_AAA_AAAA_AAAEE"),
+                64,
+                vec![
+                    (vec![0x8000; 8], (None, true)),
+                    (
+                        vec![0x8000, 0x8000, 0x8000, 0x4, 0x8000, 0x8000, 0x8000, 0x8000],
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 7,
+                                solution: Some(0b10110),
+                            }),
+                            false,
+                        ),
+                    ),
+                    (
+                        vec![0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 7, 9, 0x8000],
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 7,
+                                solution: Some(0b1110101),
+                            }),
+                            false,
+                        ),
+                    ),
+                ],
+            ),
             (
                 2,
                 8,
