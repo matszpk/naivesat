@@ -893,6 +893,7 @@ struct OpenCLQuantReducer {
     quants_start: Vec<Quant>,
     total_reduce_bits: usize,
     initial_input_group_len_bits: usize,
+    is_first_quant_all: bool,
 }
 
 impl OpenCLQuantReducer {
@@ -917,6 +918,7 @@ impl OpenCLQuantReducer {
         cmd_queue: Arc<CommandQueue>,
         group_len: Option<usize>,
     ) -> Self {
+        let is_first_quant_all = quants[0] == Quant::All;
         let quants_after = quants[reduce_end_bit..].to_vec();
         let total_reduce_bits = quants.len() - reduce_start_bit;
         let quants = &quants[reduce_start_bit..reduce_end_bit];
@@ -989,10 +991,11 @@ impl OpenCLQuantReducer {
             quants_start: quants[0..quant_start_pos].to_vec(),
             total_reduce_bits,
             initial_input_group_len_bits,
+            is_first_quant_all,
         }
     }
 
-    fn execute(&mut self, input: &Buffer<u32>) -> (Option<FinalResult>, bool) {
+    fn execute(&mut self, input: &Buffer<u32>, found_sol: bool) -> (Option<FinalResult>, bool) {
         let mut input_len = self.input_len;
         let mut next_input_buf = None;
         // call kernels
@@ -1040,9 +1043,77 @@ impl OpenCLQuantReducer {
             for i in 0..1 << self.quant_start_pos {
                 qr.push(i, (last_output[i as usize] >> 15) != 0);
             }
-            qr.final_result()
+            qr.final_result().unwrap()
         };
-        (None, false)
+        if !found_sol {
+            return (None, self.is_first_quant_all);
+        }
+        let first_quant_bits_in_reducer = std::cmp::min(
+            self.first_quant_bits,
+            self.quant_start_pos + self.group_len_bits * self.kernels.len(),
+        );
+        if let Some(sol) = quants_start_final_result.solution {
+            let mut new_sol = sol;
+            if self.first_quant_bits > self.quant_start_pos {
+                let mut cur_first_quant_bits = self.first_quant_bits - self.quant_start_pos;
+                // go get deeper first quant results
+                let mut idx = usize::try_from(
+                    (sol.reverse_bits()) >> (128 - quants_start_final_result.solution_bits),
+                )
+                .unwrap();
+                // read last buffer
+                // next buffer ....
+                let mut get_from_initial_input = true;
+                for (oi, (buffer, _)) in self.outputs.iter().rev().enumerate() {
+                    if cur_first_quant_bits <= self.group_len_bits {
+                        get_from_initial_input = false; // it is end
+                        break;
+                    }
+                    let mut buf_out = [0u16];
+                    unsafe {
+                        self.cmd_queue
+                            .enqueue_read_buffer(
+                                &self.outputs[0].0,
+                                CL_BLOCKING,
+                                2 * idx,
+                                &mut buf_out,
+                                &[],
+                            )
+                            .unwrap();
+                    }
+                    idx = (buf_out[0] & 0x7fff) as usize;
+                    let rev_idx = idx.reverse_bits() >> (16 - self.group_len_bits);
+                    if idx != 0x7fff {
+                        // update new sol
+                        new_sol |=
+                            (rev_idx as u128) << (self.quant_start_pos + oi * self.group_len);
+                    } else {
+                        panic!("Unexpected");
+                    }
+                    cur_first_quant_bits -= self.group_len_bits;
+                }
+                if get_from_initial_input {
+                    // go get deeper
+                }
+            }
+            (
+                Some(FinalResult {
+                    reversed: self.is_first_quant_all,
+                    solution_bits: first_quant_bits_in_reducer,
+                    solution: Some(new_sol),
+                }),
+                !self.is_first_quant_all,
+            )
+        } else {
+            (
+                Some(FinalResult {
+                    reversed: self.is_first_quant_all,
+                    solution_bits: first_quant_bits_in_reducer,
+                    solution: None,
+                }),
+                self.is_first_quant_all,
+            )
+        }
     }
 }
 
