@@ -1024,12 +1024,30 @@ impl OpenCLQuantReducer {
         }
         self.cmd_queue.finish().unwrap();
         // retrieve results
-        let mut last_output = vec![0u16; self.outputs[0].1];
-        unsafe {
-            self.cmd_queue
-                .enqueue_read_buffer(&self.outputs[0].0, CL_BLOCKING, 0, &mut last_output, &[])
-                .unwrap();
-        }
+        let last_output = if !self.outputs.is_empty() {
+            // load from last output
+            let mut last_output = vec![0u16; self.outputs[0].1];
+            unsafe {
+                self.cmd_queue
+                    .enqueue_read_buffer(&self.outputs[0].0, CL_BLOCKING, 0, &mut last_output, &[])
+                    .unwrap();
+            }
+            last_output
+        } else {
+            // load from input
+            let mut last_output_32 = vec![0u32; (self.input_len + 1) >> 1];
+            unsafe {
+                self.cmd_queue
+                    .enqueue_read_buffer(input, CL_BLOCKING, 0, &mut last_output_32, &[])
+                    .unwrap();
+            }
+            // and convert to u16
+            let mut last_output = vec![0u16; self.input_len];
+            for (i, v) in last_output.iter_mut().enumerate() {
+                *v = ((last_output_32[i >> i] >> ((i & 1) << 4)) & 0xffff) as u16;
+            }
+            last_output
+        };
         let quants_start_final_result = if !self.quant_start_pos != 0 {
             // determine results by quantifier's reduction on CPU
             let mut qr = QuantReducer::new(&self.quants_start);
