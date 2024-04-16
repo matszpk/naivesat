@@ -878,8 +878,8 @@ impl OpenCLQuantReducer {
     // reduce_start_bit..reduce_end_bit - reduction done by these kernels.
     // reduce_end_bit..reduce_end_bit+initial_input_group_len_bits -
     //     reduction done by circuit kernel at local reduction.
-    // reduce_end_bit+initial_input_group_len_bits - reduction done by circuit kernel
-    //     at type reduction level.
+    // reduce_end_bit+initial_input_group_len_bits..quants.len() - reduction done by
+    //    circuit kernel at type reduction level.
     // reduce_start_bit..reduce_end_bit - bit to reduce by kernels
     // initial_input_group_len_bits - group length bits (reduction bits) from circuit kernel.
     fn new(
