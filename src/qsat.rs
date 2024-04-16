@@ -3210,6 +3210,27 @@ mod tests {
             ),
             (
                 2,
+                8,
+                7,
+                &str_to_quants("EE_EEEEAA_EEAEEAE_AAEAA"),
+                64,
+            ),
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("EE_EEEEEE_EEEAAAE_AAEAA"),
+                64,
+            ),
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("EE_EEEEEE_EEEEEEE_EEAEA"),
+                64,
+            ),
+            (
+                2,
                 14,
                 7,
                 &str_to_quants("AE_AAAEAA_AEAEEA_EEAEEAE_AAEAA"),
