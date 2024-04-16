@@ -937,7 +937,7 @@ impl OpenCLQuantReducer {
         let quants_len = quants.len();
         let kernel_num = quants_len / group_len_bits;
         let quant_start_pos = quants_len - kernel_num * group_len_bits;
-        let mut source_code = "#define QUANT_REDUCER 1".to_string();
+        let mut source_code = "#define QUANT_REDUCER 1\n".to_string();
 
         let first_quant = quants[0];
         // determine first quantifier length (bits)
@@ -946,11 +946,15 @@ impl OpenCLQuantReducer {
             let quant_pos_end =
                 std::cmp::min(quants_len, quant_start_pos + (ki + 1) * group_len_bits);
             let defs = get_aggr_output_opencl_code_defs(1, group_len, &quants[0..quant_pos_end]);
-            source_code += &format!("#define QUANT_REDUCER_NAME quant_reducer_{}", ki);
+            source_code += &format!("#define QUANT_REDUCER_NAME quant_reducer_{}\n", ki);
             source_code += &defs;
+            source_code += "\n";
             source_code += AGGR_OUTPUT_OPENCL_CODE;
+            source_code += "\n";
             source_code += QUANT_REDUCER_OPENCL_UNDEFS_CODE;
+            source_code += "\n";
         }
+        //println!("source: {}", source_code);
         let program = Program::create_and_build_from_source(&context, &source_code, "").unwrap();
         Self {
             cmd_queue: cmd_queue.clone(),
@@ -958,13 +962,7 @@ impl OpenCLQuantReducer {
             group_len_bits,
             input_len: 1 << quants_len,
             kernels: (0..kernel_num)
-                .map(|ki| {
-                    Kernel::create(
-                        &program,
-                        &format!("#define QUANT_REDUCER_NAME quant_reducer_{}", ki),
-                    )
-                    .unwrap()
-                })
+                .map(|ki| Kernel::create(&program, &format!("quant_reducer_{}", ki)).unwrap())
                 .collect::<Vec<_>>(),
             outputs: (0..kernel_num)
                 .map(|ki| {
@@ -3194,14 +3192,34 @@ mod tests {
             )
         );
     }
-    
+
     #[test]
     fn test_opencl_quant_reducer() {
-        // for (xxx) in [
-        // ]
-        // .into_iter().
-        // .enumerate() {
-        // }
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        let context = Arc::new(Context::from_device(&device).unwrap());
+        #[allow(deprecated)]
+        let cmd_queue =
+            Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
+        for (i, (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len)) in [(
+            2,
+            14,
+            7,
+            &str_to_quants("AE_AAAEAA_AEAEEA_EEAEEAE_AAEAA"),
+            64,
+        )]
+        .into_iter()
+        .enumerate()
+        {
+            let ocl_qr = OpenCLQuantReducer::new(
+                reduce_start_bit,
+                reduce_end_bit,
+                init_group_len_bits,
+                quants,
+                context.clone(),
+                cmd_queue.clone(),
+                Some(group_len),
+            );
+        }
     }
 }
 
