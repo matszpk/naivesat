@@ -3203,6 +3203,13 @@ mod tests {
         for (i, (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len)) in [
             (
                 2,
+                8,
+                7,
+                &str_to_quants("AE_AAAEAA_EEAEEAE_AAEAA"),
+                64,
+            ),
+            (
+                2,
                 14,
                 7,
                 &str_to_quants("AE_AAAEAA_AEAEEA_EEAEEAE_AAEAA"),
