@@ -3211,6 +3211,7 @@ mod tests {
             i,
             (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len, testcases),
         ) in [
+            // 0
             (
                 2,
                 5,
@@ -3220,6 +3221,18 @@ mod tests {
                 vec![
                     (vec![0u16; 8], (Option::<FinalResult>::None, false)),
                     (vec![0x8000u16; 8], (None, true)),
+                ],
+            ),
+            // 1
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("AE_AEE_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 8], (None, false)),
+                    (vec![0, 0x8000, 0, 0, 0, 0, 0x8000, 0], (None, true)),
                 ],
             ),
             (2, 5, 4, &str_to_quants("EE_EEA_EEAE_AAEAA"), 64, vec![]),
