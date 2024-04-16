@@ -875,7 +875,10 @@ struct OpenCLQuantReducer {
 impl OpenCLQuantReducer {
     // form of quants:
     // before reduce_start_bit - reduction to do by argument level.
-    // reduce_start_bit..reduce_end_bit - reduction done by these kernels.
+    // reduce_start_bit..reduce_end_bit - reduction done by this reducer.
+    // reduce_start_bit..reduce_start_bit+quant_start_pos - reduction done by
+    //     CPU in this reducer.
+    // reduce_start_bit+quant_start_pos..reduce_end_bit - reduction done by these kernels.
     // reduce_end_bit..reduce_end_bit+initial_input_group_len_bits -
     //     reduction done by circuit kernel at local reduction.
     // reduce_end_bit+initial_input_group_len_bits..quants.len() - reduction done by
