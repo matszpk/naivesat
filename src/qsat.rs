@@ -1043,7 +1043,7 @@ impl OpenCLQuantReducer {
             // and convert to u16
             let mut last_output = vec![0u16; self.input_len];
             for (i, v) in last_output.iter_mut().enumerate() {
-                *v = ((last_output_32[i >> i] >> ((i & 1) << 4)) & 0xffff) as u16;
+                *v = ((last_output_32[i >> 1] >> ((i & 1) << 4)) & 0xffff) as u16;
             }
             last_output
         };
@@ -3235,6 +3235,18 @@ mod tests {
                     (vec![0, 0x8000, 0, 0, 0, 0, 0x8000, 0], (None, true)),
                 ],
             ),
+            // 2
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("EA_EAA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 8], (None, false)),
+                    (vec![0, 0, 0, 0, 0x8000, 0x8000, 0x8000, 0x8000], (None, true)),
+                ],
+            ),
             (2, 5, 4, &str_to_quants("EE_EEA_EEAE_AAEAA"), 64, vec![]),
             (2, 5, 4, &str_to_quants("EE_EEE_EEAE_AAEAA"), 64, vec![]),
             (2, 5, 4, &str_to_quants("EE_EEE_EEEE_EEEAA"), 64, vec![]),
@@ -3318,9 +3330,10 @@ mod tests {
                 .unwrap()
             };
             for (j, (input, exp_result)) in testcases.into_iter().enumerate() {
+                assert_eq!(input.len(), input_len);
                 let mut input_u32 = vec![0u32; input_len >> 1];
-                for ci in 0..input_len {
-                    input_u32[i >> 1] |= (input[ci] as u32) << ((ci & 1) << 4);
+                for i in 0..input_len {
+                    input_u32[i >> 1] |= (input[i] as u32) << ((i & 1) << 4);
                 }
                 unsafe {
                     cmd_queue
