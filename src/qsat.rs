@@ -872,6 +872,7 @@ struct OpenCLQuantReducer {
     total_reduce_bits: usize,
     initial_input_group_len_bits: usize,
     is_first_quant_all: bool,
+    have_first_quants: bool,
 }
 
 impl OpenCLQuantReducer {
@@ -897,9 +898,13 @@ impl OpenCLQuantReducer {
         group_len: Option<usize>,
     ) -> Self {
         // println!("Start");
+        assert!(1 < reduce_start_bit);
         assert!(reduce_start_bit < reduce_end_bit);
         assert!(reduce_start_bit + reduce_end_bit + initial_input_group_len_bits <= quants.len());
         let is_first_quant_all = quants[0] == Quant::All;
+        let have_first_quants = quants[1..reduce_start_bit + 1]
+            .iter()
+            .all(|x| quants[0] == *x);
         let quants_after = quants[reduce_end_bit..].to_vec();
         let total_reduce_bits = quants.len() - reduce_start_bit;
         let quants = &quants[reduce_start_bit..reduce_end_bit];
@@ -977,6 +982,7 @@ impl OpenCLQuantReducer {
             total_reduce_bits,
             initial_input_group_len_bits,
             is_first_quant_all,
+            have_first_quants,
         }
     }
 
@@ -1046,7 +1052,7 @@ impl OpenCLQuantReducer {
             // get from last buffer
             ((last_output[0] >> 15) & 1) != 0
         };
-        if !(self.is_first_quant_all ^ result) {
+        if !self.have_first_quants || !(self.is_first_quant_all ^ result) {
             // if no solution found
             return (None, result);
         }
