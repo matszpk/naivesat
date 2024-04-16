@@ -3250,6 +3250,7 @@ mod tests {
                     ),
                 ],
             ),
+            // 3
             (
                 2,
                 5,
@@ -3258,6 +3259,7 @@ mod tests {
                 64,
                 vec![
                     (vec![0u16; 8], (None, false)),
+                    (vec![0, 0, 0x8000, 0, 0x0, 0x8000, 0, 0], (None, false)),
                     (
                         vec![0, 0, 0, 0x8000, 0x8000, 0x8000, 0, 0],
                         (
@@ -3282,8 +3284,109 @@ mod tests {
                     ),
                 ],
             ),
-            (2, 5, 4, &str_to_quants("EE_EEE_EEAE_AAEAA"), 64, vec![]),
-            (2, 5, 4, &str_to_quants("EE_EEE_EEEE_EEEAA"), 64, vec![]),
+            // 4
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("AA_AAE_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0x8000; 8], (None, true)),
+                    (
+                        vec![0x8000, 0, 0x8000, 0, 0x8000, 0, 0, 0x8000],
+                        (None, true),
+                    ),
+                    (
+                        vec![0, 0x8000, 0, 0x8000, 0, 0, 0x8000, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 2,
+                                solution: Some(1),
+                            }),
+                            false,
+                        ),
+                    ),
+                    (
+                        vec![0, 0x8000, 0, 0, 0, 0x8000, 0, 0x8000],
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 2,
+                                solution: Some(2),
+                            }),
+                            false,
+                        ),
+                    ),
+                ],
+            ),
+            // 5
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("EE_EEE_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 8], (None, false)),
+                    (
+                        vec![0, 0, 0, 0x8000, 0, 0, 0, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 3,
+                                solution: Some(6),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        vec![0, 0, 0x8000, 0x8000, 0x0, 0x8000, 0, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 3,
+                                solution: Some(2),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 6
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("EE_EEE_EEEE_EEEAA"),
+                64,
+                vec![
+                    (vec![0u16; 8], (None, false)),
+                    (
+                        vec![0, 0, 0, 0x8000, 0, 0, 0, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 3,
+                                solution: Some(6),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        vec![0, 0, 0x8000, 0x8000, 0x0, 0x8000, 0, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 3,
+                                solution: Some(2),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (
                 2,
                 8,
