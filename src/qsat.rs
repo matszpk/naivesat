@@ -1048,9 +1048,11 @@ impl OpenCLQuantReducer {
         if !found_sol {
             return (None, self.is_first_quant_all);
         }
-        let first_quant_bits_in_reducer = std::cmp::min(
+        let first_quant_bits_in_reducer_and_inital_input = std::cmp::min(
             self.first_quant_bits,
-            self.quant_start_pos + self.group_len_bits * self.kernels.len(),
+            self.quant_start_pos
+                + self.group_len_bits * self.kernels.len()
+                + self.initial_input_group_len_bits,
         );
         if let Some(sol) = quants_start_final_result.solution {
             let mut new_sol = sol;
@@ -1094,12 +1096,32 @@ impl OpenCLQuantReducer {
                 }
                 if get_from_initial_input {
                     // go get deeper
+                    let mut input_out = [0u32];
+                    unsafe {
+                        self.cmd_queue
+                            .enqueue_read_buffer(
+                                input,
+                                CL_BLOCKING,
+                                4 * (idx >> 1),
+                                &mut input_out,
+                                &[],
+                            )
+                            .unwrap();
+                    }
+                    let idx = (input_out[0] >> ((idx & 1) >> 16)) & 0x7fff;
+                    let rev_idx = idx.reverse_bits() >> (16 - self.group_len_bits);
+                    if idx != 0x7fff {
+                        new_sol |= (rev_idx as u128)
+                            << (self.quant_start_pos + self.outputs.len() * self.group_len);
+                    } else {
+                        panic!("Unexpected");
+                    }
                 }
             }
             (
                 Some(FinalResult {
                     reversed: self.is_first_quant_all,
-                    solution_bits: first_quant_bits_in_reducer,
+                    solution_bits: first_quant_bits_in_reducer_and_inital_input,
                     solution: Some(new_sol),
                 }),
                 !self.is_first_quant_all,
@@ -1108,7 +1130,7 @@ impl OpenCLQuantReducer {
             (
                 Some(FinalResult {
                     reversed: self.is_first_quant_all,
-                    solution_bits: first_quant_bits_in_reducer,
+                    solution_bits: first_quant_bits_in_reducer_and_inital_input,
                     solution: None,
                 }),
                 self.is_first_quant_all,
