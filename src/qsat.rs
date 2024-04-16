@@ -3244,10 +3244,44 @@ mod tests {
                 64,
                 vec![
                     (vec![0u16; 8], (None, false)),
-                    (vec![0, 0, 0, 0, 0x8000, 0x8000, 0x8000, 0x8000], (None, true)),
+                    (
+                        vec![0, 0, 0, 0, 0x8000, 0x8000, 0x8000, 0x8000],
+                        (None, true),
+                    ),
                 ],
             ),
-            (2, 5, 4, &str_to_quants("EE_EEA_EEAE_AAEAA"), 64, vec![]),
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("EE_EEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 8], (None, false)),
+                    (
+                        vec![0, 0, 0, 0x8000, 0x8000, 0x8000, 0, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 2,
+                                solution: Some(1),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        vec![0, 0, 0x8000, 0x8000, 0x0, 0x8000, 0, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 2,
+                                solution: Some(2),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (2, 5, 4, &str_to_quants("EE_EEE_EEAE_AAEAA"), 64, vec![]),
             (2, 5, 4, &str_to_quants("EE_EEE_EEEE_EEEAA"), 64, vec![]),
             (
