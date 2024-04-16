@@ -868,6 +868,7 @@ struct OpenCLQuantReducer {
     first_quant_bits: usize,
     // start bit position from which kernels starts reduction.
     quant_start_pos: usize,
+    quants_start: Vec<Quant>,
     total_reduce_bits: usize,
     initial_input_group_len_bits: usize,
 }
@@ -963,6 +964,7 @@ impl OpenCLQuantReducer {
             },
             first_quant_bits,
             quant_start_pos,
+            quants_start: quants[0..quant_start_pos].to_vec(),
             total_reduce_bits,
             initial_input_group_len_bits,
         }
@@ -1005,7 +1007,19 @@ impl OpenCLQuantReducer {
             next_input_buf = Some(output);
         }
         // retrieve results
-
+        let mut last_output = vec![0u16; self.outputs[0].1];
+        unsafe {
+            self.cmd_queue
+                .enqueue_read_buffer(&self.outputs[0].0, CL_BLOCKING, 0, &mut last_output, &[])
+                .unwrap();
+        }
+        let quants_start_final_result = {
+            let mut qr = QuantReducer::new(&self.quants_start);
+            for i in 0..1 << self.quant_start_pos {
+                qr.push(i, (last_output[i as usize] >> 15) != 0);
+            }
+            qr.final_result()
+        };
         (None, false)
     }
 }
