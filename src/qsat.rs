@@ -1018,6 +1018,7 @@ impl OpenCLQuantReducer {
                 .unwrap();
         }
         let quants_start_final_result = if !self.quant_start_pos != 0 {
+            // determine results by quantifier's reduction on CPU
             let mut qr = QuantReducer::new(&self.quants_start);
             for i in 0..1 << self.quant_start_pos {
                 qr.push(i, (last_output[i as usize] >> 15) != 0);
@@ -1035,19 +1036,7 @@ impl OpenCLQuantReducer {
             quants_start_final_result.solution.is_some() ^ self.is_first_quant_all
         } else {
             // get from last buffer
-            let mut buf_out = [0u16];
-            unsafe {
-                self.cmd_queue
-                    .enqueue_read_buffer(
-                        &self.outputs.last().unwrap().0,
-                        CL_BLOCKING,
-                        0,
-                        &mut buf_out,
-                        &[],
-                    )
-                    .unwrap();
-            }
-            ((buf_out[0] >> 15) & 1) != 0
+            ((last_output[0] >> 15) & 1) != 0
         };
         if !(self.is_first_quant_all ^ result) {
             // if no solution found
@@ -1101,7 +1090,7 @@ impl OpenCLQuantReducer {
                     cur_first_quant_bits -= self.group_len_bits;
                 }
                 if get_from_initial_input {
-                    // go get deeper
+                    // go get deeper to input data
                     let mut input_out = [0u32];
                     unsafe {
                         self.cmd_queue
