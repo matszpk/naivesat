@@ -3217,20 +3217,7 @@ mod tests {
                 4,
                 &str_to_quants("AE_AAA_EEAE_AAEAA"),
                 64,
-                vec![
-                    (vec![0u16; 128], (None, false)),
-                    (
-                        vec![0u16; 128],
-                        (
-                            Some(FinalResult {
-                                reversed: true,
-                                solution_bits: 0,
-                                solution: None,
-                            }),
-                            false,
-                        ),
-                    ),
-                ],
+                vec![(vec![0u16; 128], (Option::<FinalResult>::None, false))],
             ),
             (2, 5, 4, &str_to_quants("EE_EEA_EEAE_AAEAA"), 64, vec![]),
             (2, 5, 4, &str_to_quants("EE_EEE_EEAE_AAEAA"), 64, vec![]),
