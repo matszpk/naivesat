@@ -896,6 +896,7 @@ impl OpenCLQuantReducer {
         cmd_queue: Arc<CommandQueue>,
         group_len: Option<usize>,
     ) -> Self {
+        // println!("Start");
         assert!(reduce_start_bit < reduce_end_bit);
         assert!(reduce_start_bit + reduce_end_bit + initial_input_group_len_bits <= quants.len());
         let is_first_quant_all = quants[0] == Quant::All;
@@ -912,9 +913,13 @@ impl OpenCLQuantReducer {
         } else {
             group_len
         };
+        // println!("GroupLen: {}", group_len);
+        // println!("GroupLenBits: {}", group_len_bits);
         let quants_len = quants.len();
+        // println!("QuantsLen: {}", quants_len);
         let kernel_num = quants_len / group_len_bits;
         let quant_start_pos = quants_len - kernel_num * group_len_bits;
+        // println!("QuantStartPos: {}", quant_start_pos);
         let mut source_code = "#define QUANT_REDUCER 1\n".to_string();
 
         let first_quant = quants[0];
@@ -923,6 +928,7 @@ impl OpenCLQuantReducer {
         for ki in 0..kernel_num {
             let quant_pos_end =
                 std::cmp::min(quants_len, quant_start_pos + (ki + 1) * group_len_bits);
+            // println!("QuantPosEnd: {} {}", ki, quant_pos_end);
             let defs = get_aggr_output_opencl_code_defs(1, group_len, &quants[0..quant_pos_end]);
             source_code += &format!("#define QUANT_REDUCER_NAME quant_reducer_{}\n", ki);
             source_code += &defs;
@@ -945,6 +951,7 @@ impl OpenCLQuantReducer {
             outputs: (0..kernel_num)
                 .map(|ki| {
                     let output_len = 1usize << (quant_start_pos + ki * group_len_bits);
+                    // println!("OutputLen: {} {}", ki, output_len);
                     (
                         unsafe {
                             Buffer::create(
