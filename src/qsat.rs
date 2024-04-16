@@ -819,7 +819,6 @@ fn get_final_results_from_cpu_outputs(
         let work_rev_idx = work_idx.reverse_bits() >> (64 - first_quant_bits_in_work);
         // join with values in type
         let final_rev_idx = if first_quant_bits > quants_len - type_len_bits {
-            let first_quant_bits_in_type = first_quant_bits - (quants_len - type_len_bits);
             let mut qr = QuantReducer::new(&quants[quants_len - type_len_bits..]);
             for idx in 0..type_len {
                 qr.push(idx as u64, ((outputs[idx >> 5] >> (idx & 31)) & 1) != 0);
@@ -1101,13 +1100,7 @@ impl OpenCLQuantReducer {
                     let mut buf_out = [0u16];
                     unsafe {
                         self.cmd_queue
-                            .enqueue_read_buffer(
-                                &self.outputs[0].0,
-                                CL_BLOCKING,
-                                2 * idx,
-                                &mut buf_out,
-                                &[],
-                            )
+                            .enqueue_read_buffer(&buffer, CL_BLOCKING, 2 * idx, &mut buf_out, &[])
                             .unwrap();
                     }
                     idx = (buf_out[0] & 0x7fff) as usize;
@@ -3214,21 +3207,73 @@ mod tests {
         #[allow(deprecated)]
         let cmd_queue =
             Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
-        for (i, (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len)) in [
-            (2, 5, 4, &str_to_quants("AE_AAA_EEAE_AAEAA"), 64),
-            (2, 5, 4, &str_to_quants("EE_EEA_EEAE_AAEAA"), 64),
-            (2, 5, 4, &str_to_quants("EE_EEE_EEAE_AAEAA"), 64),
-            (2, 5, 4, &str_to_quants("EE_EEE_EEEE_EEEAA"), 64),
-            (2, 8, 7, &str_to_quants("AE_AAAEAA_EEAEEAE_AAEAA"), 64),
-            (2, 8, 7, &str_to_quants("EE_EEEEAA_EEAEEAE_AAEAA"), 64),
-            (2, 8, 7, &str_to_quants("EE_EEEEEE_EEEAAAE_AAEAA"), 64),
-            (2, 8, 7, &str_to_quants("EE_EEEEEE_EEEEEEE_EEAEA"), 64),
+        for (
+            i,
+            (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len, testcases),
+        ) in [
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("AE_AAA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 128], (None, false)),
+                    (
+                        vec![0u16; 128],
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 0,
+                                solution: None,
+                            }),
+                            false,
+                        ),
+                    ),
+                ],
+            ),
+            (2, 5, 4, &str_to_quants("EE_EEA_EEAE_AAEAA"), 64, vec![]),
+            (2, 5, 4, &str_to_quants("EE_EEE_EEAE_AAEAA"), 64, vec![]),
+            (2, 5, 4, &str_to_quants("EE_EEE_EEEE_EEEAA"), 64, vec![]),
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("AE_AAAEAA_EEAEEAE_AAEAA"),
+                64,
+                vec![],
+            ),
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("EE_EEEEAA_EEAEEAE_AAEAA"),
+                64,
+                vec![],
+            ),
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("EE_EEEEEE_EEEAAAE_AAEAA"),
+                64,
+                vec![],
+            ),
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("EE_EEEEEE_EEEEEEE_EEAEA"),
+                64,
+                vec![],
+            ),
             (
                 2,
                 14,
                 7,
                 &str_to_quants("AE_AAAEAA_AEAEEA_EEAEEAE_AAEAA"),
                 64,
+                vec![],
             ),
             (
                 3,
@@ -3236,6 +3281,7 @@ mod tests {
                 4,
                 &str_to_quants("AEE_AA_AAAEAA_AEAEEA_EEAE_AAEAA"),
                 64,
+                vec![],
             ),
             (
                 3,
@@ -3243,12 +3289,13 @@ mod tests {
                 4,
                 &str_to_quants("AEE_AA_AAAEAA_AEAEEA_EEAAEA_EEAE_AAEAA"),
                 64,
+                vec![],
             ),
         ]
         .into_iter()
         .enumerate()
         {
-            let ocl_qr = OpenCLQuantReducer::new(
+            let mut ocl_qr = OpenCLQuantReducer::new(
                 reduce_start_bit,
                 reduce_end_bit,
                 init_group_len_bits,
@@ -3257,6 +3304,30 @@ mod tests {
                 cmd_queue.clone(),
                 Some(group_len),
             );
+            let input_len = 1usize << (reduce_end_bit - reduce_start_bit);
+            let mut input_buffer = unsafe {
+                Buffer::<u32>::create(
+                    &context,
+                    CL_MEM_READ_WRITE,
+                    input_len >> 1,
+                    std::ptr::null_mut(),
+                )
+                .unwrap()
+            };
+            for (j, (input, exp_result)) in testcases.into_iter().enumerate() {
+                let mut input_u32 = vec![0u32; input_len >> 1];
+                for ci in 0..input_len {
+                    input_u32[i >> 1] |= (input[ci] as u32) << ((ci & 1) << 4);
+                }
+                unsafe {
+                    cmd_queue
+                        .enqueue_write_buffer(&mut input_buffer, CL_BLOCKING, 0, &input_u32, &[])
+                        .unwrap();
+                    cmd_queue.finish().unwrap();
+                }
+                let result = ocl_qr.execute(&input_buffer);
+                assert_eq!(exp_result, result, "{} {}", i, j);
+            }
         }
     }
 }
