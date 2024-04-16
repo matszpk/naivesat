@@ -1017,16 +1017,43 @@ impl OpenCLQuantReducer {
                 .enqueue_read_buffer(&self.outputs[0].0, CL_BLOCKING, 0, &mut last_output, &[])
                 .unwrap();
         }
-        let quants_start_final_result = {
+        let quants_start_final_result = if !self.quant_start_pos != 0 {
             let mut qr = QuantReducer::new(&self.quants_start);
             for i in 0..1 << self.quant_start_pos {
                 qr.push(i, (last_output[i as usize] >> 15) != 0);
             }
             qr.final_result().unwrap()
+        } else {
+            FinalResult {
+                reversed: self.is_first_quant_all,
+                solution_bits: 0,
+                solution: Some(0),
+            }
         };
         if !found_sol {
-            return (None, self.is_first_quant_all);
+            let result = if !self.quant_start_pos != 0 {
+                // if some first processed by CPU (QuantReducer)
+                quants_start_final_result.solution.is_some() ^ self.is_first_quant_all
+            } else {
+                // get from last buffer
+                let mut buf_out = [0u16];
+                unsafe {
+                    self.cmd_queue
+                        .enqueue_read_buffer(
+                            &self.outputs.last().unwrap().0,
+                            CL_BLOCKING,
+                            0,
+                            &mut buf_out,
+                            &[],
+                        )
+                        .unwrap();
+                }
+                ((buf_out[0] >> 15) & 1) != 0
+            };
+            // if solution not found
+            return (None, result);
         }
+        // solution found
         let first_quant_bits_in_reducer_and_inital_input = std::cmp::min(
             self.first_quant_bits,
             self.quant_start_pos
