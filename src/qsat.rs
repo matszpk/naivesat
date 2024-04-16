@@ -863,19 +863,37 @@ struct OpenCLQuantReducer {
     kernels: Vec<Kernel>,
     input_len: usize,
     outputs: Vec<(Buffer<u16>, usize)>,
+    // is some if first quantifiers after reduce_end_bit
+    quants_after: Option<Vec<Quant>>,
+    first_quant_bits: usize,
+    // start bit position from which kernels starts reduction.
+    quant_start_pos: usize,
+    total_reduce_bits: usize,
+    initial_input_group_len_bits: usize,
 }
 
 impl OpenCLQuantReducer {
-    // special info: quants - quantifiers from first input to bits that will be reduced.
-    // by default: quants are all quantifiers for all input bits.
+    // form of quants:
+    // before reduce_start_bit - reduction to do by argument level.
+    // reduce_start_bit..reduce_end_bit - reduction done by these kernels.
+    // reduce_end_bit..reduce_end_bit+initial_input_group_len_bits -
+    //     reduction done by circuit kernel at local reduction.
+    // reduce_end_bit+initial_input_group_len_bits - reduction done by circuit kernel
+    //     at type reduction level.
+    // reduce_start_bit..reduce_end_bit - bit to reduce by kernels
+    // initial_input_group_len_bits - group length bits (reduction bits) from circuit kernel.
     fn new(
-        reduce_bits: usize,
+        reduce_start_bit: usize,
+        reduce_end_bit: usize,
+        initial_input_group_len_bits: usize,
         quants: &[Quant],
         context: Arc<Context>,
         cmd_queue: Arc<CommandQueue>,
         group_len: Option<usize>,
     ) -> Self {
-        let quants = &quants[quants.len() - reduce_bits..];
+        let quants_after = quants[reduce_end_bit..].to_vec();
+        let total_reduce_bits = quants.len() - reduce_start_bit;
+        let quants = &quants[reduce_start_bit..reduce_end_bit];
         let device = Device::new(context.devices()[0]);
         let group_len: usize =
             group_len.unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
@@ -935,7 +953,57 @@ impl OpenCLQuantReducer {
                     )
                 })
                 .collect::<Vec<_>>(),
+            quants_after: if quants_len < first_quant_bits {
+                Some(quants_after)
+            } else {
+                None
+            },
+            first_quant_bits,
+            quant_start_pos,
+            total_reduce_bits,
+            initial_input_group_len_bits,
         }
+    }
+
+    fn execute(&mut self, input: &Buffer<u32>) -> (Option<FinalResult>, bool) {
+        let mut input_len = self.input_len;
+        let mut next_input_buf = None;
+        // call kernels
+        for (kernel, (output, output_len)) in
+            self.kernels.iter_mut().zip(self.outputs.iter_mut()).rev()
+        {
+            let cl_num = cl_ulong::try_from(input_len).unwrap();
+            unsafe {
+                if let Some(next_input) = next_input_buf {
+                    ExecuteKernel::new(kernel)
+                        .set_arg(&cl_num)
+                        .set_arg(next_input)
+                        .set_arg(output)
+                        .set_local_work_size(self.group_len)
+                        .set_global_work_size(
+                            ((input_len + self.group_len - 1) / self.group_len) * self.group_len,
+                        )
+                        .enqueue_nd_range(&self.cmd_queue)
+                        .unwrap();
+                } else {
+                    ExecuteKernel::new(kernel)
+                        .set_arg(&cl_num)
+                        .set_arg(input)
+                        .set_arg(output)
+                        .set_local_work_size(self.group_len)
+                        .set_global_work_size(
+                            ((input_len + self.group_len - 1) / self.group_len) * self.group_len,
+                        )
+                        .enqueue_nd_range(&self.cmd_queue)
+                        .unwrap();
+                }
+            }
+            input_len = *output_len;
+            next_input_buf = Some(output);
+        }
+        // retrieve results
+
+        (None, false)
     }
 }
 
