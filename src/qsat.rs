@@ -1031,6 +1031,7 @@ impl OpenCLQuantReducer {
             input_len = *output_len;
             next_input_buf = Some(output);
         }
+        self.cmd_queue.finish().unwrap();
         // retrieve results
         let mut last_output = vec![0u16; self.outputs[0].1];
         unsafe {
