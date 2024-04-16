@@ -929,6 +929,15 @@ impl OpenCLQuantReducer {
         let first_quant = quants[0];
         // determine first quantifier length (bits)
         let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
+        let first_quant_bits = if !quants_after.is_empty() && quants_len == first_quant_bits {
+            first_quant_bits
+                + quants_after
+                    .iter()
+                    .take_while(|q| **q == first_quant)
+                    .count()
+        } else {
+            first_quant_bits
+        };
         for ki in 0..kernel_num {
             let quant_pos_end =
                 std::cmp::min(quants_len, quant_start_pos + (ki + 1) * group_len_bits);
@@ -1082,7 +1091,7 @@ impl OpenCLQuantReducer {
         );
         if let Some(sol) = quants_start_final_result.solution {
             let mut new_sol = sol;
-            if self.first_quant_bits > self.quant_start_pos {
+            let idx = if self.first_quant_bits > self.quant_start_pos {
                 let mut cur_first_quant_bits = self.first_quant_bits - self.quant_start_pos;
                 // go get deeper first quant results
                 let mut idx = usize::try_from(
@@ -1091,10 +1100,8 @@ impl OpenCLQuantReducer {
                 .unwrap();
                 // read last buffer
                 // next buffer ....
-                let mut get_from_initial_input = true;
                 for (oi, (buffer, _)) in self.outputs.iter().rev().enumerate() {
                     if cur_first_quant_bits <= self.group_len_bits {
-                        get_from_initial_input = false; // it is end
                         break;
                     }
                     let mut buf_out = [0u16];
@@ -1114,28 +1121,34 @@ impl OpenCLQuantReducer {
                     }
                     cur_first_quant_bits -= self.group_len_bits;
                 }
-                if get_from_initial_input {
-                    // go get deeper to input data
-                    let mut input_out = [0u32];
-                    unsafe {
-                        self.cmd_queue
-                            .enqueue_read_buffer(
-                                input,
-                                CL_BLOCKING,
-                                4 * (idx >> 1),
-                                &mut input_out,
-                                &[],
-                            )
-                            .unwrap();
-                    }
-                    let idx = ((input_out[0] >> ((idx & 1) << 4)) & 0x7fff) as u16;
-                    let rev_idx = idx.reverse_bits() >> (16 - self.group_len_bits);
-                    if idx != 0x7fff {
-                        new_sol |= (rev_idx as u128)
-                            << (self.quant_start_pos + self.outputs.len() * self.group_len);
-                    } else {
-                        panic!("Unexpected");
-                    }
+                idx
+            } else {
+                usize::try_from(
+                    (sol.reverse_bits()) >> (128 - quants_start_final_result.solution_bits),
+                )
+                .unwrap()
+            };
+            if self.quants_after.is_some() {
+                // go get deeper to input data
+                let mut input_out = [0u32];
+                unsafe {
+                    self.cmd_queue
+                        .enqueue_read_buffer(
+                            input,
+                            CL_BLOCKING,
+                            4 * (idx >> 1),
+                            &mut input_out,
+                            &[],
+                        )
+                        .unwrap();
+                }
+                let idx = ((input_out[0] >> ((idx & 1) << 4)) & 0x7fff) as u16;
+                let rev_idx = idx.reverse_bits() >> (16 - self.initial_input_group_len_bits);
+                if idx != 0x7fff {
+                    new_sol |= (rev_idx as u128)
+                        << (self.quant_start_pos + self.outputs.len() * self.group_len);
+                } else {
+                    panic!("Unexpected");
                 }
             }
             (
@@ -3331,23 +3344,23 @@ mod tests {
                 vec![
                     (vec![0u16; 8], (None, false)),
                     (
-                        vec![0, 0, 0, 0x8000, 0, 0, 0, 0],
+                        vec![0, 0, 0, 0x8003, 0, 0, 0, 0],
                         (
                             Some(FinalResult {
                                 reversed: false,
-                                solution_bits: 3,
-                                solution: Some(6),
+                                solution_bits: 5,
+                                solution: Some(0b1100110),
                             }),
                             true,
                         ),
                     ),
                     (
-                        vec![0, 0, 0x8000, 0x8000, 0x0, 0x8000, 0, 0],
+                        vec![0, 0, 0x8005, 0x8000, 0x0, 0x8000, 0, 0],
                         (
                             Some(FinalResult {
                                 reversed: false,
-                                solution_bits: 3,
-                                solution: Some(2),
+                                solution_bits: 5,
+                                solution: Some(0b1010010),
                             }),
                             true,
                         ),
@@ -3364,23 +3377,23 @@ mod tests {
                 vec![
                     (vec![0u16; 8], (None, false)),
                     (
-                        vec![0, 0, 0, 0x8000, 0, 0, 0, 0],
+                        vec![0, 0, 0, 0x8003, 0, 0, 0, 0],
                         (
                             Some(FinalResult {
                                 reversed: false,
-                                solution_bits: 3,
-                                solution: Some(6),
+                                solution_bits: 7,
+                                solution: Some(0b1100110),
                             }),
                             true,
                         ),
                     ),
                     (
-                        vec![0, 0, 0x8000, 0x8000, 0x0, 0x8000, 0, 0],
+                        vec![0, 0, 0x8009, 0x8000, 0x0, 0x8000, 0, 0],
                         (
                             Some(FinalResult {
                                 reversed: false,
-                                solution_bits: 3,
-                                solution: Some(2),
+                                solution_bits: 7,
+                                solution: Some(0b1001010),
                             }),
                             true,
                         ),
@@ -3467,6 +3480,7 @@ mod tests {
                 .unwrap()
             };
             for (j, (input, exp_result)) in testcases.into_iter().enumerate() {
+                println!("Test {} {}", i, j);
                 assert_eq!(input.len(), input_len);
                 let mut input_u32 = vec![0u32; input_len >> 1];
                 for i in 0..input_len {
