@@ -4609,7 +4609,7 @@ mod tests {
             (
                 2,
                 17,
-                7,
+                4,
                 &str_to_quants("EE_EEE_EEEEEE_AEAEEA_EEAE_AAEAA"),
                 64,
                 vec![
@@ -4664,7 +4664,7 @@ mod tests {
             (
                 2,
                 17,
-                7,
+                4,
                 &str_to_quants("EE_EEE_EEEEEE_EEEEEA_EEAE_AAEAA"),
                 64,
                 vec![
@@ -4705,7 +4705,7 @@ mod tests {
             (
                 2,
                 17,
-                7,
+                4,
                 &str_to_quants("EE_EEE_EEEEEE_EEEEEE_AAAE_AAEAA"),
                 64,
                 vec![
@@ -4746,7 +4746,7 @@ mod tests {
             (
                 2,
                 17,
-                7,
+                4,
                 &str_to_quants("EE_EEE_EEEEEE_EEEEEE_EEEA_AAEAA"),
                 64,
                 vec![
@@ -4754,7 +4754,7 @@ mod tests {
                     (
                         iter::repeat(0)
                             .take(14367)
-                            .chain(iter::once(0x8060))
+                            .chain(iter::once(0x800c))
                             .chain(iter::repeat(0).take(4096 * 8 - 14367 - 1))
                             .collect::<Vec<_>>(),
                         (
@@ -4769,7 +4769,7 @@ mod tests {
                     (
                         iter::repeat(0)
                             .take(31722)
-                            .chain(iter::once(0x8030))
+                            .chain(iter::once(0x8006))
                             .chain(iter::repeat(0).take(4096 * 8 - 31722 - 1))
                             .collect::<Vec<_>>(),
                         (
@@ -4777,6 +4777,32 @@ mod tests {
                                 reversed: false,
                                 solution_bits: 18,
                                 solution: Some(0b110_010101_111101_111),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 40
+            (
+                2,
+                16,
+                4,
+                &str_to_quants("EE_EE_EEEEEE_EEEEEE_EEEA_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 4 * 4096], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(11779)
+                            .chain(iter::once(0x800c))
+                            .chain(iter::repeat(0).take(4096 * 4 - 11779 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 17,
+                                solution: Some(0b011_11000_000011_101),
                             }),
                             true,
                         ),
