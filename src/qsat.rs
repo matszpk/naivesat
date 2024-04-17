@@ -4402,6 +4402,32 @@ mod tests {
                     ),
                 ],
             ),
+            // 31
+            (
+                2,
+                14,
+                7,
+                &str_to_quants("EE_EEEEEE_EEEEEE_EEEEEEE_EAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 64 * 64], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(2276)
+                            .chain(iter::once(0x805d))
+                            .chain(iter::repeat(0).take(4096 - 2276 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 19,
+                                solution: Some(0b1011101_001001_110001),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (
                 3,
                 17,
