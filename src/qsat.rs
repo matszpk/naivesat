@@ -1071,7 +1071,7 @@ impl OpenCLQuantReducer {
                 solution: Some(0),
             }
         };
-        let result = if !self.quant_start_pos != 0 {
+        let result = if self.quant_start_pos != 0 {
             // if some first processed by CPU (QuantReducer)
             quants_start_final_result.solution.is_some() ^ self.is_first_quant_all
         } else {
@@ -3440,8 +3440,7 @@ mod tests {
                 7,
                 &str_to_quants("EA_EEEAEE_AAAEAAE_EEAEE"),
                 64,
-                vec![],
-                //vec![(vec![0u16; 64], (None, false))],
+                vec![(vec![0u16; 64], (None, false))],
             ),
             (
                 2,
