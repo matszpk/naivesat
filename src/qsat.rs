@@ -1111,12 +1111,12 @@ impl OpenCLQuantReducer {
                             .enqueue_read_buffer(&buffer, CL_BLOCKING, 2 * idx, &mut buf_out, &[])
                             .unwrap();
                     }
-                    idx = (buf_out[0] & 0x7fff) as usize;
+                    idx = ((buf_out[0] & 0x7fff) as usize) | (idx << self.group_len_bits);
 
-                    let rev_idx = (idx.reverse_bits()
+                    let rev_idx = ((idx & 0x7fff).reverse_bits()
                         >> ((usize::BITS as usize) - self.group_len_bits))
                         & ((1usize << pass_bits) - 1);
-                    if idx != 0x7fff {
+                    if (idx & 0x7fff) != 0x7fff {
                         // update new sol
                         new_sol |=
                             (rev_idx as u128) << (self.quant_start_pos + oi * self.group_len_bits);
@@ -3857,6 +3857,98 @@ mod tests {
                                 solution: Some(0b01011_110110),
                             }),
                             false,
+                        ),
+                    ),
+                ],
+            ),
+            // 20
+            (
+                2,
+                11,
+                7,
+                &str_to_quants("EE_EEE_EEEEAA_EEAEEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 64 * 8], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(141)
+                            .chain(iter::once(0x8022))
+                            .chain(iter::repeat(0).take(64 * 8 - 141 - 1))
+                            .collect::<Vec<_>>(),
+                        (None, false),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(21 * 8)
+                            .chain(iter::repeat(0x8022).take(8))
+                            .chain(iter::repeat(0).take(64 * 8 - 21 * 8 - 8))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 7,
+                                solution: Some(0b101_010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(46 * 8)
+                            .chain(iter::repeat(0x8022).take(8))
+                            .chain(iter::repeat(0).take(64 * 8 - 46 * 8 - 8))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 7,
+                                solution: Some(0b011_101),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 21
+            (
+                2,
+                11,
+                7,
+                &str_to_quants("EE_EEE_EEEEEE_EEEEEAA_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 64 * 8], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(141)
+                            .chain(iter::once(0x806c))
+                            .chain(iter::repeat(0).take(64 * 8 - 141 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 14,
+                                solution: Some(0b11011_101100_010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(184)
+                            .chain(iter::once(0x8038))
+                            .chain(iter::repeat(0).take(173))
+                            .chain(iter::once(0x8014))
+                            .chain(iter::repeat(0).take(64 * 8 - 173 - 1 - 184 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 14,
+                                solution: Some(0b1110_000111_010),
+                            }),
+                            true,
                         ),
                     ),
                 ],
