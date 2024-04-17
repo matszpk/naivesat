@@ -4126,13 +4126,35 @@ mod tests {
                     ),
                 ],
             ),
+            // 26
             (
                 2,
                 14,
                 7,
                 &str_to_quants("AE_AAAEAA_AEAEEA_EEAEEAE_AAEAA"),
                 64,
-                vec![],
+                vec![
+                    (vec![0u16; 64 * 64], (None, false)),
+                    (
+                        (0..64)
+                            .map(|i| {
+                                if (i & 4) == 0 {
+                                    (0..64)
+                                        .map(|j| {
+                                            (((0x300c00000000c003u64.rotate_left(i * 32) >> j) & 1)
+                                                << 15)
+                                                as u16
+                                        })
+                                        .collect::<Vec<_>>()
+                                } else {
+                                    vec![0; 64]
+                                }
+                            })
+                            .flatten()
+                            .collect(),
+                        (None, true),
+                    ),
+                ],
             ),
             (
                 3,
