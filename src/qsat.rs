@@ -3775,6 +3775,23 @@ mod tests {
                             true,
                         ),
                     ),
+                    (
+                        iter::repeat(0)
+                            .take(17)
+                            .chain(iter::once(0x8040))
+                            .chain(iter::repeat(0).take(21))
+                            .chain(iter::once(0x8010))
+                            .chain(iter::repeat(0).take(64 - 21 - 1 - 17 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 9,
+                                solution: Some(0b001_100010),
+                            }),
+                            true,
+                        ),
+                    ),
                 ],
             ),
             // 18
@@ -3814,6 +3831,32 @@ mod tests {
                                 solution: Some(0b0101101_110101),
                             }),
                             true,
+                        ),
+                    ),
+                ],
+            ),
+            // 19
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("AA_AAAAAA_AAAAEEA_EAEAA"),
+                64,
+                vec![
+                    (vec![0x8000; 64], (None, true)),
+                    (
+                        iter::repeat(0x8000)
+                            .take(27)
+                            .chain(iter::once(0x68))
+                            .chain(iter::repeat(0x8000).take(64 - 27 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 10,
+                                solution: Some(0b01011_110110),
+                            }),
+                            false,
                         ),
                     ),
                 ],
