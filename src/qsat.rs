@@ -4225,6 +4225,61 @@ mod tests {
                     ),
                 ],
             ),
+            // 28
+            (
+                2,
+                14,
+                7,
+                &str_to_quants("EE_EEEEEE_AEAEEA_EEAEEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 64 * 64], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(64 * 13)
+                            .chain(
+                                (0..64)
+                                    .map(|j| (((0x300c00000000c003u64 >> j) & 1) << 15) as u16)
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * 12))
+                            .chain(
+                                (0..64)
+                                    .map(|j| (((0x300c00000000c003u64 >> j) & 1) << 15) as u16)
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * (64 - 13 - 2 - 12)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 6,
+                                solution: Some(0b101100),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(64 * 50)
+                            .chain(
+                                (0..64)
+                                    .map(|j| (((0x300c00000000c003u64 >> j) & 1) << 15) as u16)
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * 64 - 64 * 50 - 64))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 6,
+                                solution: Some(0b010011),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (
                 3,
                 17,
