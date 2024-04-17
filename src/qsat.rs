@@ -1108,7 +1108,7 @@ impl OpenCLQuantReducer {
                         / self.group_len_bits,
                     self.outputs.len(),
                 );
-                for (oi, (buffer, _)) in self.outputs[0..output_num].iter().rev().enumerate() {
+                for (oi, (buffer, _)) in self.outputs[0..output_num].iter().enumerate() {
                     let pass_bits = std::cmp::min(cur_first_quant_bits, self.group_len_bits);
                     let mut buf_out = [0u16];
                     unsafe {
@@ -1117,7 +1117,6 @@ impl OpenCLQuantReducer {
                             .unwrap();
                     }
                     idx = ((buf_out[0] & 0x7fff) as usize) | (idx << self.group_len_bits);
-                    println!("Idx: {}", idx);
 
                     let rev_idx = ((idx & 0x7fff).reverse_bits()
                         >> ((usize::BITS as usize) - self.group_len_bits))
@@ -4274,6 +4273,47 @@ mod tests {
                                 reversed: false,
                                 solution_bits: 6,
                                 solution: Some(0b010011),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 29
+            (
+                2,
+                14,
+                7,
+                &str_to_quants("EE_EEEEEE_EEEEAE_EEAEEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 64 * 64], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(379 * 4)
+                            .chain([0, 0x8000, 0x8000, 0].into_iter())
+                            .chain(iter::repeat(0).take(4 * (1024 - 379 - 1)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 10,
+                                solution: Some(0b1101_111010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(999 * 4)
+                            .chain([0, 0x8000, 0x8000, 0].into_iter())
+                            .chain(iter::repeat(0).take(4 * (1024 - 999 - 1)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 10,
+                                solution: Some(0b1110_011111),
                             }),
                             true,
                         ),
