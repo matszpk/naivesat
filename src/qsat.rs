@@ -1056,7 +1056,7 @@ impl OpenCLQuantReducer {
             }
             last_output
         };
-        let quants_start_final_result = if !self.quant_start_pos != 0 {
+        let quants_start_final_result = if self.quant_start_pos != 0 {
             // determine results by quantifier's reduction on CPU
             let mut qr = QuantReducer::new(&self.quants_start);
             for i in 0..1 << self.quant_start_pos {
@@ -3432,6 +3432,16 @@ mod tests {
                         ),
                     ),
                 ],
+            ),
+            // 8
+            (
+                2,
+                8,
+                7,
+                &str_to_quants("EA_EEEAEE_AAAEAAE_EEAEE"),
+                64,
+                vec![],
+                //vec![(vec![0u16; 64], (None, false))],
             ),
             (
                 2,
