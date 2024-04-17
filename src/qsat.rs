@@ -870,7 +870,6 @@ struct OpenCLQuantReducer {
     // start bit position from which kernels starts reduction.
     quant_start_pos: usize,
     quants_start: Vec<Quant>,
-    total_reduce_bits: usize,
     initial_input_group_len_bits: usize,
     is_first_quant_all: bool,
     have_first_quants: bool,
@@ -909,7 +908,6 @@ impl OpenCLQuantReducer {
             .iter()
             .all(|x| quants[0] == *x);
         let quants_after = quants[reduce_end_bit..].to_vec();
-        let total_reduce_bits = quants.len() - reduce_start_bit;
         let quants = &quants[reduce_start_bit..reduce_end_bit];
         let device = Device::new(context.devices()[0]);
         let group_len: usize =
@@ -990,7 +988,6 @@ impl OpenCLQuantReducer {
             first_quant_bits,
             quant_start_pos,
             quants_start: quants[0..quant_start_pos].to_vec(),
-            total_reduce_bits,
             initial_input_group_len_bits,
             is_first_quant_all,
             have_first_quants,
