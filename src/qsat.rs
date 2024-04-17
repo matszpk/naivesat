@@ -1094,7 +1094,7 @@ impl OpenCLQuantReducer {
         );
         if let Some(sol) = quants_start_final_result.solution {
             let mut new_sol = sol;
-            let idx = if self.first_quant_bits > self.quant_start_pos {
+            let idx = if !self.kernels.is_empty() {
                 let mut cur_first_quant_bits = self.first_quant_bits - self.quant_start_pos;
                 // go get deeper first quant results
                 let mut idx = usize::try_from(
@@ -1104,9 +1104,7 @@ impl OpenCLQuantReducer {
                 // read last buffer
                 // next buffer ....
                 for (oi, (buffer, _)) in self.outputs.iter().rev().enumerate() {
-                    if cur_first_quant_bits <= self.group_len_bits {
-                        break;
-                    }
+                    let pass_bits = std::cmp::min(cur_first_quant_bits, self.group_len_bits);
                     let mut buf_out = [0u16];
                     unsafe {
                         self.cmd_queue
@@ -1114,13 +1112,19 @@ impl OpenCLQuantReducer {
                             .unwrap();
                     }
                     idx = (buf_out[0] & 0x7fff) as usize;
-                    let rev_idx = idx.reverse_bits() >> (16 - self.group_len_bits);
+
+                    let rev_idx = (idx.reverse_bits()
+                        >> ((usize::BITS as usize) - self.group_len_bits))
+                        & ((1usize << pass_bits) - 1);
                     if idx != 0x7fff {
                         // update new sol
                         new_sol |=
                             (rev_idx as u128) << (self.quant_start_pos + oi * self.group_len);
                     } else {
                         panic!("Unexpected");
+                    }
+                    if cur_first_quant_bits <= self.group_len_bits {
+                        break;
                     }
                     cur_first_quant_bits -= self.group_len_bits;
                 }
@@ -3642,7 +3646,29 @@ mod tests {
                 7,
                 &str_to_quants("EE_EEEEAA_EEAEEAE_AAEAA"),
                 64,
-                vec![],
+                vec![
+                    (vec![0u16; 64], (None, false)),
+                    (
+                        vec![
+                            0, 0, 0, 0, 0, 0, 0, 0, // 0
+                            0, 0, 0, 0x8000, 0, 0, 0, 0, // 1
+                            0, 0, 0, 0, 0, 0x8000, 0, 0, // 2
+                            0x8000, 0x8000, 0, 0x8000, 0, 0, 0, 0, // 3
+                            0, 0, 0, 0, 0x8000, 0x8000, 0, 0x8000, // 4
+                            0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0, 0, // 5
+                            0, 0, 0, 0, 0, 0, 0x8000, 0, // 6
+                            0, 0, 0, 0x8000, 0, 0, 0, 0, // 7
+                        ],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 4,
+                                solution: Some(0b0101),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
             ),
             (
                 2,
