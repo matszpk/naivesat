@@ -1103,7 +1103,12 @@ impl OpenCLQuantReducer {
                 .unwrap();
                 // read last buffer
                 // next buffer ....
-                for (oi, (buffer, _)) in self.outputs.iter().rev().enumerate() {
+                let output_num = std::cmp::min(
+                    (self.first_quant_bits - self.quant_start_pos + self.group_len_bits - 1)
+                        / self.group_len_bits,
+                    self.outputs.len(),
+                );
+                for (oi, (buffer, _)) in self.outputs[0..output_num].iter().rev().enumerate() {
                     let pass_bits = std::cmp::min(cur_first_quant_bits, self.group_len_bits);
                     let mut buf_out = [0u16];
                     unsafe {
@@ -1112,6 +1117,7 @@ impl OpenCLQuantReducer {
                             .unwrap();
                     }
                     idx = ((buf_out[0] & 0x7fff) as usize) | (idx << self.group_len_bits);
+                    println!("Idx: {}", idx);
 
                     let rev_idx = ((idx & 0x7fff).reverse_bits()
                         >> ((usize::BITS as usize) - self.group_len_bits))
@@ -4153,6 +4159,69 @@ mod tests {
                             .flatten()
                             .collect(),
                         (None, true),
+                    ),
+                ],
+            ),
+            // 27
+            (
+                2,
+                14,
+                7,
+                &str_to_quants("EE_EEEEAA_AEAEEA_EEAEEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 64 * 64], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(256 * 5)
+                            .chain(
+                                vec![
+                                    (0..64)
+                                        .map(|j| {
+                                            (((0x300c00000000c003u64 >> j) & 1) << 15) as u16
+                                        })
+                                        .collect::<Vec<_>>();
+                                    4
+                                ]
+                                .into_iter()
+                                .flatten(),
+                            )
+                            .chain(iter::repeat(0).take(64 * 64 - 256 * 5 - 256))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 4,
+                                solution: Some(0b1010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(256 * 11)
+                            .chain(
+                                vec![
+                                    (0..64)
+                                        .map(|j| {
+                                            (((0x300c00000000c003u64 >> j) & 1) << 15) as u16
+                                        })
+                                        .collect::<Vec<_>>();
+                                    4
+                                ]
+                                .into_iter()
+                                .flatten(),
+                            )
+                            .chain(iter::repeat(0).take(64 * 64 - 256 * 11 - 256))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 4,
+                                solution: Some(0b1101),
+                            }),
+                            true,
+                        ),
                     ),
                 ],
             ),
