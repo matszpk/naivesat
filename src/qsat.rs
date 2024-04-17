@@ -4428,6 +4428,97 @@ mod tests {
                     ),
                 ],
             ),
+            // 33
+            (
+                2,
+                17,
+                4,
+                &str_to_quants("AE_AAE_AAAEAA_AEAEEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 4096 * 8], (None, false)),
+                    (
+                        (0..8)
+                            .map(|h| {
+                                if (h & 1) == 0 {
+                                    (0..64)
+                                        .map(|i| {
+                                            if (i & 4) == 0 {
+                                                (0..64)
+                                                    .map(|j| {
+                                                        (((0x300c00000000c003u64
+                                                            .rotate_left(i * 32)
+                                                            >> j)
+                                                            & 1)
+                                                            << 15)
+                                                            as u16
+                                                    })
+                                                    .collect::<Vec<_>>()
+                                            } else {
+                                                vec![0; 64]
+                                            }
+                                        })
+                                        .flatten()
+                                        .collect()
+                                } else {
+                                    vec![0; 4096]
+                                }
+                            })
+                            .flatten()
+                            .collect(),
+                        (None, true),
+                    ),
+                ],
+            ),
+            // 34
+            (
+                2,
+                17,
+                4,
+                &str_to_quants("EE_EEE_AAAEAA_AEAEEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 4096 * 8], (None, false)),
+                    (
+                        (0..8)
+                            .map(|h| {
+                                if h == 6 {
+                                    (0..64)
+                                        .map(|i| {
+                                            if (i & 4) == 0 {
+                                                (0..64)
+                                                    .map(|j| {
+                                                        (((0x300c00000000c003u64
+                                                            .rotate_left(i * 32)
+                                                            >> j)
+                                                            & 1)
+                                                            << 15)
+                                                            as u16
+                                                    })
+                                                    .collect::<Vec<_>>()
+                                            } else {
+                                                vec![0; 64]
+                                            }
+                                        })
+                                        .flatten()
+                                        .collect()
+                                } else {
+                                    vec![0; 4096]
+                                }
+                            })
+                            .flatten()
+                            .collect(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 3,
+                                solution: Some(3),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (
                 3,
                 17,
