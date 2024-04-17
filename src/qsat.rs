@@ -832,7 +832,9 @@ fn get_final_results_from_cpu_outputs(
         (
             Some(FinalResult {
                 solution_bits: first_quant_bits - work_first_bit,
-                solution: Some(final_rev_idx as u128),
+                solution: Some(
+                    (final_rev_idx as u128) & ((1u128 << (first_quant_bits - work_first_bit)) - 1),
+                ),
                 reversed: first_quant == Quant::All,
             }),
             work_result,
