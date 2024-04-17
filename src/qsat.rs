@@ -3261,9 +3261,86 @@ mod tests {
                             true,
                         ),
                     ),
+                    (
+                        vec![0x8004],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 2,
+                                solution: Some(2),
+                            }),
+                            true,
+                        ),
+                    ),
                 ],
             ),
-            // 0
+            // 2
+            (
+                2,
+                2,
+                4,
+                &str_to_quants("EE__EEEE_EEEAA"),
+                64,
+                vec![
+                    (vec![0u16], (None, false)),
+                    (
+                        vec![0x800a],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 4,
+                                solution: Some(5),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 3
+            (
+                2,
+                2,
+                4,
+                &str_to_quants("AA__AAEE_AAEAA"),
+                64,
+                vec![
+                    (vec![0x8000], (None, true)),
+                    (
+                        vec![0x000a],
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 2,
+                                solution: Some(1),
+                            }),
+                            false,
+                        ),
+                    ),
+                ],
+            ),
+            // 4
+            (
+                2,
+                2,
+                4,
+                &str_to_quants("AA__AAAA_AAEAA"),
+                64,
+                vec![
+                    (vec![0x8000], (None, true)),
+                    (
+                        vec![0x000a],
+                        (
+                            Some(FinalResult {
+                                reversed: true,
+                                solution_bits: 4,
+                                solution: Some(5),
+                            }),
+                            false,
+                        ),
+                    ),
+                ],
+            ),
+            // 5
             (
                 2,
                 5,
@@ -3275,7 +3352,7 @@ mod tests {
                     (vec![0x8000u16; 8], (None, true)),
                 ],
             ),
-            // 1
+            // 6
             (
                 2,
                 5,
@@ -3287,7 +3364,7 @@ mod tests {
                     (vec![0, 0x8000, 0, 0, 0, 0, 0x8000, 0], (None, true)),
                 ],
             ),
-            // 2
+            // 7
             (
                 2,
                 5,
@@ -3302,7 +3379,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 3
+            // 8
             (
                 2,
                 5,
@@ -3336,7 +3413,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 4
+            // 9
             (
                 2,
                 5,
@@ -3373,7 +3450,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 5
+            // 10
             (
                 2,
                 5,
@@ -3417,7 +3494,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 6
+            // 11
             (
                 2,
                 5,
@@ -3450,7 +3527,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 7
+            // 12
             (
                 2,
                 5,
@@ -3483,7 +3560,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 8
+            // 13
             (
                 2,
                 8,
@@ -3520,7 +3597,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 9
+            // 14
             (
                 2,
                 8,
