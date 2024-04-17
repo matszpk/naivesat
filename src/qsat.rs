@@ -4891,6 +4891,59 @@ mod tests {
                     ),
                 ],
             ),
+            // 43
+            (
+                2,
+                20,
+                4,
+                &str_to_quants("EE_EEEEEE_EEEEEE_AEAEEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 64 * 4096], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(64 * 2167)
+                            .chain(
+                                (0..64)
+                                    .map(|j| {
+                                        ((((0x300c00000000c003u64 >> j) & 1) << 15) + 255) as u16
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * (4096 - 2167 - 1)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 12,
+                                solution: Some(0b111011_100001),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(64 * 1578)
+                            .chain(
+                                (0..64)
+                                    .map(|j| {
+                                        ((((0x300c00000000c003u64 >> j) & 1) + 255) << 15) as u16
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * (4096 - 1578 - 1)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 12,
+                                solution: Some(0b010101_000110),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (
                 3,
                 17,
