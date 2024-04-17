@@ -4519,6 +4519,150 @@ mod tests {
                     ),
                 ],
             ),
+            // 35
+            (
+                2,
+                17,
+                4,
+                &str_to_quants("EE_EEE_EEEEAA_AEAEEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 4096 * 8], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(256 * 23)
+                            .chain(
+                                vec![
+                                    (0..64)
+                                        .map(|j| {
+                                            (((0x300c00000000c003u64 >> j) & 1) << 15) as u16
+                                        })
+                                        .collect::<Vec<_>>();
+                                    4
+                                ]
+                                .into_iter()
+                                .flatten(),
+                            )
+                            .chain(iter::repeat(0).take(8 * 4096 - 256 * 23 - 256))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 7,
+                                solution: Some(0b1110_100),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(256 * 41)
+                            .chain(
+                                vec![
+                                    (0..64)
+                                        .map(|j| {
+                                            (((0x300c00000000c003u64 >> j) & 1) << 15) as u16
+                                        })
+                                        .collect::<Vec<_>>();
+                                    4
+                                ]
+                                .into_iter()
+                                .flatten(),
+                            )
+                            .chain(iter::repeat(0).take(8 * 4096 - 256 * 41 - 256))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 7,
+                                solution: Some(0b1001_010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(256 * 102)
+                            .chain(
+                                vec![
+                                    (0..64)
+                                        .map(|j| {
+                                            (((0x300c00000000c003u64 >> j) & 1) << 15) as u16
+                                        })
+                                        .collect::<Vec<_>>();
+                                    4
+                                ]
+                                .into_iter()
+                                .flatten(),
+                            )
+                            .chain(iter::repeat(0).take(8 * 4096 - 256 * 102 - 256))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 7,
+                                solution: Some(0b0110_011),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 36
+            (
+                2,
+                17,
+                7,
+                &str_to_quants("EE_EEE_EEEEEE_AEAEEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 8 * 4096], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(64 * 169)
+                            .chain(
+                                (0..64)
+                                    .map(|j| (((0x300c00000000c003u64 >> j) & 1) << 15) as u16)
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * 206))
+                            .chain(
+                                (0..64)
+                                    .map(|j| (((0x300c00000000c003u64 >> j) & 1) << 15) as u16)
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * (512 - 169 - 2 - 206)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 9,
+                                solution: Some(0b100101_010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(64 * 418)
+                            .chain(
+                                (0..64)
+                                    .map(|j| (((0x300c00000000c003u64 >> j) & 1) << 15) as u16)
+                                    .collect::<Vec<_>>(),
+                            )
+                            .chain(iter::repeat(0).take(64 * (512 - 418 - 1)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 9,
+                                solution: Some(0b010001_011),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (
                 3,
                 17,
