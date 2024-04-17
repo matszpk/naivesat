@@ -1092,7 +1092,6 @@ impl OpenCLQuantReducer {
         if let Some(sol) = quants_start_final_result.solution {
             let mut new_sol = sol;
             let idx = if !self.kernels.is_empty() {
-                let mut cur_first_quant_bits = self.first_quant_bits - self.quant_start_pos;
                 // go get deeper first quant results
                 let mut idx = usize::try_from(
                     (sol.reverse_bits()) >> (128 - quants_start_final_result.solution_bits),
@@ -1106,7 +1105,10 @@ impl OpenCLQuantReducer {
                     self.outputs.len(),
                 );
                 for (oi, (buffer, _)) in self.outputs[0..output_num].iter().enumerate() {
-                    let pass_bits = std::cmp::min(cur_first_quant_bits, self.group_len_bits);
+                    let pass_bits = std::cmp::min(
+                        self.first_quant_bits - oi * self.group_len_bits - self.quant_start_pos,
+                        self.group_len_bits,
+                    );
                     let mut buf_out = [0u16];
                     unsafe {
                         self.cmd_queue
@@ -1125,10 +1127,6 @@ impl OpenCLQuantReducer {
                     } else {
                         panic!("Unexpected");
                     }
-                    if cur_first_quant_bits <= self.group_len_bits {
-                        break;
-                    }
-                    cur_first_quant_bits -= self.group_len_bits;
                 }
                 idx
             } else {
