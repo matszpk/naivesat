@@ -3783,7 +3783,39 @@ mod tests {
                 7,
                 &str_to_quants("EE_EEEEEE_EEEEEEE_EEAEA"),
                 64,
-                vec![],
+                vec![
+                    (vec![0u16; 64], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(22)
+                            .chain(iter::once(0x802d))
+                            .chain(iter::repeat(0).take(64 - 22 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 13,
+                                solution: Some(0b1011010_011010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(43)
+                            .chain(iter::once(0x805a))
+                            .chain(iter::repeat(0).take(64 - 43 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 13,
+                                solution: Some(0b0101101_110101),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
             ),
             (
                 2,
