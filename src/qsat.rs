@@ -898,9 +898,11 @@ impl OpenCLQuantReducer {
     ) -> Self {
         // println!("Start");
         assert!(1 < reduce_start_bit);
-        assert!(reduce_start_bit < reduce_end_bit);
+        assert!(reduce_start_bit <= reduce_end_bit);
+        assert_ne!(initial_input_group_len_bits, 0);
         assert!(reduce_start_bit + reduce_end_bit + initial_input_group_len_bits <= quants.len());
         let is_first_quant_all = quants[0] == Quant::All;
+        let first_quant = quants[0];
         let have_first_quants = quants[1..reduce_start_bit + 1]
             .iter()
             .all(|x| quants[0] == *x);
@@ -926,7 +928,6 @@ impl OpenCLQuantReducer {
         // println!("QuantStartPos: {}", quant_start_pos);
         let mut source_code = "#define QUANT_REDUCER 1\n".to_string();
 
-        let first_quant = quants[0];
         // determine first quantifier length (bits)
         let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
         let first_quant_bits = if !quants_after.is_empty() && quants_len == first_quant_bits {
@@ -1155,7 +1156,9 @@ impl OpenCLQuantReducer {
                 Some(FinalResult {
                     reversed: self.is_first_quant_all,
                     solution_bits: first_quant_bits_in_reducer_and_inital_input,
-                    solution: Some(new_sol),
+                    solution: Some(
+                        new_sol & ((1u128 << first_quant_bits_in_reducer_and_inital_input) - 1),
+                    ),
                 }),
                 !self.is_first_quant_all,
             )
@@ -3227,6 +3230,40 @@ mod tests {
             // 0
             (
                 2,
+                2,
+                4,
+                &str_to_quants("AE__EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16], (Option::<FinalResult>::None, false)),
+                    (vec![0x8000], (None, true)),
+                ],
+            ),
+            // 1
+            (
+                2,
+                2,
+                4,
+                &str_to_quants("EE__EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16], (None, false)),
+                    (
+                        vec![0x800a],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 2,
+                                solution: Some(1),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 0
+            (
+                2,
                 5,
                 4,
                 &str_to_quants("AE_AAA_EEAE_AAEAA"),
@@ -3349,7 +3386,18 @@ mod tests {
                             Some(FinalResult {
                                 reversed: false,
                                 solution_bits: 5,
-                                solution: Some(0b1100110),
+                                solution: Some(0b00110),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        vec![0, 0, 0, 0x800c, 0, 0, 0, 0],
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 5,
+                                solution: Some(0b11110),
                             }),
                             true,
                         ),
@@ -3360,7 +3408,7 @@ mod tests {
                             Some(FinalResult {
                                 reversed: false,
                                 solution_bits: 5,
-                                solution: Some(0b1010010),
+                                solution: Some(0b10010),
                             }),
                             true,
                         ),
@@ -3575,7 +3623,7 @@ mod tests {
                 Buffer::<u32>::create(
                     &context,
                     CL_MEM_READ_WRITE,
-                    input_len >> 1,
+                    (input_len + 1) >> 1,
                     std::ptr::null_mut(),
                 )
                 .unwrap()
@@ -3583,7 +3631,7 @@ mod tests {
             for (j, (input, exp_result)) in testcases.into_iter().enumerate() {
                 println!("Test {} {}", i, j);
                 assert_eq!(input.len(), input_len);
-                let mut input_u32 = vec![0u32; input_len >> 1];
+                let mut input_u32 = vec![0u32; (input_len + 1) >> 1];
                 for i in 0..input_len {
                     input_u32[i >> 1] |= (input[i] as u32) << ((i & 1) << 4);
                 }
