@@ -1119,7 +1119,7 @@ impl OpenCLQuantReducer {
                     if idx != 0x7fff {
                         // update new sol
                         new_sol |=
-                            (rev_idx as u128) << (self.quant_start_pos + oi * self.group_len);
+                            (rev_idx as u128) << (self.quant_start_pos + oi * self.group_len_bits);
                     } else {
                         panic!("Unexpected");
                     }
@@ -1153,7 +1153,7 @@ impl OpenCLQuantReducer {
                 let rev_idx = idx.reverse_bits() >> (16 - self.initial_input_group_len_bits);
                 if idx != 0x7fff {
                     new_sol |= (rev_idx as u128)
-                        << (self.quant_start_pos + self.outputs.len() * self.group_len);
+                        << (self.quant_start_pos + self.outputs.len() * self.group_len_bits);
                 } else {
                     panic!("Unexpected");
                 }
@@ -1169,14 +1169,7 @@ impl OpenCLQuantReducer {
                 !self.is_first_quant_all,
             )
         } else {
-            (
-                Some(FinalResult {
-                    reversed: self.is_first_quant_all,
-                    solution_bits: first_quant_bits_in_reducer_and_inital_input,
-                    solution: None,
-                }),
-                self.is_first_quant_all,
-            )
+            panic!("Unexpected");
         }
     }
 }
@@ -3224,6 +3217,7 @@ mod tests {
 
     #[test]
     fn test_opencl_quant_reducer() {
+        use std::iter;
         let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
         let context = Arc::new(Context::from_device(&device).unwrap());
         #[allow(deprecated)]
@@ -3742,13 +3736,46 @@ mod tests {
                     ),
                 ],
             ),
+            // 17
             (
                 2,
                 8,
                 7,
                 &str_to_quants("EE_EEEEEE_EEEAAAE_AAEAA"),
                 64,
-                vec![],
+                vec![
+                    (vec![0u16; 64], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(22)
+                            .chain(iter::once(0x8060))
+                            .chain(iter::repeat(0).take(64 - 22 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 9,
+                                solution: Some(0b011_011010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(43)
+                            .chain(iter::once(0x8030))
+                            .chain(iter::repeat(0).take(64 - 43 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 9,
+                                solution: Some(0b110_110101),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
             ),
             (
                 2,
