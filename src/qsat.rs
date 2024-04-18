@@ -1206,18 +1206,22 @@ impl OpenCLQuantReducer {
         let max_sol_bits_with_init_group_len = self.quant_start_pos
             + self.group_len_bits * self.kernels.len()
             + self.initial_input_group_len_bits;
+        println!("MaxSolBitsW: {}", max_sol_bits_with_init_group_len);
         if self.first_quant_bits > max_sol_bits_with_init_group_len
             && result.solution_bits == max_sol_bits_with_init_group_len
         {
             // if circuit calculation needed
             if let Some(sol) = result.solution {
                 let quants_after = self.quants_after.as_ref().unwrap();
+                println!("QuantsAfter: {:?}", quants_after);
                 let mut qr = QuantReducer::new(&quants_after[self.initial_input_group_len_bits..]);
                 let circuit_result_num =
                     1 << (quants_after.len() - self.initial_input_group_len_bits);
+                println!("circuit_result_num: {}", circuit_result_num);
                 let mut circuit_results = vec![0u32; circuit_result_num >> 5];
                 let circuit_results_word_bits =
                     quants_after.len() - self.initial_input_group_len_bits - 5;
+                println!("circuit_result_num: {}", circuit_result_num);
                 for (i, v) in circuit_results.iter_mut().enumerate() {
                     // generate inputs for circuit
                     let inputs = (0..result.solution_bits)
@@ -5214,6 +5218,100 @@ mod tests {
                 }
                 let result = ocl_qr.execute(&input_buffer);
                 assert_eq!(exp_result, result, "{} {}", i, j);
+            }
+        }
+    }
+
+    fn gen_circuit(solution_bits: usize, solution: u128, values: u32) -> Circuit<usize> {
+        use gategen::boolexpr::*;
+        use gategen::dynintexpr::*;
+        use gategen::*;
+        use gateutil::*;
+        let ec = ExprCreatorSys::new();
+        let input = UDynExprNode::variable(ec.clone(), solution_bits + 5);
+        let out = dynint_booltable(
+            input.subvalue(solution_bits, 5),
+            (0..32u32).map(|b| {
+                BoolExprNode::single_value(
+                    ec.clone(),
+                    ((values >> (b.reverse_bits() >> (32 - 5))) & 1) != 0,
+                )
+            }),
+        ) & input
+            .subvalue(0, solution_bits)
+            .equal(UDynExprNode::try_constant_n(ec.clone(), solution_bits, solution).unwrap());
+        let (circuit, input_map) = out.to_circuit();
+        let input_list = input_map_to_input_list(input_map, input.iter());
+        translate_inputs_rev(circuit, input_list)
+    }
+
+    #[test]
+    fn test_opencl_quant_reducer_final_result_with_circuit() {
+        let device = Device::new(*get_all_devices(CL_DEVICE_TYPE_GPU).unwrap().get(0).unwrap());
+        let context = Arc::new(Context::from_device(&device).unwrap());
+        #[allow(deprecated)]
+        let cmd_queue =
+            Arc::new(unsafe { CommandQueue::create(&context, device.id(), 0).unwrap() });
+        for (
+            i,
+            (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len, testcases),
+        ) in [(
+            2,
+            24,
+            4,
+            &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_EEEAA"),
+            64,
+            vec![(
+                0x1a39a07u128,
+                0xb4a85fb8u32,
+                FinalResult {
+                    reversed: false,
+                    solution_bits: 26 + 3,
+                    solution: Some(0b01001101000111001101000000111),
+                },
+            )],
+        )]
+        .into_iter()
+        .enumerate()
+        {
+            let mut ocl_qr = OpenCLQuantReducer::new(
+                reduce_start_bit,
+                reduce_end_bit,
+                init_group_len_bits,
+                quants,
+                context.clone(),
+                cmd_queue.clone(),
+                Some(group_len),
+            );
+            let first_quant = quants[0];
+            let first_quant_bits =
+                quants.iter().take_while(|q| **q == first_quant).count() - reduce_start_bit;
+            let solution_bits = std::cmp::min(
+                reduce_end_bit - reduce_start_bit + init_group_len_bits,
+                first_quant_bits,
+            );
+            println!("Data: {}: {} {}", i, first_quant_bits, solution_bits);
+            for (j, (solution, circuit_values, exp_result)) in testcases.into_iter().enumerate() {
+                println!("Test {} {}", i, j);
+                let circuit = gen_circuit(solution_bits, solution, circuit_values);
+                // for i in 0..32 {
+                //     let input = (0..solution_bits)
+                //         .map(|b| ((solution >> b) & 1) != 0)
+                //         .chain((0..5).rev().map(|b| ((i >> b) & 1) != 0))
+                //         .collect::<Vec<_>>();
+                //     let out = circuit.eval(input)[0];
+                //     println!("Circuit out: {} = {}", i, out);
+                // }
+                let final_result = ocl_qr.final_result_with_circuit(
+                    circuit,
+                    FinalResult {
+                        reversed: first_quant == Quant::All,
+                        solution_bits,
+                        solution: Some(solution),
+                    },
+                );
+                println!("Result: {}", final_result);
+                assert_eq!(final_result, exp_result, "{} {}", i, j);
             }
         }
     }

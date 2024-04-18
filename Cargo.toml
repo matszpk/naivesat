@@ -25,3 +25,7 @@ gatenative = { path="../gatenative", version="0.1.0" }
 opencl3 = "0.9"
 clap = { version = "4.5.3", features = ["derive"] }
 rayon = "1.0"
+
+[dev-dependencies]
+gategen = { path="../gategen", version="0.1.0" }
+gateutil = { path="../gateutil", version="0.1.0" }
