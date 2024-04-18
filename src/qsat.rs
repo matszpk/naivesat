@@ -18,7 +18,7 @@ use std::collections::BinaryHeap;
 use std::fmt::{Display, Formatter, Write};
 use std::fs;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 // IDEA HOW TO WRITE REDUCTION:
@@ -1352,6 +1352,64 @@ impl MainOpenCLQuantReducer {
             None
         }
     }
+}
+
+fn do_command_with_par_mapper<'a>(
+    mut mapper: CPUParBasicMapperBuilder<'a>,
+    qcircuit: QuantCircuit<usize>,
+    elem_inputs: usize,
+) -> Option<FinalResult> {
+    let circuit = qcircuit.circuit();
+    let input_len = circuit.input_len();
+    let arg_steps = 1u128 << (input_len - elem_inputs);
+    let type_len = mapper.type_len() as usize;
+    let quants = qcircuit.quants();
+    mapper.user_defs(&get_aggr_output_cpu_code_defs(
+        type_len,
+        elem_inputs,
+        quants,
+    ));
+    mapper.add_with_config(
+        "formula",
+        qcircuit.circuit().clone(),
+        CodeConfig::new()
+            .elem_inputs(Some(
+                &(input_len - elem_inputs..input_len)
+                    .rev()
+                    .collect::<Vec<usize>>(),
+            ))
+            .arg_inputs(Some(
+                &(0..input_len - elem_inputs).rev().collect::<Vec<usize>>(),
+            ))
+            .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+            .aggr_output_len(Some((type_len >> 5) + 4 + 2 * elem_inputs)),
+    );
+    let mut execs = mapper.build().unwrap();
+    let main_qr = Mutex::new(MainCPUQuantReducer::new(elem_inputs, type_len, quants));
+    let input = execs[0].new_data(16);
+    println!("Start execution");
+    let start = SystemTime::now();
+    let result = execs[0]
+        .execute_direct(
+            &input,
+            None,
+            |_, output, arg| {
+                println!("Step: {} / {}", arg, arg_steps);
+                main_qr.lock().unwrap().eval(arg, output)
+            },
+            |a, b| {
+                if a.is_some() {
+                    a
+                } else {
+                    b
+                }
+            },
+            |a| a.is_some(),
+        )
+        .unwrap();
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    result
 }
 
 #[cfg(test)]
