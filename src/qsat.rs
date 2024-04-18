@@ -5966,6 +5966,13 @@ fn main() {
     );
     let cmd_args = CommandArgs::parse();
     let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
-    let qcircuit = QuantCircuit::<usize>::from_str(&circuit_str).unwrap();
+    let qcircuit = match QuantCircuit::<usize>::from_str(&circuit_str) {
+        Ok(c) => c,
+        Err(_) => {
+            let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
+            let input_len = circuit.input_len();
+            QuantCircuit::new(std::iter::repeat(Quant::Exists).take(input_len), circuit).unwrap()
+        }
+    };
     do_command(qcircuit, cmd_args);
 }
