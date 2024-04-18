@@ -5020,6 +5020,47 @@ mod tests {
                     ),
                 ],
             ),
+            // 42
+            (
+                2,
+                23,
+                4,
+                &str_to_quants("EE_EEE_EEEEEE_EEEEEE_EEEEEE_EEEA_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 512 * 4096], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(794531)
+                            .chain(iter::once(0x8002))
+                            .chain(iter::repeat(0).take(4096 * 512 - 794531 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 24,
+                                solution: Some(0b100_110001_011111_100000_110),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(1859312)
+                            .chain(iter::once(0x800c))
+                            .chain(iter::repeat(0).take(4096 * 512 - 1859312 - 1))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 24,
+                                solution: Some(0b011_000011_110111_101000_111),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
             (
                 3,
                 17,
