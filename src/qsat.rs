@@ -101,7 +101,10 @@ impl FinalResult {
                 Self {
                     reversed: self.reversed,
                     solution_bits: self.solution_bits + second.solution_bits,
-                    solution: Some(self_sol | (second_sol << self.solution_bits)),
+                    solution: Some(
+                        (self_sol | (second_sol << self.solution_bits))
+                            & ((1u128 << (self.solution_bits + second.solution_bits)) - 1),
+                    ),
                 }
             } else {
                 panic!("Unexpected");
@@ -1206,22 +1209,22 @@ impl OpenCLQuantReducer {
         let max_sol_bits_with_init_group_len = self.quant_start_pos
             + self.group_len_bits * self.kernels.len()
             + self.initial_input_group_len_bits;
-        println!("MaxSolBitsW: {}", max_sol_bits_with_init_group_len);
+        // println!("MaxSolBitsW: {}", max_sol_bits_with_init_group_len);
         if self.first_quant_bits > max_sol_bits_with_init_group_len
             && result.solution_bits == max_sol_bits_with_init_group_len
         {
             // if circuit calculation needed
             if let Some(sol) = result.solution {
                 let quants_after = self.quants_after.as_ref().unwrap();
-                println!("QuantsAfter: {:?}", quants_after);
+                // println!("QuantsAfter: {:?}", quants_after);
                 let mut qr = QuantReducer::new(&quants_after[self.initial_input_group_len_bits..]);
                 let circuit_result_num =
                     1 << (quants_after.len() - self.initial_input_group_len_bits);
-                println!("circuit_result_num: {}", circuit_result_num);
+                // println!("circuit_result_num: {}", circuit_result_num);
                 let mut circuit_results = vec![0u32; circuit_result_num >> 5];
                 let circuit_results_word_bits =
                     quants_after.len() - self.initial_input_group_len_bits - 5;
-                println!("circuit_result_num: {}", circuit_result_num);
+                // println!("circuit_results_word_bits: {}", circuit_results_word_bits);
                 for (i, v) in circuit_results.iter_mut().enumerate() {
                     // generate inputs for circuit
                     let inputs = (0..result.solution_bits)
@@ -5256,6 +5259,7 @@ mod tests {
             i,
             (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len, testcases),
         ) in [
+            // 0
             (
                 2,
                 24,
@@ -5292,6 +5296,7 @@ mod tests {
                     ),
                 ],
             ),
+            // 1
             (
                 2,
                 24,
@@ -5319,11 +5324,130 @@ mod tests {
                     ),
                 ],
             ),
+            // 2
+            (
+                2,
+                24,
+                4,
+                &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_AAAAA"),
+                64,
+                vec![(
+                    0x2a69b1eu128,
+                    0x4b854e2u32, // doesn't matter
+                    FinalResult {
+                        reversed: false,
+                        solution_bits: 26,
+                        solution: Some(0b10101001101001101100011110),
+                    },
+                )],
+            ),
+            // 3
+            (
+                2,
+                24,
+                4,
+                &str_to_quants("AA_AAAA_AAAAAA_AAAAAA_AAAAAA_AAAA_AAAEE"),
+                64,
+                vec![(
+                    0x1d8c4b3u128,
+                    0x10111111u32,
+                    FinalResult {
+                        reversed: true,
+                        solution_bits: 26 + 3,
+                        solution: Some(0b110_1110110001100010010110011),
+                    },
+                )],
+            ),
+            // 4
+            (
+                2,
+                20,
+                4,
+                &str_to_quants("AA_AAAAAA_AAAAAA_AAAAAA_AAAA_AAAEA"),
+                64,
+                vec![(
+                    0x3acd1au128,
+                    0xfebc6b73u32,
+                    FinalResult {
+                        reversed: true,
+                        solution_bits: 22 + 3,
+                        solution: Some(0b110_1110101100110100011010),
+                    },
+                )],
+            ),
+            // 5
+            (
+                2,
+                20,
+                4,
+                &str_to_quants("AA_AAAAAA_AAAAAA_AAAAAA_AAAA_EEEEA"),
+                64,
+                vec![(
+                    0x3acd1au128,
+                    0xfebc6b73u32, // doesn't matter
+                    FinalResult {
+                        reversed: true,
+                        solution_bits: 22,
+                        solution: Some(0b1110101100110100011010),
+                    },
+                )],
+            ),
+            // 6
+            (
+                2,
+                20,
+                4,
+                &str_to_quants("AA_AAAAAA_AAAAAA_AAAAAA_AAAA_AAAEA"),
+                64,
+                vec![(
+                    0x3acd1au128,  // doesn't matter
+                    0xfebc6b73u32, // doesn't matter
+                    FinalResult {
+                        reversed: true,
+                        solution_bits: 22,
+                        solution: None,
+                    },
+                )],
+            ),
+            // 7
+            (
+                2,
+                24,
+                4,
+                &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEAA_AAAAA"),
+                64,
+                vec![(
+                    0xa69b1eu128,
+                    0x4b854e2u32, // doesn't matter
+                    FinalResult {
+                        reversed: false,
+                        solution_bits: 24,
+                        solution: Some(0b101001101001101100011110),
+                    },
+                )],
+            ),
+            // 8
+            (
+                2,
+                24,
+                4,
+                &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_EEEAA"),
+                64,
+                vec![(
+                    0x1a39a07u128,
+                    0xb4a85fb8u32, // doesn't matter
+                    FinalResult {
+                        reversed: false,
+                        solution_bits: 26,
+                        solution: None,
+                    },
+                )],
+            ),
         ]
         .into_iter()
         .enumerate()
         {
-            let mut ocl_qr = OpenCLQuantReducer::new(
+            let ocl_qr = OpenCLQuantReducer::new(
                 reduce_start_bit,
                 reduce_end_bit,
                 init_group_len_bits,
@@ -5348,7 +5472,11 @@ mod tests {
                     FinalResult {
                         reversed: first_quant == Quant::All,
                         solution_bits,
-                        solution: Some(solution),
+                        solution: if exp_result.solution.is_some() {
+                            Some(solution)
+                        } else {
+                            None
+                        },
                     },
                 );
                 println!("Result: {}", final_result);
