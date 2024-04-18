@@ -253,7 +253,7 @@ fn do_command_with_parseq_mapper<'a>(
 
 fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
     let input_len = circuit.input_len();
-    let result = if input_len >= 10 {
+    let result = if input_len >= 14 {
         let elem_inputs = if cmd_args.elem_inputs >= input_len {
             input_len - 1
         } else {

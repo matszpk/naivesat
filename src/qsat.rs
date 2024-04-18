@@ -1576,7 +1576,7 @@ fn do_command_with_parseq_mapper<'a>(
 fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
     let circuit = qcircuit.circuit();
     let input_len = circuit.input_len();
-    let result = if input_len >= 10 {
+    let result = if input_len >= 14 {
         let elem_inputs = if cmd_args.elem_inputs >= input_len {
             input_len - 1
         } else {
