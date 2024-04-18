@@ -1723,7 +1723,12 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
             }
         }
     } else {
-        panic!("Unsupported!");
+        let mut qr = QuantReducer::new(qcircuit.quants());
+        for v in 0..1 << input_len {
+            let r = circuit.eval((0..input_len).rev().map(|b| (v >> b) & 1 != 0))[0];
+            qr.push(v, r);
+        }
+        qr.final_result().unwrap()
     };
     println!("Result: {}", result);
 }
