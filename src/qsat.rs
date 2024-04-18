@@ -5020,7 +5020,7 @@ mod tests {
                     ),
                 ],
             ),
-            // 42
+            // 46
             (
                 2,
                 23,
@@ -5061,21 +5061,42 @@ mod tests {
                     ),
                 ],
             ),
+            // 47
             (
-                3,
-                17,
+                2,
+                22,
                 4,
-                &str_to_quants("AEE_AA_AAAEAA_AEAEEA_EEAE_AAEAA"),
+                &str_to_quants("EE_EE_EEEEEE_EEEEAA_AEAEEA_EEAE_AAEAA"),
                 64,
-                vec![],
-            ),
-            (
-                3,
-                23,
-                4,
-                &str_to_quants("AEE_AA_AAAEAA_AEAEEA_EEAAEA_EEAE_AAEAA"),
-                64,
-                vec![],
+                vec![
+                    (vec![0u16; 4096 * 256], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(256 * 2593)
+                            .chain(
+                                vec![
+                                    (0..64)
+                                        .map(|j| {
+                                            (((0x300c00000000c003u64 >> j) & 1) << 15) as u16
+                                        })
+                                        .collect::<Vec<_>>();
+                                    4
+                                ]
+                                .into_iter()
+                                .flatten(),
+                            )
+                            .chain(iter::repeat(0).take(256 * 4096 - 256 * 2593 - 256))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 12,
+                                solution: Some(0b1000_010001_01),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
             ),
         ]
         .into_iter()
