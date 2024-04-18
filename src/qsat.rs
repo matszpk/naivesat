@@ -107,7 +107,11 @@ impl FinalResult {
                 panic!("Unexpected");
             }
         } else if second.solution.is_none() {
-            self
+            Self {
+                reversed: self.reversed,
+                solution_bits: self.solution_bits + second.solution_bits,
+                solution: None,
+            }
         } else {
             panic!("Unexpected");
         }
