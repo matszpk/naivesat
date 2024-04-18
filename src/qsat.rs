@@ -5261,15 +5261,35 @@ mod tests {
             4,
             &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_EEEAA"),
             64,
-            vec![(
-                0x1a39a07u128,
-                0xb4a85fb8u32,
-                FinalResult {
-                    reversed: false,
-                    solution_bits: 26 + 3,
-                    solution: Some(0b01001101000111001101000000111),
-                },
-            )],
+            vec![
+                (
+                    0x1a39a07u128,
+                    0xb4a85fb8u32,
+                    FinalResult {
+                        reversed: false,
+                        solution_bits: 26 + 3,
+                        solution: Some(0b010_01101000111001101000000111),
+                    },
+                ),
+                (
+                    0x1a39a07u128,
+                    0xb4f852b8u32,
+                    FinalResult {
+                        reversed: false,
+                        solution_bits: 26 + 3,
+                        solution: Some(0b101_01101000111001101000000111),
+                    },
+                ),
+                (
+                    0x1a39a07u128,
+                    0xb4ef52b8u32,
+                    FinalResult {
+                        reversed: false,
+                        solution_bits: 26 + 3,
+                        solution: Some(0b001_01101000111001101000000111),
+                    },
+                ),
+            ],
         )]
         .into_iter()
         .enumerate()
@@ -5294,14 +5314,6 @@ mod tests {
             for (j, (solution, circuit_values, exp_result)) in testcases.into_iter().enumerate() {
                 println!("Test {} {}", i, j);
                 let circuit = gen_circuit(solution_bits, solution, circuit_values);
-                // for i in 0..32 {
-                //     let input = (0..solution_bits)
-                //         .map(|b| ((solution >> b) & 1) != 0)
-                //         .chain((0..5).rev().map(|b| ((i >> b) & 1) != 0))
-                //         .collect::<Vec<_>>();
-                //     let out = circuit.eval(input)[0];
-                //     println!("Circuit out: {} = {}", i, out);
-                // }
                 let final_result = ocl_qr.final_result_with_circuit(
                     circuit,
                     FinalResult {
