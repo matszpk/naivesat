@@ -1358,7 +1358,7 @@ fn do_command_with_par_mapper<'a>(
     mut mapper: CPUParBasicMapperBuilder<'a>,
     qcircuit: QuantCircuit<usize>,
     elem_inputs: usize,
-) -> Option<FinalResult> {
+) -> FinalResult {
     let circuit = qcircuit.circuit();
     let input_len = circuit.input_len();
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -1410,7 +1410,7 @@ fn do_command_with_par_mapper<'a>(
         .unwrap();
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
-    result
+    result.unwrap()
 }
 
 fn do_command_with_opencl_mapper<'a>(
@@ -1418,7 +1418,7 @@ fn do_command_with_opencl_mapper<'a>(
     qcircuit: QuantCircuit<usize>,
     elem_inputs: usize,
     group_len: usize,
-) -> Option<FinalResult> {
+) -> FinalResult {
     let circuit = qcircuit.circuit();
     assert_eq!(group_len.count_ones(), 1);
     let input_len = circuit.input_len();
@@ -1469,7 +1469,7 @@ fn do_command_with_opencl_mapper<'a>(
         .unwrap();
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
-    result
+    result.unwrap()
 }
 
 fn do_command_with_parseq_mapper<'a>(
@@ -1477,7 +1477,7 @@ fn do_command_with_parseq_mapper<'a>(
     qcircuit: QuantCircuit<usize>,
     elem_inputs: usize,
     group_len: usize,
-) -> Option<FinalResult> {
+) -> FinalResult {
     let circuit = qcircuit.circuit();
     let input_len = circuit.input_len();
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -1572,7 +1572,7 @@ fn do_command_with_parseq_mapper<'a>(
         .unwrap();
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
-    result
+    result.unwrap()
 }
 
 #[cfg(test)]
