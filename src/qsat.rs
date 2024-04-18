@@ -1203,7 +1203,7 @@ impl OpenCLQuantReducer {
 
     fn final_result_with_circuit(
         &self,
-        circuit: Circuit<usize>,
+        circuit: &Circuit<usize>,
         result: FinalResult,
     ) -> FinalResult {
         let max_sol_bits_with_init_group_len = self.quant_start_pos
@@ -1271,7 +1271,7 @@ struct MainCPUQuantReducer {
 }
 
 impl MainCPUQuantReducer {
-    fn new(arg_bits: usize, elem_bits: usize, type_len: usize, quants: &[Quant]) -> Self {
+    fn new(elem_bits: usize, type_len: usize, quants: &[Quant]) -> Self {
         assert_eq!(type_len.count_ones(), 1);
         Self {
             elem_bits,
@@ -1291,6 +1291,63 @@ impl MainCPUQuantReducer {
         self.qr.push(arg, result);
         if let Some(final_result) = self.qr.final_result() {
             Some(final_result.join(work_result.unwrap()))
+        } else {
+            None
+        }
+    }
+}
+
+struct MainOpenCLQuantReducer {
+    type_len: usize,
+    elem_bits: usize,
+    qr: QuantReducer,
+    ocl_qr: OpenCLQuantReducer,
+    quants: Vec<Quant>,
+}
+
+impl MainOpenCLQuantReducer {
+    fn new(
+        elem_bits: usize,
+        type_len: usize,
+        group_len: usize,
+        quants: &[Quant],
+        context: Arc<Context>,
+        cmd_queue: Arc<CommandQueue>,
+    ) -> Self {
+        assert_eq!(type_len.count_ones(), 1);
+        assert_eq!(group_len.count_ones(), 1);
+        let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
+        let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
+        Self {
+            elem_bits,
+            type_len,
+            qr: QuantReducer::new(&quants[0..quants.len() - elem_bits]),
+            ocl_qr: OpenCLQuantReducer::new(
+                quants.len() - elem_bits,
+                quants.len() - type_len_bits - group_len_bits,
+                group_len_bits,
+                quants,
+                context.clone(),
+                cmd_queue.clone(),
+                Some(group_len),
+            ),
+            quants: quants.to_vec(),
+        }
+    }
+
+    fn eval(
+        &mut self,
+        arg: u64,
+        outputs: &Buffer<u32>,
+        circuit: &Circuit<usize>,
+    ) -> Option<FinalResult> {
+        let (work_result, result) = self.ocl_qr.execute(outputs);
+        self.qr.push(arg, result);
+        if let Some(final_result) = self.qr.final_result() {
+            let work_result = self
+                .ocl_qr
+                .final_result_with_circuit(circuit, work_result.unwrap());
+            Some(final_result.join(work_result))
         } else {
             None
         }
@@ -5505,7 +5562,7 @@ mod tests {
                 println!("Test {} {}", i, j);
                 let circuit = gen_circuit(solution_bits, solution, circuit_values);
                 let final_result = ocl_qr.final_result_with_circuit(
-                    circuit,
+                    &circuit,
                     FinalResult {
                         reversed: first_quant == Quant::All,
                         solution_bits,
