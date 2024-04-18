@@ -5255,42 +5255,71 @@ mod tests {
         for (
             i,
             (reduce_start_bit, reduce_end_bit, init_group_len_bits, quants, group_len, testcases),
-        ) in [(
-            2,
-            24,
-            4,
-            &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_EEEAA"),
-            64,
-            vec![
-                (
-                    0x1a39a07u128,
-                    0xb4a85fb8u32,
-                    FinalResult {
-                        reversed: false,
-                        solution_bits: 26 + 3,
-                        solution: Some(0b010_01101000111001101000000111),
-                    },
-                ),
-                (
-                    0x1a39a07u128,
-                    0xb4f852b8u32,
-                    FinalResult {
-                        reversed: false,
-                        solution_bits: 26 + 3,
-                        solution: Some(0b101_01101000111001101000000111),
-                    },
-                ),
-                (
-                    0x1a39a07u128,
-                    0xb4ef52b8u32,
-                    FinalResult {
-                        reversed: false,
-                        solution_bits: 26 + 3,
-                        solution: Some(0b001_01101000111001101000000111),
-                    },
-                ),
-            ],
-        )]
+        ) in [
+            (
+                2,
+                24,
+                4,
+                &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_EEEAA"),
+                64,
+                vec![
+                    (
+                        0x1a39a07u128,
+                        0xb4a85fb8u32,
+                        FinalResult {
+                            reversed: false,
+                            solution_bits: 26 + 3,
+                            solution: Some(0b010_01101000111001101000000111),
+                        },
+                    ),
+                    (
+                        0x1a39a27u128,
+                        0xb4f852b8u32,
+                        FinalResult {
+                            reversed: false,
+                            solution_bits: 26 + 3,
+                            solution: Some(0b101_01101000111001101000100111),
+                        },
+                    ),
+                    (
+                        0x1a39a17u128,
+                        0xb4ef52b8u32,
+                        FinalResult {
+                            reversed: false,
+                            solution_bits: 26 + 3,
+                            solution: Some(0b001_01101000111001101000010111),
+                        },
+                    ),
+                ],
+            ),
+            (
+                2,
+                24,
+                4,
+                &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_EEEEE"),
+                64,
+                vec![
+                    (
+                        0x2a69b1eu128,
+                        1 << 27,
+                        FinalResult {
+                            reversed: false,
+                            solution_bits: 26 + 5,
+                            solution: Some(0b11011_10101001101001101100011110),
+                        },
+                    ),
+                    (
+                        0x2106eb6u128,
+                        1 << 22,
+                        FinalResult {
+                            reversed: false,
+                            solution_bits: 26 + 5,
+                            solution: Some(0b01101_10000100000110111010110110),
+                        },
+                    ),
+                ],
+            ),
+        ]
         .into_iter()
         .enumerate()
         {
