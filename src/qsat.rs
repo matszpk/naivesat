@@ -14,7 +14,7 @@ use opencl3::memory::{Buffer, CL_MEM_READ_WRITE};
 use opencl3::program::Program;
 use opencl3::types::{cl_ulong, CL_BLOCKING};
 
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::fmt::{Display, Formatter, Write};
 use std::fs;
 use std::str::FromStr;
@@ -1463,6 +1463,109 @@ fn do_command_with_opencl_mapper<'a>(
             |result, _, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
                 main_qr.eval(arg, unsafe { output.buffer() }, circuit)
+            },
+            |a| a.is_some(),
+        )
+        .unwrap();
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    result
+}
+
+fn do_command_with_parseq_mapper<'a>(
+    mut mapper: CPUOpenCLParSeqMapperBuilder<'a>,
+    qcircuit: QuantCircuit<usize>,
+    elem_inputs: usize,
+    group_len: usize,
+) -> Option<FinalResult> {
+    let circuit = qcircuit.circuit();
+    let input_len = circuit.input_len();
+    let arg_steps = 1u128 << (input_len - elem_inputs);
+    let quants = qcircuit.quants();
+    let cpu_type_len = mapper.type_len(ParSeqSelection::Par) as usize;
+    assert_eq!(cpu_type_len.count_ones(), 1);
+    let seq_builder_num = mapper.seq_builder_num();
+    let opencl_type_lens = (0..seq_builder_num)
+        .map(|i| {
+            let ocl_type_len = mapper.type_len(ParSeqSelection::Seq(i)) as usize;
+            assert_eq!(ocl_type_len.count_ones(), 1);
+            ocl_type_len
+        })
+        .collect::<Vec<_>>();
+    let cpu_user_def = get_aggr_output_cpu_code_defs(cpu_type_len, elem_inputs, quants);
+    let ocl_user_defs = (0..seq_builder_num)
+        .map(|i| get_aggr_output_opencl_code_defs(opencl_type_lens[i], group_len, quants))
+        .collect::<Vec<_>>();
+    mapper.user_defs(|sel| match sel {
+        ParSeqSelection::Par => &cpu_user_def,
+        ParSeqSelection::Seq(i) => &ocl_user_defs[i],
+    });
+    mapper.add_with_config(
+        "formula",
+        circuit.clone(),
+        &&(0..input_len - elem_inputs).rev().collect::<Vec<usize>>(),
+        Some(
+            &(input_len - elem_inputs..input_len)
+                .rev()
+                .collect::<Vec<usize>>(),
+        ),
+        |sel| match sel {
+            ParSeqSelection::Par => ParSeqDynamicConfig::new()
+                .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
+                .aggr_output_len(Some((cpu_type_len >> 5) + 4 + 2 * elem_inputs)),
+            ParSeqSelection::Seq(i) => ParSeqDynamicConfig::new()
+                .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+                .aggr_output_len(Some(
+                    (1 << elem_inputs) / (group_len * opencl_type_lens[i] * 2),
+                )),
+        },
+    );
+    let mut execs = mapper.build().unwrap();
+    let main_cpu_qr = Mutex::new(MainCPUQuantReducer::new(elem_inputs, cpu_type_len, quants));
+    let mut main_ocl_qrs = HashMap::new();
+    execs[0].with_executor(|exec| match exec {
+        ParSeqObject::Seq((i, exec)) => {
+            main_ocl_qrs.insert(
+                i,
+                Mutex::new(MainOpenCLQuantReducer::new(
+                    elem_inputs,
+                    opencl_type_lens[i],
+                    group_len,
+                    quants,
+                    unsafe { exec.context() },
+                    unsafe { exec.command_queue() },
+                )),
+            );
+        }
+        _ => (),
+    });
+    let input = execs[0].new_data(16);
+    println!("Start execution");
+    let start = SystemTime::now();
+    let result = execs[0]
+        .execute(
+            &input,
+            None,
+            |sel, _, output, arg| {
+                println!("Step: {} / {}", arg, arg_steps);
+                match sel {
+                    ParSeqSelection::Par => main_cpu_qr
+                        .lock()
+                        .unwrap()
+                        .eval(arg, output.par().unwrap().get().get()),
+                    ParSeqSelection::Seq(i) => main_ocl_qrs[&i].lock().unwrap().eval(
+                        arg,
+                        unsafe { output.seq().unwrap().buffer() },
+                        circuit,
+                    ),
+                }
+            },
+            |a, b| {
+                if a.is_some() {
+                    a
+                } else {
+                    b
+                }
             },
             |a| a.is_some(),
         )
