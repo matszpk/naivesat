@@ -4819,7 +4819,7 @@ mod tests {
                     (
                         iter::repeat(0)
                             .take(76993 * 2)
-                            .chain([0x8000, 0x8022].into_iter())
+                            .chain([0x807f, 0x80ff].into_iter())
                             .chain(iter::repeat(0).take(2 * (4096 * 32 - 76993 - 1)))
                             .collect::<Vec<_>>(),
                         (
@@ -4834,7 +4834,7 @@ mod tests {
                     (
                         iter::repeat(0)
                             .take(47606 * 2)
-                            .chain([0x8000, 0x8000].into_iter())
+                            .chain([0x80ff, 0x80ff].into_iter())
                             .chain(iter::repeat(0).take(2 * (4096 * 32 - 47606 - 1)))
                             .collect::<Vec<_>>(),
                         (
@@ -4973,6 +4973,47 @@ mod tests {
                                 reversed: false,
                                 solution_bits: 10,
                                 solution: Some(0b1010_011101),
+                            }),
+                            true,
+                        ),
+                    ),
+                ],
+            ),
+            // 45
+            (
+                2,
+                24,
+                4,
+                &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 1024 * 4096], (None, false)),
+                    (
+                        iter::repeat(0)
+                            .take(568217 * 2)
+                            .chain([0x80ff, 0x80ff].into_iter())
+                            .chain(iter::repeat(0).take(2 * (4096 * 512 - 568217 - 1)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 21,
+                                solution: Some(0b010011_001110_101010_0010),
+                            }),
+                            true,
+                        ),
+                    ),
+                    (
+                        iter::repeat(0)
+                            .take(1784317 * 2)
+                            .chain([0x80ff, 0x80ff].into_iter())
+                            .chain(iter::repeat(0).take(2 * (4096 * 512 - 1784317 - 1)))
+                            .collect::<Vec<_>>(),
+                        (
+                            Some(FinalResult {
+                                reversed: false,
+                                solution_bits: 21,
+                                solution: Some(0b010111_111100_111001_1011),
                             }),
                             true,
                         ),
