@@ -93,6 +93,27 @@ struct FinalResult {
     solution: Option<u128>,
 }
 
+impl FinalResult {
+    fn join(self, second: Self) -> Self {
+        assert_eq!(self.reversed, second.reversed);
+        if let Some(self_sol) = self.solution {
+            if let Some(second_sol) = second.solution {
+                Self {
+                    reversed: self.reversed,
+                    solution_bits: self.solution_bits + second.solution_bits,
+                    solution: Some(self_sol | (second_sol << second.solution_bits)),
+                }
+            } else {
+                panic!("Unexpected");
+            }
+        } else if second.solution.is_none() {
+            self
+        } else {
+            panic!("Unexpected");
+        }
+    }
+}
+
 impl Display for FinalResult {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         if self.reversed {
