@@ -101,7 +101,7 @@ impl FinalResult {
                 Self {
                     reversed: self.reversed,
                     solution_bits: self.solution_bits + second.solution_bits,
-                    solution: Some(self_sol | (second_sol << second.solution_bits)),
+                    solution: Some(self_sol | (second_sol << self.solution_bits)),
                 }
             } else {
                 panic!("Unexpected");
