@@ -1363,6 +1363,7 @@ fn do_command_with_par_mapper<'a>(
     let input_len = circuit.input_len();
     let arg_steps = 1u128 << (input_len - elem_inputs);
     let type_len = mapper.type_len() as usize;
+    assert_eq!(type_len.count_ones(), 1);
     let quants = qcircuit.quants();
     mapper.user_defs(&get_aggr_output_cpu_code_defs(
         type_len,
@@ -1371,7 +1372,7 @@ fn do_command_with_par_mapper<'a>(
     ));
     mapper.add_with_config(
         "formula",
-        qcircuit.circuit().clone(),
+        circuit.clone(),
         CodeConfig::new()
             .elem_inputs(Some(
                 &(input_len - elem_inputs..input_len)
@@ -1403,6 +1404,65 @@ fn do_command_with_par_mapper<'a>(
                 } else {
                     b
                 }
+            },
+            |a| a.is_some(),
+        )
+        .unwrap();
+    let time = start.elapsed().unwrap();
+    println!("Time: {}", time.as_secs_f64());
+    result
+}
+
+fn do_command_with_opencl_mapper<'a>(
+    mut mapper: OpenCLBasicMapperBuilder<'a>,
+    qcircuit: QuantCircuit<usize>,
+    elem_inputs: usize,
+    group_len: usize,
+) -> Option<FinalResult> {
+    let circuit = qcircuit.circuit();
+    assert_eq!(group_len.count_ones(), 1);
+    let input_len = circuit.input_len();
+    let arg_steps = 1u128 << (input_len - elem_inputs);
+    let type_len = mapper.type_len() as usize;
+    assert_eq!(type_len.count_ones(), 1);
+    let quants = qcircuit.quants();
+    mapper.user_defs(&get_aggr_output_opencl_code_defs(
+        type_len, group_len, quants,
+    ));
+    mapper.add_with_config(
+        "formula",
+        circuit.clone(),
+        CodeConfig::new()
+            .elem_inputs(Some(
+                &(input_len - elem_inputs..input_len)
+                    .rev()
+                    .collect::<Vec<usize>>(),
+            ))
+            .arg_inputs(Some(
+                &(0..input_len - elem_inputs).rev().collect::<Vec<usize>>(),
+            ))
+            .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
+            .aggr_output_len(Some((1 << elem_inputs) / (group_len * type_len * 2))),
+    );
+    let mut execs = mapper.build().unwrap();
+    let input = execs[0].new_data(16);
+    let mut main_qr = MainOpenCLQuantReducer::new(
+        elem_inputs,
+        type_len,
+        group_len,
+        quants,
+        unsafe { execs[0].executor().context() },
+        unsafe { execs[0].executor().command_queue() },
+    );
+    println!("Start execution");
+    let start = SystemTime::now();
+    let result = execs[0]
+        .execute(
+            &input,
+            None,
+            |result, _, output, arg| {
+                println!("Step: {} / {}", arg, arg_steps);
+                main_qr.eval(arg, unsafe { output.buffer() }, circuit)
             },
             |a| a.is_some(),
         )
