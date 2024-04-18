@@ -1197,6 +1197,59 @@ impl OpenCLQuantReducer {
             panic!("Unexpected");
         }
     }
+
+    fn final_result_with_circuit(
+        &self,
+        circuit: Circuit<usize>,
+        result: FinalResult,
+    ) -> FinalResult {
+        let max_sol_bits_with_init_group_len = self.quant_start_pos
+            + self.group_len_bits * self.kernels.len()
+            + self.initial_input_group_len_bits;
+        if self.first_quant_bits > max_sol_bits_with_init_group_len
+            && result.solution_bits == max_sol_bits_with_init_group_len
+        {
+            // if circuit calculation needed
+            if let Some(sol) = result.solution {
+                let quants_after = self.quants_after.as_ref().unwrap();
+                let mut qr = QuantReducer::new(&quants_after[self.initial_input_group_len_bits..]);
+                let circuit_result_num =
+                    1 << (quants_after.len() - self.initial_input_group_len_bits);
+                let mut circuit_results = vec![0u32; circuit_result_num >> 5];
+                let circuit_results_word_bits =
+                    quants_after.len() - self.initial_input_group_len_bits - 5;
+                for (i, v) in circuit_results.iter_mut().enumerate() {
+                    // generate inputs for circuit
+                    let inputs = (0..result.solution_bits)
+                        .map(|b| (((sol >> b) & 1) as u32) * 0xffffffffu32)
+                        .chain(
+                            (0..circuit_results_word_bits)
+                                .rev()
+                                .map(|b| (((i >> b) & 1) as u32) * 0xffffffff),
+                        )
+                        .chain(
+                            [0xffff0000, 0xff00ff00, 0xf0f0f0f0, 0xcccccccc, 0xaaaaaaaa]
+                                .into_iter(),
+                        )
+                        .collect::<Vec<_>>();
+                    // store circuit results
+                    *v = circuit.eval(inputs)[0];
+                }
+                // evalute on QuantReducer
+                for i in 0..1 << (quants_after.len() - self.initial_input_group_len_bits) {
+                    qr.push(
+                        i,
+                        ((circuit_results[(i >> 5) as usize] >> (i & 31)) & 1) != 0,
+                    );
+                }
+                result.join(qr.final_result().unwrap())
+            } else {
+                result
+            }
+        } else {
+            result
+        }
+    }
 }
 
 #[cfg(test)]
