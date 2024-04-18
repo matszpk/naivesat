@@ -172,7 +172,6 @@ fn do_command_with_opencl_mapper<'a>(
                 if result.is_some() {
                     result
                 } else if output[0] != 0 {
-                    println!("Output[2]: {}", output[2]);
                     let elem_idx = ((output[4].trailing_zeros() | (output[3] << 5)) as u128)
                         | (((output[1] as u128) | ((output[2] as u128) << 32))
                             * (type_len as u128));
