@@ -1259,6 +1259,44 @@ impl OpenCLQuantReducer {
     }
 }
 
+//
+// main quant reducers with arg reduction
+//
+
+struct MainCPUQuantReducer {
+    type_len: usize,
+    elem_bits: usize,
+    qr: QuantReducer,
+    quants: Vec<Quant>,
+}
+
+impl MainCPUQuantReducer {
+    fn new(arg_bits: usize, elem_bits: usize, type_len: usize, quants: &[Quant]) -> Self {
+        assert_eq!(type_len.count_ones(), 1);
+        Self {
+            elem_bits,
+            type_len,
+            qr: QuantReducer::new(&quants[0..quants.len() - elem_bits]),
+            quants: quants.to_vec(),
+        }
+    }
+
+    fn eval(&mut self, arg: u64, outputs: &[u32]) -> Option<FinalResult> {
+        let (work_result, result) = get_final_results_from_cpu_outputs(
+            self.type_len,
+            self.elem_bits,
+            &self.quants,
+            outputs,
+        );
+        self.qr.push(arg, result);
+        if let Some(final_result) = self.qr.final_result() {
+            Some(final_result.join(work_result.unwrap()))
+        } else {
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
