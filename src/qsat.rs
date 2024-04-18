@@ -1298,11 +1298,8 @@ impl MainCPUQuantReducer {
 }
 
 struct MainOpenCLQuantReducer {
-    type_len: usize,
-    elem_bits: usize,
     qr: QuantReducer,
     ocl_qr: OpenCLQuantReducer,
-    quants: Vec<Quant>,
 }
 
 impl MainOpenCLQuantReducer {
@@ -1319,8 +1316,6 @@ impl MainOpenCLQuantReducer {
         let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
         let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
         Self {
-            elem_bits,
-            type_len,
             qr: QuantReducer::new(&quants[0..quants.len() - elem_bits]),
             ocl_qr: OpenCLQuantReducer::new(
                 quants.len() - elem_bits,
@@ -1331,7 +1326,6 @@ impl MainOpenCLQuantReducer {
                 cmd_queue.clone(),
                 Some(group_len),
             ),
-            quants: quants.to_vec(),
         }
     }
 
@@ -1462,7 +1456,11 @@ fn do_command_with_opencl_mapper<'a>(
             None,
             |result, _, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
-                main_qr.eval(arg, unsafe { output.buffer() }, circuit)
+                if let Some(result) = result {
+                    Some(result)
+                } else {
+                    main_qr.eval(arg, unsafe { output.buffer() }, circuit)
+                }
             },
             |a| a.is_some(),
         )
@@ -1476,7 +1474,7 @@ fn do_command_with_parseq_mapper<'a>(
     mut mapper: CPUOpenCLParSeqMapperBuilder<'a>,
     qcircuit: QuantCircuit<usize>,
     elem_inputs: usize,
-    group_len: usize,
+    group_lens: &[usize],
 ) -> FinalResult {
     let circuit = qcircuit.circuit();
     let input_len = circuit.input_len();
@@ -1494,7 +1492,7 @@ fn do_command_with_parseq_mapper<'a>(
         .collect::<Vec<_>>();
     let cpu_user_def = get_aggr_output_cpu_code_defs(cpu_type_len, elem_inputs, quants);
     let ocl_user_defs = (0..seq_builder_num)
-        .map(|i| get_aggr_output_opencl_code_defs(opencl_type_lens[i], group_len, quants))
+        .map(|i| get_aggr_output_opencl_code_defs(opencl_type_lens[i], group_lens[i], quants))
         .collect::<Vec<_>>();
     mapper.user_defs(|sel| match sel {
         ParSeqSelection::Par => &cpu_user_def,
@@ -1516,7 +1514,7 @@ fn do_command_with_parseq_mapper<'a>(
             ParSeqSelection::Seq(i) => ParSeqDynamicConfig::new()
                 .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
                 .aggr_output_len(Some(
-                    (1 << elem_inputs) / (group_len * opencl_type_lens[i] * 2),
+                    (1 << elem_inputs) / (group_lens[i] * opencl_type_lens[i] * 2),
                 )),
         },
     );
@@ -1530,7 +1528,7 @@ fn do_command_with_parseq_mapper<'a>(
                 Mutex::new(MainOpenCLQuantReducer::new(
                     elem_inputs,
                     opencl_type_lens[i],
-                    group_len,
+                    group_lens[i],
                     quants,
                     unsafe { exec.context() },
                     unsafe { exec.command_queue() },
@@ -1573,6 +1571,161 @@ fn do_command_with_parseq_mapper<'a>(
     let time = start.elapsed().unwrap();
     println!("Time: {}", time.as_secs_f64());
     result.unwrap()
+}
+
+fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
+    let circuit = qcircuit.circuit();
+    let input_len = circuit.input_len();
+    let result = if input_len >= 10 {
+        let elem_inputs = if cmd_args.elem_inputs >= input_len {
+            input_len - 1
+        } else {
+            cmd_args.elem_inputs
+        };
+        assert!(elem_inputs > 12 && elem_inputs <= 64);
+        assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
+        assert_eq!(circuit.outputs().len(), 1);
+        println!("Elem inputs: {}", elem_inputs);
+
+        let exec_type = cmd_args.exec_type;
+        match exec_type {
+            ExecType::CPU => {
+                println!("Execute in CPU");
+                let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
+                do_command_with_par_mapper(builder, qcircuit.clone(), elem_inputs)
+            }
+            ExecType::OpenCL(didx) => {
+                println!("Execute in OpenCL device={}", didx);
+                let device = Device::new(
+                    *get_all_devices(CL_DEVICE_TYPE_GPU)
+                        .unwrap()
+                        .get(didx)
+                        .unwrap(),
+                );
+                let group_len = cmd_args
+                    .opencl_group_len
+                    .unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
+                let opencl_config = OpenCLBuilderConfig {
+                    optimize_negs: true,
+                    group_len: Some(group_len),
+                    group_vec: false,
+                };
+                let builder =
+                    BasicMapperBuilder::new(OpenCLBuilder::new(&device, Some(opencl_config)));
+                do_command_with_opencl_mapper(builder, qcircuit.clone(), elem_inputs, group_len)
+            }
+            ExecType::CPUAndOpenCL
+            | ExecType::CPUAndOpenCLD
+            | ExecType::CPUAndOpenCL1(_)
+            | ExecType::CPUAndOpenCL1D(_) => {
+                let par_builder = CPUBuilder::new(None);
+                let seq_builders_and_group_lens = if let ExecType::CPUAndOpenCL1(didx) = exec_type {
+                    println!("Execute in CPUAndOpenCL1");
+                    get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id.clone());
+                            let group_len = cmd_args.opencl_group_len.unwrap_or(
+                                usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
+                            );
+                            let opencl_config = OpenCLBuilderConfig {
+                                optimize_negs: true,
+                                group_len: Some(group_len),
+                                group_vec: false,
+                            };
+                            (OpenCLBuilder::new(&device, Some(opencl_config)), group_len)
+                        })
+                        .collect::<Vec<_>>()
+                } else if let ExecType::CPUAndOpenCL1D(didx) = exec_type {
+                    println!("Execute in CPUAndOpenCL1D");
+                    get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id.clone());
+                            let group_len = cmd_args.opencl_group_len.unwrap_or(
+                                usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
+                            );
+                            let opencl_config = OpenCLBuilderConfig {
+                                optimize_negs: true,
+                                group_len: Some(group_len),
+                                group_vec: false,
+                            };
+                            [
+                                (
+                                    OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                                    group_len,
+                                ),
+                                (
+                                    OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                                    group_len,
+                                ),
+                            ]
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>()
+                } else if matches!(exec_type, ExecType::CPUAndOpenCL) {
+                    println!("Execute in CPUAndOpenCL");
+                    get_all_devices(CL_DEVICE_TYPE_GPU)
+                        .unwrap()
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id);
+                            let group_len = cmd_args.opencl_group_len.unwrap_or(
+                                usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
+                            );
+                            let opencl_config = OpenCLBuilderConfig {
+                                optimize_negs: true,
+                                group_len: Some(group_len),
+                                group_vec: false,
+                            };
+                            (OpenCLBuilder::new(&device, Some(opencl_config)), group_len)
+                        })
+                        .collect::<Vec<_>>()
+                } else {
+                    println!("Execute in CPUAndOpenCLD");
+                    get_all_devices(CL_DEVICE_TYPE_GPU)
+                        .unwrap()
+                        .into_iter()
+                        .map(|dev_id| {
+                            let device = Device::new(dev_id);
+                            let group_len = cmd_args.opencl_group_len.unwrap_or(
+                                usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
+                            );
+                            let opencl_config = OpenCLBuilderConfig {
+                                optimize_negs: true,
+                                group_len: Some(group_len),
+                                group_vec: false,
+                            };
+                            [
+                                (
+                                    OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                                    group_len,
+                                ),
+                                (
+                                    OpenCLBuilder::new(&device, Some(opencl_config.clone())),
+                                    group_len,
+                                ),
+                            ]
+                        })
+                        .flatten()
+                        .collect::<Vec<_>>()
+                };
+                let group_lens = seq_builders_and_group_lens
+                    .iter()
+                    .map(|x| x.1)
+                    .collect::<Vec<_>>();
+                let seq_builders = seq_builders_and_group_lens
+                    .into_iter()
+                    .map(|x| x.0)
+                    .collect::<Vec<_>>();
+                let builder = ParSeqMapperBuilder::new(par_builder, seq_builders);
+                do_command_with_parseq_mapper(builder, qcircuit.clone(), elem_inputs, &group_lens)
+            }
+        }
+    } else {
+        panic!("Unsupported!");
+    };
+    println!("Result: {}", result);
 }
 
 #[cfg(test)]
@@ -5809,5 +5962,5 @@ fn main() {
     let cmd_args = CommandArgs::parse();
     let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
     let qcircuit = QuantCircuit::<usize>::from_str(&circuit_str).unwrap();
-    // do_command(circuit, cmd_args);
+    do_command(qcircuit, cmd_args);
 }
