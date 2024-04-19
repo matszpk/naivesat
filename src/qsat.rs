@@ -5984,6 +5984,7 @@ fn main() {
     let qcircuit = match QuantCircuit::<usize>::from_str(&circuit_str) {
         Ok(c) => c,
         Err(_) => {
+            println!("Load as circuit with quantifiers");
             let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
             let input_len = circuit.input_len();
             QuantCircuit::new(std::iter::repeat(Quant::Exists).take(input_len), circuit).unwrap()
