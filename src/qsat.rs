@@ -950,7 +950,7 @@ impl OpenCLQuantReducer {
         assert!(1 < reduce_start_bit);
         assert!(reduce_start_bit <= reduce_end_bit);
         assert_ne!(initial_input_group_len_bits, 0);
-        assert!(reduce_start_bit + reduce_end_bit + initial_input_group_len_bits <= quants.len());
+        assert!(reduce_end_bit + initial_input_group_len_bits <= quants.len());
         let is_first_quant_all = quants[0] == Quant::All;
         let first_quant = quants[0];
         let have_first_quants = quants[1..reduce_start_bit + 1]
