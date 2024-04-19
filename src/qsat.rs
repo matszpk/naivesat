@@ -948,7 +948,7 @@ impl OpenCLQuantReducer {
         group_len: Option<usize>,
     ) -> Self {
         // println!("Start");
-        assert!(1 < reduce_start_bit);
+        assert!(1 <= reduce_start_bit);
         assert!(reduce_start_bit <= reduce_end_bit);
         assert_ne!(initial_input_group_len_bits, 0);
         assert!(reduce_end_bit + initial_input_group_len_bits <= quants.len());
@@ -5904,30 +5904,30 @@ mod tests {
                 64,
                 vec![
                     (
-                        0x1a39a07u128,
+                        0x68e681du128,
                         0xb4a85fb8u32,
                         FinalResult {
                             reversed: false,
-                            solution_bits: 26 + 3,
-                            solution: Some(0b010_01101000111001101000000111),
+                            solution_bits: 2 + 26 + 3,
+                            solution: Some(0b010_0110100011100110100000011101),
                         },
                     ),
                     (
-                        0x1a39a27u128,
+                        0x68e689eu128,
                         0xb4f852b8u32,
                         FinalResult {
                             reversed: false,
-                            solution_bits: 26 + 3,
-                            solution: Some(0b101_01101000111001101000100111),
+                            solution_bits: 2 + 26 + 3,
+                            solution: Some(0b101_0110100011100110100010011110),
                         },
                     ),
                     (
-                        0x1a39a17u128,
+                        0x68e685fu128,
                         0xb4ef52b8u32,
                         FinalResult {
                             reversed: false,
-                            solution_bits: 26 + 3,
-                            solution: Some(0b001_01101000111001101000010111),
+                            solution_bits: 2 + 26 + 3,
+                            solution: Some(0b001_0110100011100110100001011111),
                         },
                     ),
                 ],
@@ -5941,21 +5941,21 @@ mod tests {
                 64,
                 vec![
                     (
-                        0x2a69b1eu128,
+                        0xa9a6c79u128,
                         1 << 27,
                         FinalResult {
                             reversed: false,
-                            solution_bits: 26 + 5,
-                            solution: Some(0b11011_10101001101001101100011110),
+                            solution_bits: 2 + 26 + 5,
+                            solution: Some(0b11011_1010100110100110110001111001),
                         },
                     ),
                     (
-                        0x2106eb6u128,
+                        0x841bad8u128,
                         1 << 22,
                         FinalResult {
                             reversed: false,
-                            solution_bits: 26 + 5,
-                            solution: Some(0b01101_10000100000110111010110110),
+                            solution_bits: 2 + 26 + 5,
+                            solution: Some(0b01101_1000010000011011101011011000),
                         },
                     ),
                 ],
@@ -5968,12 +5968,12 @@ mod tests {
                 &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_AAAAA"),
                 64,
                 vec![(
-                    0x2a69b1eu128,
+                    0xa9a6c7bu128,
                     0x4b854e2u32, // doesn't matter
                     FinalResult {
                         reversed: false,
-                        solution_bits: 26,
-                        solution: Some(0b10101001101001101100011110),
+                        solution_bits: 2 + 26,
+                        solution: Some(0b1010100110100110110001111011),
                     },
                 )],
             ),
@@ -5985,12 +5985,12 @@ mod tests {
                 &str_to_quants("AA_AAAA_AAAAAA_AAAAAA_AAAAAA_AAAA_AAAEE"),
                 64,
                 vec![(
-                    0x1d8c4b3u128,
+                    0x76312ceu128,
                     0x10111111u32,
                     FinalResult {
                         reversed: true,
-                        solution_bits: 26 + 3,
-                        solution: Some(0b110_1110110001100010010110011),
+                        solution_bits: 2 + 26 + 3,
+                        solution: Some(0b110_111011000110001001011001110),
                     },
                 )],
             ),
@@ -6002,12 +6002,12 @@ mod tests {
                 &str_to_quants("AA_AAAAAA_AAAAAA_AAAAAA_AAAA_AAAEA"),
                 64,
                 vec![(
-                    0x3acd1au128,
+                    0xeb346bu128,
                     0xfebc6b73u32,
                     FinalResult {
                         reversed: true,
-                        solution_bits: 22 + 3,
-                        solution: Some(0b110_1110101100110100011010),
+                        solution_bits: 2 + 22 + 3,
+                        solution: Some(0b110_111010110011010001101011),
                     },
                 )],
             ),
@@ -6019,12 +6019,12 @@ mod tests {
                 &str_to_quants("AA_AAAAAA_AAAAAA_AAAAAA_AAAA_EEEEA"),
                 64,
                 vec![(
-                    0x3acd1au128,
+                    0xeb3469u128,
                     0xfebc6b73u32, // doesn't matter
                     FinalResult {
                         reversed: true,
-                        solution_bits: 22,
-                        solution: Some(0b1110101100110100011010),
+                        solution_bits: 2 + 22,
+                        solution: Some(0b111010110011010001101001),
                     },
                 )],
             ),
@@ -6036,11 +6036,11 @@ mod tests {
                 &str_to_quants("AA_AAAAAA_AAAAAA_AAAAAA_AAAA_AAAEA"),
                 64,
                 vec![(
-                    0x3acd1au128,  // doesn't matter
+                    0xeb346au128,  // doesn't matter
                     0xfebc6b73u32, // doesn't matter
                     FinalResult {
                         reversed: true,
-                        solution_bits: 22,
+                        solution_bits: 2 + 22,
                         solution: None,
                     },
                 )],
@@ -6053,12 +6053,12 @@ mod tests {
                 &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEAA_AAAAA"),
                 64,
                 vec![(
-                    0xa69b1eu128,
+                    0x29a6c7bu128,
                     0x4b854e2u32, // doesn't matter
                     FinalResult {
                         reversed: false,
-                        solution_bits: 24,
-                        solution: Some(0b101001101001101100011110),
+                        solution_bits: 2 + 24,
+                        solution: Some(0b10100110100110110001111011),
                     },
                 )],
             ),
@@ -6070,11 +6070,11 @@ mod tests {
                 &str_to_quants("EE_EEEE_EEEEEE_EEEEEE_EEEEEE_EEEE_EEEAA"),
                 64,
                 vec![(
-                    0x1a39a07u128,
+                    0x68e681cu128,
                     0xb4a85fb8u32, // doesn't matter
                     FinalResult {
                         reversed: false,
-                        solution_bits: 26,
+                        solution_bits: 2 + 26,
                         solution: None,
                     },
                 )],
@@ -6096,8 +6096,8 @@ mod tests {
             let first_quant_bits =
                 quants.iter().take_while(|q| **q == first_quant).count() - reduce_start_bit;
             let solution_bits = std::cmp::min(
-                reduce_end_bit - reduce_start_bit + init_group_len_bits,
-                first_quant_bits,
+                reduce_end_bit + init_group_len_bits,
+                reduce_start_bit + first_quant_bits,
             );
             println!("Data: {}: {} {}", i, first_quant_bits, solution_bits);
             for (j, (solution, circuit_values, exp_result)) in testcases.into_iter().enumerate() {
