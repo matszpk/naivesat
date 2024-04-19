@@ -883,6 +883,17 @@ fn get_final_results_from_cpu_outputs(
     }
 }
 
+fn adjust_opencl_group_len(group_len: usize) -> (usize, usize) {
+    let group_len = std::cmp::min(group_len, 4096);
+    let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
+    let group_len = if group_len.count_ones() != 1 {
+        1usize << group_len_bits
+    } else {
+        group_len
+    };
+    (group_len, group_len_bits)
+}
+
 // OpenCLQuantReducer
 
 struct OpenCLQuantReducer {
@@ -940,13 +951,7 @@ impl OpenCLQuantReducer {
         let device = Device::new(context.devices()[0]);
         let group_len: usize =
             group_len.unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
-        let group_len = std::cmp::min(group_len, 4096);
-        let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
-        let group_len = if group_len.count_ones() != 1 {
-            1usize << group_len_bits
-        } else {
-            group_len
-        };
+        let (group_len, group_len_bits) = adjust_opencl_group_len(group_len);
         // println!("GroupLen: {}", group_len);
         // println!("GroupLenBits: {}", group_len_bits);
         let quants_len = quants.len();
@@ -1605,6 +1610,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                 let group_len = cmd_args
                     .opencl_group_len
                     .unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
+                let (group_len, _) = adjust_opencl_group_len(group_len);
+                println!("GroupLen: {}", group_len);
                 let opencl_config = OpenCLBuilderConfig {
                     optimize_negs: true,
                     group_len: Some(group_len),
@@ -1628,6 +1635,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             let group_len = cmd_args.opencl_group_len.unwrap_or(
                                 usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
                             );
+                            let (group_len, _) = adjust_opencl_group_len(group_len);
+                            println!("GroupLen for {:?}: {}", dev_id, group_len);
                             let opencl_config = OpenCLBuilderConfig {
                                 optimize_negs: true,
                                 group_len: Some(group_len),
@@ -1645,6 +1654,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             let group_len = cmd_args.opencl_group_len.unwrap_or(
                                 usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
                             );
+                            let (group_len, _) = adjust_opencl_group_len(group_len);
+                            println!("GroupLen for {:?}: {}", dev_id, group_len);
                             let opencl_config = OpenCLBuilderConfig {
                                 optimize_negs: true,
                                 group_len: Some(group_len),
@@ -1673,6 +1684,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             let group_len = cmd_args.opencl_group_len.unwrap_or(
                                 usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
                             );
+                            let (group_len, _) = adjust_opencl_group_len(group_len);
+                            println!("GroupLen for {:?}: {}", dev_id, group_len);
                             let opencl_config = OpenCLBuilderConfig {
                                 optimize_negs: true,
                                 group_len: Some(group_len),
@@ -1691,6 +1704,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             let group_len = cmd_args.opencl_group_len.unwrap_or(
                                 usize::try_from(device.max_work_group_size().unwrap()).unwrap(),
                             );
+                            let (group_len, _) = adjust_opencl_group_len(group_len);
+                            println!("GroupLen for {:?}: {}", dev_id, group_len);
                             let opencl_config = OpenCLBuilderConfig {
                                 optimize_negs: true,
                                 group_len: Some(group_len),
