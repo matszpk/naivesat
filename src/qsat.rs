@@ -1426,7 +1426,7 @@ struct MainCPUOpenCLQuantReducer {
     qr: QuantReducer,
     ocl_qrs: HashMap<usize, OpenCLQuantReducer>,
     quants: Vec<Quant>,
-    work_results: HashMap<u64, FinalResult>,
+    work_results: HashMap<u64, (FinalResult, Option<usize>)>,
     found_result: Option<FinalResult>,
     join_work_results: bool,
     solution_bits: usize,
@@ -1480,7 +1480,45 @@ impl MainCPUOpenCLQuantReducer {
         }
     }
 
-    fn eval_cpu(&mut self, arg: u64, outputs: &[u32]) -> Option<FinalResult> {
+    fn eval_end(
+        &mut self,
+        arg: u64,
+        circuit: &Circuit<usize>,
+        result: bool,
+    ) -> Option<FinalResult> {
+        self.qr.push(arg, result);
+        let old_arg = self.qr.start_prev();
+        if let Some(final_result) = self.qr.final_result() {
+            // get correct work result from collection of previous work_results
+            self.found_result = if let Some((old_work_result, dev_id)) =
+                self.work_results.get(&old_arg)
+            {
+                if self.join_work_results {
+                    // println!("From: {:?}", dev_id);
+                    if let Some(dev_id) = dev_id {
+                        let work_result = final_result.join(*old_work_result);
+                        Some(self.ocl_qrs[&dev_id].final_result_with_circuit(circuit, work_result))
+                    } else {
+                        Some(final_result.join(*old_work_result))
+                    }
+                } else {
+                    Some(final_result.set_solution_bits(self.solution_bits))
+                }
+            } else {
+                Some(final_result.set_solution_bits(self.solution_bits))
+            };
+            self.found_result
+        } else {
+            None
+        }
+    }
+
+    fn eval_cpu(
+        &mut self,
+        arg: u64,
+        outputs: &[u32],
+        circuit: &Circuit<usize>,
+    ) -> Option<FinalResult> {
         if let Some(final_result) = self.found_result {
             return Some(final_result);
         }
@@ -1493,26 +1531,10 @@ impl MainCPUOpenCLQuantReducer {
         // put to work_results
         if let Some(work_result) = work_result {
             if work_result.solution.is_some() {
-                self.work_results.insert(arg, work_result);
+                self.work_results.insert(arg, (work_result, None));
             }
         }
-        self.qr.push(arg, result);
-        let old_arg = self.qr.start_prev();
-        if let Some(final_result) = self.qr.final_result() {
-            // get correct work result from collection of previous work_results
-            self.found_result = if let Some(old_work_result) = self.work_results.get(&old_arg) {
-                if self.join_work_results {
-                    Some(final_result.join(*old_work_result))
-                } else {
-                    Some(final_result.set_solution_bits(self.solution_bits))
-                }
-            } else {
-                Some(final_result.set_solution_bits(self.solution_bits))
-            };
-            self.found_result
-        } else {
-            None
-        }
+        self.eval_end(arg, circuit, result)
     }
 
     fn eval_opencl(
@@ -1529,27 +1551,10 @@ impl MainCPUOpenCLQuantReducer {
         // put to work_results
         if let Some(work_result) = work_result {
             if work_result.solution.is_some() {
-                self.work_results.insert(arg, work_result);
+                self.work_results.insert(arg, (work_result, Some(dev_id)));
             }
         }
-        self.qr.push(arg, result);
-        let old_arg = self.qr.start_prev();
-        if let Some(final_result) = self.qr.final_result() {
-            // get correct work result from collection of previous work_results
-            self.found_result = if let Some(old_work_result) = self.work_results.get(&old_arg) {
-                if self.join_work_results {
-                    let work_result = final_result.join(*old_work_result);
-                    Some(self.ocl_qrs[&dev_id].final_result_with_circuit(circuit, work_result))
-                } else {
-                    Some(final_result.set_solution_bits(self.solution_bits))
-                }
-            } else {
-                Some(final_result.set_solution_bits(self.solution_bits))
-            };
-            self.found_result
-        } else {
-            None
-        }
+        self.eval_end(arg, circuit, result)
     }
 }
 
@@ -1762,10 +1767,11 @@ fn do_command_with_parseq_mapper<'a>(
             |sel, _, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
                 match sel {
-                    ParSeqSelection::Par => main_qr
-                        .lock()
-                        .unwrap()
-                        .eval_cpu(arg, output.par().unwrap().get().get()),
+                    ParSeqSelection::Par => main_qr.lock().unwrap().eval_cpu(
+                        arg,
+                        output.par().unwrap().get().get(),
+                        circuit,
+                    ),
                     ParSeqSelection::Seq(i) => main_qr.lock().unwrap().eval_opencl(
                         i,
                         arg,
