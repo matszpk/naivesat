@@ -1273,6 +1273,7 @@ struct MainCPUQuantReducer {
     elem_bits: usize,
     qr: QuantReducer,
     quants: Vec<Quant>,
+    found_result: Option<FinalResult>,
 }
 
 impl MainCPUQuantReducer {
@@ -1283,10 +1284,14 @@ impl MainCPUQuantReducer {
             type_len,
             qr: QuantReducer::new(&quants[0..quants.len() - elem_bits]),
             quants: quants.to_vec(),
+            found_result: None,
         }
     }
 
     fn eval(&mut self, arg: u64, outputs: &[u32]) -> Option<FinalResult> {
+        if let Some(final_result) = self.found_result {
+            return Some(final_result);
+        }
         let (work_result, result) = get_final_results_from_cpu_outputs(
             self.type_len,
             self.elem_bits,
@@ -1295,7 +1300,8 @@ impl MainCPUQuantReducer {
         );
         self.qr.push(arg, result);
         if let Some(final_result) = self.qr.final_result() {
-            Some(final_result.join(work_result.unwrap()))
+            self.found_result = Some(final_result.join(work_result.unwrap()));
+            self.found_result
         } else {
             None
         }
@@ -1305,6 +1311,7 @@ impl MainCPUQuantReducer {
 struct MainOpenCLQuantReducer {
     qr: QuantReducer,
     ocl_qr: OpenCLQuantReducer,
+    found_result: Option<FinalResult>,
 }
 
 impl MainOpenCLQuantReducer {
@@ -1331,6 +1338,7 @@ impl MainOpenCLQuantReducer {
                 cmd_queue.clone(),
                 Some(group_len),
             ),
+            found_result: None,
         }
     }
 
@@ -1340,13 +1348,17 @@ impl MainOpenCLQuantReducer {
         outputs: &Buffer<u32>,
         circuit: &Circuit<usize>,
     ) -> Option<FinalResult> {
+        if let Some(final_result) = self.found_result {
+            return Some(final_result);
+        }
         let (work_result, result) = self.ocl_qr.execute(outputs);
         self.qr.push(arg, result);
         if let Some(final_result) = self.qr.final_result() {
             let work_result = self
                 .ocl_qr
                 .final_result_with_circuit(circuit, work_result.unwrap());
-            Some(final_result.join(work_result))
+            self.found_result = Some(final_result.join(work_result));
+            self.found_result
         } else {
             None
         }
