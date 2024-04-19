@@ -1373,8 +1373,13 @@ impl MainOpenCLQuantReducer {
         let (work_result, result) = self.ocl_qr.execute(outputs);
         self.qr.push(arg, result);
         if let Some(final_result) = self.qr.final_result() {
-            let work_result = final_result.join(work_result.unwrap());
-            self.found_result = Some(self.ocl_qr.final_result_with_circuit(circuit, work_result));
+            if let Some(work_result) = work_result {
+                let work_result = final_result.join(work_result);
+                self.found_result =
+                    Some(self.ocl_qr.final_result_with_circuit(circuit, work_result));
+            } else {
+                self.found_result = Some(final_result);
+            }
             self.found_result
         } else {
             None
