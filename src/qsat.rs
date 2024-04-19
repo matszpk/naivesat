@@ -198,9 +198,15 @@ impl QuantReducer {
         assert!(!self.is_end());
         while let Some((index, item)) = self.items.peek().copied() {
             if self.start == index.0 {
+                let old_is_solution = self.solution.is_some();
                 // if index is match then flush
                 self.items.pop();
                 self.apply(item);
+                if !old_is_solution && self.solution.is_some() {
+                    // VERY IMPORTANT for CPU quant reducer
+                    // stop if solution found
+                    break;
+                }
             } else {
                 break;
             }
@@ -1505,6 +1511,7 @@ fn do_command_with_parseq_mapper<'a>(
     elem_inputs: usize,
     group_lens: &[usize],
 ) -> FinalResult {
+    // TODO: FIX Main Quant reducers
     let circuit = qcircuit.circuit();
     let input_len = circuit.input_len();
     let arg_steps = 1u128 << (input_len - elem_inputs);
