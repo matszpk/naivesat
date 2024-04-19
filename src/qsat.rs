@@ -119,6 +119,14 @@ impl FinalResult {
             panic!("Unexpected");
         }
     }
+
+    fn set_solution_bits(self, sol_bits: usize) -> Self {
+        Self {
+            reversed: self.reversed,
+            solution_bits: sol_bits,
+            solution: self.solution,
+        }
+    }
 }
 
 impl Display for FinalResult {
@@ -1286,10 +1294,14 @@ struct MainCPUQuantReducer {
     quants: Vec<Quant>,
     work_results: HashMap<u64, FinalResult>,
     found_result: Option<FinalResult>,
+    join_work_results: bool,
+    solution_bits: usize,
 }
 
 impl MainCPUQuantReducer {
     fn new(elem_bits: usize, type_len: usize, quants: &[Quant]) -> Self {
+        let first_quant = quants[0];
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
         assert_eq!(type_len.count_ones(), 1);
         Self {
             elem_bits,
@@ -1298,6 +1310,8 @@ impl MainCPUQuantReducer {
             quants: quants.to_vec(),
             work_results: HashMap::new(),
             found_result: None,
+            join_work_results: first_quant_bits > quants.len() - elem_bits,
+            solution_bits: first_quant_bits,
         }
     }
 
@@ -1313,13 +1327,23 @@ impl MainCPUQuantReducer {
         );
         // put to work_results
         if let Some(work_result) = work_result {
-            self.work_results.insert(arg, work_result);
+            if work_result.solution.is_some() {
+                self.work_results.insert(arg, work_result);
+            }
         }
         self.qr.push(arg, result);
         let old_arg = self.qr.start_prev();
         if let Some(final_result) = self.qr.final_result() {
             // get correct work result from collection of previous work_results
-            self.found_result = Some(final_result.join(self.work_results[&old_arg]));
+            self.found_result = if let Some(old_work_result) = self.work_results.get(&old_arg) {
+                if self.join_work_results {
+                    Some(final_result.join(*old_work_result))
+                } else {
+                    Some(final_result.set_solution_bits(self.solution_bits))
+                }
+            } else {
+                Some(final_result.set_solution_bits(self.solution_bits))
+            };
             self.found_result
         } else {
             None
@@ -1331,6 +1355,8 @@ struct MainOpenCLQuantReducer {
     qr: QuantReducer,
     ocl_qr: OpenCLQuantReducer,
     found_result: Option<FinalResult>,
+    join_work_results: bool,
+    solution_bits: usize,
 }
 
 impl MainOpenCLQuantReducer {
@@ -1346,6 +1372,8 @@ impl MainOpenCLQuantReducer {
         assert_eq!(group_len.count_ones(), 1);
         let type_len_bits = (usize::BITS - type_len.leading_zeros() - 1) as usize;
         let group_len_bits = (usize::BITS - group_len.leading_zeros() - 1) as usize;
+        let first_quant = quants[0];
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
         Self {
             qr: QuantReducer::new(&quants[0..quants.len() - elem_bits]),
             ocl_qr: OpenCLQuantReducer::new(
@@ -1358,6 +1386,8 @@ impl MainOpenCLQuantReducer {
                 Some(group_len),
             ),
             found_result: None,
+            join_work_results: first_quant_bits > quants.len() - elem_bits,
+            solution_bits: first_quant_bits,
         }
     }
 
@@ -1373,13 +1403,16 @@ impl MainOpenCLQuantReducer {
         let (work_result, result) = self.ocl_qr.execute(outputs);
         self.qr.push(arg, result);
         if let Some(final_result) = self.qr.final_result() {
-            if let Some(work_result) = work_result {
-                let work_result = final_result.join(work_result);
-                self.found_result =
-                    Some(self.ocl_qr.final_result_with_circuit(circuit, work_result));
+            self.found_result = if let Some(work_result) = work_result {
+                if self.join_work_results {
+                    let work_result = final_result.join(work_result);
+                    Some(self.ocl_qr.final_result_with_circuit(circuit, work_result))
+                } else {
+                    Some(final_result.set_solution_bits(self.solution_bits))
+                }
             } else {
-                self.found_result = Some(final_result);
-            }
+                Some(final_result.set_solution_bits(self.solution_bits))
+            };
             self.found_result
         } else {
             None
@@ -1395,6 +1428,8 @@ struct MainCPUOpenCLQuantReducer {
     quants: Vec<Quant>,
     work_results: HashMap<u64, FinalResult>,
     found_result: Option<FinalResult>,
+    join_work_results: bool,
+    solution_bits: usize,
 }
 
 impl MainCPUOpenCLQuantReducer {
@@ -1411,6 +1446,8 @@ impl MainCPUOpenCLQuantReducer {
         assert_eq!(opencl_type_lens.len(), opencl_group_lens.len());
         assert_eq!(opencl_type_lens.len(), opencl_contexts.len());
         assert_eq!(opencl_type_lens.len(), opencl_cmd_queues.len());
+        let first_quant = quants[0];
+        let first_quant_bits = quants.iter().take_while(|q| **q == first_quant).count();
         Self {
             elem_bits,
             cpu_type_len,
@@ -1438,6 +1475,8 @@ impl MainCPUOpenCLQuantReducer {
             quants: quants.to_vec(),
             work_results: HashMap::new(),
             found_result: None,
+            join_work_results: first_quant_bits > quants.len() - elem_bits,
+            solution_bits: first_quant_bits,
         }
     }
 
@@ -1453,13 +1492,23 @@ impl MainCPUOpenCLQuantReducer {
         );
         // put to work_results
         if let Some(work_result) = work_result {
-            self.work_results.insert(arg, work_result);
+            if work_result.solution.is_some() {
+                self.work_results.insert(arg, work_result);
+            }
         }
         self.qr.push(arg, result);
         let old_arg = self.qr.start_prev();
         if let Some(final_result) = self.qr.final_result() {
             // get correct work result from collection of previous work_results
-            self.found_result = Some(final_result.join(self.work_results[&old_arg]));
+            self.found_result = if let Some(old_work_result) = self.work_results.get(&old_arg) {
+                if self.join_work_results {
+                    Some(final_result.join(*old_work_result))
+                } else {
+                    Some(final_result.set_solution_bits(self.solution_bits))
+                }
+            } else {
+                Some(final_result.set_solution_bits(self.solution_bits))
+            };
             self.found_result
         } else {
             None
@@ -1479,15 +1528,24 @@ impl MainCPUOpenCLQuantReducer {
         let (work_result, result) = self.ocl_qrs.get_mut(&dev_id).unwrap().execute(outputs);
         // put to work_results
         if let Some(work_result) = work_result {
-            self.work_results.insert(arg, work_result);
+            if work_result.solution.is_some() {
+                self.work_results.insert(arg, work_result);
+            }
         }
         self.qr.push(arg, result);
         let old_arg = self.qr.start_prev();
         if let Some(final_result) = self.qr.final_result() {
             // get correct work result from collection of previous work_results
-            let work_result = final_result.join(self.work_results[&old_arg]);
-            self.found_result =
-                Some(self.ocl_qrs[&dev_id].final_result_with_circuit(circuit, work_result));
+            self.found_result = if let Some(old_work_result) = self.work_results.get(&old_arg) {
+                if self.join_work_results {
+                    let work_result = final_result.join(*old_work_result);
+                    Some(self.ocl_qrs[&dev_id].final_result_with_circuit(circuit, work_result))
+                } else {
+                    Some(final_result.set_solution_bits(self.solution_bits))
+                }
+            } else {
+                Some(final_result.set_solution_bits(self.solution_bits))
+            };
             self.found_result
         } else {
             None
