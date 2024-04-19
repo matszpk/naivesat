@@ -189,6 +189,10 @@ impl QuantReducer {
         self.flush();
     }
 
+    fn start_prev(&self) -> u64 {
+        self.start.overflowing_sub(1).0
+    }
+
     // returns final result is
     fn flush(&mut self) {
         assert!(!self.is_end());
@@ -1273,6 +1277,7 @@ struct MainCPUQuantReducer {
     elem_bits: usize,
     qr: QuantReducer,
     quants: Vec<Quant>,
+    work_results: HashMap<u64, FinalResult>,
     found_result: Option<FinalResult>,
 }
 
@@ -1284,6 +1289,7 @@ impl MainCPUQuantReducer {
             type_len,
             qr: QuantReducer::new(&quants[0..quants.len() - elem_bits]),
             quants: quants.to_vec(),
+            work_results: HashMap::new(),
             found_result: None,
         }
     }
@@ -1298,9 +1304,15 @@ impl MainCPUQuantReducer {
             &self.quants,
             outputs,
         );
+        // put to work_results
+        if let Some(work_result) = work_result.as_ref() {
+            self.work_results.insert(arg, *work_result);
+        }
         self.qr.push(arg, result);
+        let old_arg = self.qr.start_prev();
         if let Some(final_result) = self.qr.final_result() {
-            self.found_result = Some(final_result.join(work_result.unwrap()));
+            // get correct work result from collection of previous work_results
+            self.found_result = Some(final_result.join(self.work_results[&old_arg]));
             self.found_result
         } else {
             None
