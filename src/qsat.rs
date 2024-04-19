@@ -1383,6 +1383,114 @@ impl MainOpenCLQuantReducer {
     }
 }
 
+struct MainCPUOpenCLQuantReducer {
+    cpu_type_len: usize,
+    elem_bits: usize,
+    qr: QuantReducer,
+    ocl_qrs: HashMap<usize, OpenCLQuantReducer>,
+    quants: Vec<Quant>,
+    work_results: HashMap<u64, FinalResult>,
+    found_result: Option<FinalResult>,
+}
+
+impl MainCPUOpenCLQuantReducer {
+    fn new(
+        elem_bits: usize,
+        cpu_type_len: usize,
+        quants: &[Quant],
+        opencl_type_lens: &[usize],
+        opencl_group_lens: &[usize],
+        opencl_contexts: &[Arc<Context>],
+        opencl_cmd_queues: &[Arc<CommandQueue>],
+    ) -> Self {
+        assert_eq!(cpu_type_len.count_ones(), 1);
+        assert_eq!(opencl_type_lens.len(), opencl_group_lens.len());
+        assert_eq!(opencl_type_lens.len(), opencl_contexts.len());
+        assert_eq!(opencl_type_lens.len(), opencl_cmd_queues.len());
+        Self {
+            elem_bits,
+            cpu_type_len,
+            qr: QuantReducer::new(&quants[0..quants.len() - elem_bits]),
+            ocl_qrs: HashMap::from_iter((0..opencl_type_lens.len()).map(|i| {
+                assert_eq!(opencl_type_lens[i].count_ones(), 1);
+                assert_eq!(opencl_group_lens[i].count_ones(), 1);
+                let opencl_type_len_bits =
+                    (usize::BITS - opencl_type_lens[i].leading_zeros() - 1) as usize;
+                let opencl_group_len_bits =
+                    (usize::BITS - opencl_group_lens[i].leading_zeros() - 1) as usize;
+                (
+                    i,
+                    OpenCLQuantReducer::new(
+                        quants.len() - elem_bits,
+                        quants.len() - opencl_type_len_bits - opencl_group_len_bits,
+                        opencl_group_len_bits,
+                        quants,
+                        opencl_contexts[i].clone(),
+                        opencl_cmd_queues[i].clone(),
+                        Some(opencl_group_lens[i]),
+                    ),
+                )
+            })),
+            quants: quants.to_vec(),
+            work_results: HashMap::new(),
+            found_result: None,
+        }
+    }
+
+    fn eval_cpu(&mut self, arg: u64, outputs: &[u32]) -> Option<FinalResult> {
+        if let Some(final_result) = self.found_result {
+            return Some(final_result);
+        }
+        let (work_result, result) = get_final_results_from_cpu_outputs(
+            self.cpu_type_len,
+            self.elem_bits,
+            &self.quants,
+            outputs,
+        );
+        // put to work_results
+        if let Some(work_result) = work_result.as_ref() {
+            self.work_results.insert(arg, *work_result);
+        }
+        self.qr.push(arg, result);
+        let old_arg = self.qr.start_prev();
+        if let Some(final_result) = self.qr.final_result() {
+            // get correct work result from collection of previous work_results
+            self.found_result = Some(final_result.join(self.work_results[&old_arg]));
+            self.found_result
+        } else {
+            None
+        }
+    }
+
+    fn eval_opencl(
+        &mut self,
+        dev_id: usize,
+        arg: u64,
+        outputs: &Buffer<u32>,
+        circuit: &Circuit<usize>,
+    ) -> Option<FinalResult> {
+        if let Some(final_result) = self.found_result {
+            return Some(final_result);
+        }
+        let (work_result, result) = self.ocl_qrs.get_mut(&dev_id).unwrap().execute(outputs);
+        // put to work_results
+        if let Some(work_result) = work_result.as_ref() {
+            let work_result =
+                self.ocl_qrs[&dev_id].final_result_with_circuit(circuit, *work_result);
+            self.work_results.insert(arg, work_result);
+        }
+        self.qr.push(arg, result);
+        let old_arg = self.qr.start_prev();
+        if let Some(final_result) = self.qr.final_result() {
+            // get correct work result from collection of previous work_results
+            self.found_result = Some(final_result.join(self.work_results[&old_arg]));
+            self.found_result
+        } else {
+            None
+        }
+    }
+}
+
 fn do_command_with_par_mapper<'a>(
     mut mapper: CPUParBasicMapperBuilder<'a>,
     qcircuit: QuantCircuit<usize>,
@@ -1511,7 +1619,6 @@ fn do_command_with_parseq_mapper<'a>(
     elem_inputs: usize,
     group_lens: &[usize],
 ) -> FinalResult {
-    // TODO: FIX Main Quant reducers
     let circuit = qcircuit.circuit();
     let input_len = circuit.input_len();
     let arg_steps = 1u128 << (input_len - elem_inputs);
@@ -1555,24 +1662,34 @@ fn do_command_with_parseq_mapper<'a>(
         },
     );
     let mut execs = mapper.build().unwrap();
-    let main_cpu_qr = Mutex::new(MainCPUQuantReducer::new(elem_inputs, cpu_type_len, quants));
-    let mut main_ocl_qrs = HashMap::new();
-    execs[0].with_executor(|exec| match exec {
-        ParSeqObject::Seq((i, exec)) => {
-            main_ocl_qrs.insert(
-                i,
-                Mutex::new(MainOpenCLQuantReducer::new(
-                    elem_inputs,
-                    opencl_type_lens[i],
-                    group_lens[i],
-                    quants,
-                    unsafe { exec.context() },
-                    unsafe { exec.command_queue() },
-                )),
-            );
-        }
-        _ => (),
-    });
+    let main_qr = {
+        let mut opencl_contexts = vec![None; seq_builder_num];
+        let mut opencl_cmd_queues = vec![None; seq_builder_num];
+        execs[0].with_executor(|exec| match exec {
+            ParSeqObject::Seq((i, exec)) => {
+                opencl_contexts[i] = unsafe { Some(exec.context()) };
+                opencl_cmd_queues[i] = unsafe { Some(exec.command_queue()) };
+            }
+            _ => (),
+        });
+        let opencl_contexts = opencl_contexts
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect::<Vec<_>>();
+        let opencl_cmd_queues = opencl_cmd_queues
+            .into_iter()
+            .map(|c| c.unwrap())
+            .collect::<Vec<_>>();
+        Mutex::new(MainCPUOpenCLQuantReducer::new(
+            elem_inputs,
+            cpu_type_len,
+            quants,
+            &opencl_type_lens,
+            group_lens,
+            &opencl_contexts,
+            &opencl_cmd_queues,
+        ))
+    };
     let input = execs[0].new_data(16);
     println!("Start execution");
     let start = SystemTime::now();
@@ -1583,11 +1700,12 @@ fn do_command_with_parseq_mapper<'a>(
             |sel, _, output, arg| {
                 println!("Step: {} / {}", arg, arg_steps);
                 match sel {
-                    ParSeqSelection::Par => main_cpu_qr
+                    ParSeqSelection::Par => main_qr
                         .lock()
                         .unwrap()
-                        .eval(arg, output.par().unwrap().get().get()),
-                    ParSeqSelection::Seq(i) => main_ocl_qrs[&i].lock().unwrap().eval(
+                        .eval_cpu(arg, output.par().unwrap().get().get()),
+                    ParSeqSelection::Seq(i) => main_qr.lock().unwrap().eval_opencl(
+                        i,
                         arg,
                         unsafe { output.seq().unwrap().buffer() },
                         circuit,
