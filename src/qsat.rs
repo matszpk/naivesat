@@ -862,7 +862,8 @@ fn get_final_results_from_cpu_outputs(
         let first_quant_bits_in_work =
             std::cmp::min(first_quant_bits - work_first_bit, elem_bits - type_len_bits);
         let work_idx = (outputs[out_base + 2] as u64) | ((outputs[out_base + 3] as u64) << 32);
-        let work_rev_idx = work_idx.reverse_bits() >> (64 - first_quant_bits_in_work);
+        let work_rev_idx = (work_idx.reverse_bits() >> (64 - (elem_bits - type_len_bits)))
+            & ((1u64 << first_quant_bits_in_work) - 1);
         // join with values in type
         let final_rev_idx = if first_quant_bits > quants_len - type_len_bits {
             let mut qr = QuantReducer::new(&quants[quants_len - type_len_bits..]);
@@ -3918,7 +3919,7 @@ mod tests {
                 256,
                 18,
                 &str_to_quants("EEEE_EEEAAEAAEE_EEAEAEEA"),
-                &[0, 0, 11, 770, 0, 110500, 0, 17, 1, 1, 6, 0][..]
+                &[0, 0, 11, 770, 0, 110500, 0, 17, 1, 1, 6 << 7, 0][..]
             )
         );
         assert_eq!(
@@ -3934,7 +3935,7 @@ mod tests {
                 256,
                 18,
                 &str_to_quants("AAAA_AAAAAAEAEE_EEAEAEEA"),
-                &[0, 49, 0, 0, 456, 21200, 0, 133, 0, 1, 41, 0][..]
+                &[0, 49, 0, 0, 456, 21200, 0, 133, 0, 1, 41 << 4, 0][..]
             )
         );
         assert_eq!(
