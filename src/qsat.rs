@@ -136,7 +136,7 @@ impl FinalResult {
                 None
             } else {
                 Some(0)
-            }
+            },
         }
     }
 }
@@ -5905,6 +5905,54 @@ mod tests {
                             true,
                         ),
                     ),
+                ],
+            ),
+            // 48
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("EE_AEE_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 8], (None, false)),
+                    (vec![0, 0x8000, 0, 0, 0x8000, 0, 0, 0x8000], (None, true)),
+                ],
+            ),
+            // 49
+            (
+                2,
+                5,
+                4,
+                &str_to_quants("AA_EEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0x8000; 8], (None, true)),
+                    (vec![0, 0, 0, 0, 0x8000, 0x8000, 0, 0x8000], (None, true)),
+                ],
+            ),
+            // 50
+            (
+                2,
+                10,
+                4,
+                &str_to_quants("EE_AA_EEAEEA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0u16; 256], (None, false)),
+                    (vec![0x8000; 256], (None, true)),
+                ],
+            ),
+            // 51
+            (
+                2,
+                10,
+                4,
+                &str_to_quants("AA_EE_AAEEAA_EEAE_AAEAA"),
+                64,
+                vec![
+                    (vec![0x8000; 256], (None, true)),
+                    (vec![0x0; 256], (None, false)),
                 ],
             ),
         ]
