@@ -127,6 +127,18 @@ impl FinalResult {
             solution: self.solution,
         }
     }
+
+    fn reverse(self) -> Self {
+        Self {
+            reversed: !self.reversed,
+            solution_bits: self.solution_bits,
+            solution: if self.solution.is_some() {
+                None
+            } else {
+                Some(0)
+            }
+        }
+    }
 }
 
 impl Display for FinalResult {
@@ -1116,7 +1128,12 @@ impl OpenCLQuantReducer {
             for i in 0..1 << self.quant_start_pos {
                 qr.push(i, (last_output[i as usize] >> 15) != 0);
             }
-            qr.final_result().unwrap()
+            let r = qr.final_result().unwrap();
+            if r.reversed != self.is_first_quant_all {
+                r.reverse()
+            } else {
+                r
+            }
         } else {
             // generate final result with solution
             FinalResult {
