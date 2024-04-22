@@ -1512,9 +1512,10 @@ impl MainCPUOpenCLQuantReducer {
                 self.work_results.get(&old_arg)
             {
                 if self.join_work_results {
-                    // println!("From: {:?}", dev_id);
                     if let Some(dev_id) = dev_id {
                         let work_result = final_result.join(*old_work_result);
+                        // finalize by joining last bits of results from circuit values
+                        // with this result.
                         Some(self.ocl_qrs[&dev_id].final_result_with_circuit(circuit, work_result))
                     } else {
                         Some(final_result.join(*old_work_result))
