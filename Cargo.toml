@@ -22,7 +22,6 @@ path = "src/greedysatostop.rs"
 [dependencies]
 gatesim = { path="../gatesim", version="0.1.0" }
 gatenative = { path="../gatenative", version="0.1.0" }
-opencl3 = "0.9"
 clap = { version = "4.5.3", features = ["derive"] }
 rayon = "1.0"
 
