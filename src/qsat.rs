@@ -1848,11 +1848,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                     .unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
                 let (group_len, _) = adjust_opencl_group_len(group_len);
                 println!("GroupLen: {}", group_len);
-                let opencl_config = OpenCLBuilderConfig {
-                    optimize_negs: true,
-                    group_len: Some(group_len),
-                    group_vec: false,
-                };
+                let opencl_config =
+                    OPENCL_BUILDER_CONFIG_DEFAULT.group_len(cmd_args.opencl_group_len);
                 let builder =
                     BasicMapperBuilder::new(OpenCLBuilder::new(&device, Some(opencl_config)));
                 do_command_with_opencl_mapper(builder, qcircuit.clone(), elem_inputs, group_len)
@@ -1873,11 +1870,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config = OpenCLBuilderConfig {
-                                optimize_negs: true,
-                                group_len: Some(group_len),
-                                group_vec: false,
-                            };
+                            let opencl_config =
+                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
                             (OpenCLBuilder::new(&device, Some(opencl_config)), group_len)
                         })
                         .collect::<Vec<_>>()
@@ -1892,11 +1886,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config = OpenCLBuilderConfig {
-                                optimize_negs: true,
-                                group_len: Some(group_len),
-                                group_vec: false,
-                            };
+                            let opencl_config =
+                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
                             [
                                 (
                                     OpenCLBuilder::new(&device, Some(opencl_config.clone())),
@@ -1922,11 +1913,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config = OpenCLBuilderConfig {
-                                optimize_negs: true,
-                                group_len: Some(group_len),
-                                group_vec: false,
-                            };
+                            let opencl_config =
+                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
                             (OpenCLBuilder::new(&device, Some(opencl_config)), group_len)
                         })
                         .collect::<Vec<_>>()
@@ -1942,11 +1930,8 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config = OpenCLBuilderConfig {
-                                optimize_negs: true,
-                                group_len: Some(group_len),
-                                group_vec: false,
-                            };
+                            let opencl_config =
+                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
                             [
                                 (
                                     OpenCLBuilder::new(&device, Some(opencl_config.clone())),
@@ -3479,11 +3464,7 @@ mod tests {
             let defs = get_aggr_output_opencl_code_defs(32, 1, &quants);
             let mut builder = OpenCLBuilder::new(
                 &device,
-                Some(OpenCLBuilderConfig {
-                    optimize_negs: true,
-                    group_vec: false,
-                    group_len: Some(1),
-                }),
+                Some(OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(1))),
             );
             assert_eq!(builder.type_len(), 32);
             builder.user_defs(&defs);
@@ -3811,11 +3792,7 @@ mod tests {
             let defs = get_aggr_output_opencl_code_defs(32, group_len, &quants);
             let mut builder = OpenCLBuilder::new(
                 &device,
-                Some(OpenCLBuilderConfig {
-                    optimize_negs: true,
-                    group_vec: false,
-                    group_len: Some(group_len),
-                }),
+                Some(OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len))),
             );
             assert_eq!(builder.type_len(), 32);
             builder.user_defs(&defs);

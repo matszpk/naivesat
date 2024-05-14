@@ -1675,11 +1675,7 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
         );
         println!("Unknowns: {}", cmd_args.unknowns);
         println!("Unknown fill bits: {}", unknown_fill_bits);
-        let opencl_config = OpenCLBuilderConfig {
-            optimize_negs: true,
-            group_len: cmd_args.opencl_group_len,
-            group_vec: false,
-        };
+        let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT.group_len(cmd_args.opencl_group_len);
         let exec_type = cmd_args.exec_type;
         match exec_type {
             ExecType::CPU => {

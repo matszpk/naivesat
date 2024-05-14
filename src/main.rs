@@ -263,11 +263,7 @@ fn do_command(circuit: Circuit<usize>, cmd_args: CommandArgs) {
         assert!(input_len - elem_inputs > 0 && input_len - elem_inputs <= 64);
         assert_eq!(circuit.outputs().len(), 1);
         println!("Elem inputs: {}", elem_inputs);
-        let opencl_config = OpenCLBuilderConfig {
-            optimize_negs: true,
-            group_len: cmd_args.opencl_group_len,
-            group_vec: false,
-        };
+        let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT.group_len(cmd_args.opencl_group_len);
         let exec_type = cmd_args.exec_type;
         match exec_type {
             ExecType::CPU => {
