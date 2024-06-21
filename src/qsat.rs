@@ -389,6 +389,7 @@ const AGGR_OUTPUT_CPU_CODE: &str = r##"{
 // aggr output code for OpenCL and OpenCL quant reducer code together
 // QUANT_REDUCER - enables OpenCL Quant Reducer kernel code.
 // major code is common.
+const INIT_OPENCL_CODE: &str = "local uint local_results[GROUP_LEN];";
 const AGGR_OUTPUT_OPENCL_CODE: &str = r##"
 #ifdef QUANT_REDUCER
 
@@ -408,7 +409,6 @@ kernel void QUANT_REDUCER_NAME(unsigned long n, const global ushort* input, glob
 #else // QUANT_REDUCER
 
 // normal aggegated output code for OpenCL
-local uint local_results[GROUP_LEN];
 {
     uint i;
     size_t lidx = get_local_id(0);
@@ -1664,6 +1664,7 @@ fn do_command_with_opencl_mapper<'a>(
             .arg_inputs(Some(
                 &(0..input_len - elem_inputs).rev().collect::<Vec<usize>>(),
             ))
+            .init_code(Some(INIT_OPENCL_CODE))
             .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
             .aggr_output_len(Some((1 << elem_inputs) / (group_len * type_len * 2))),
     );
@@ -1741,6 +1742,7 @@ fn do_command_with_parseq_mapper<'a>(
                 .aggr_output_code(Some(AGGR_OUTPUT_CPU_CODE))
                 .aggr_output_len(Some((cpu_type_len >> 5) + 4 + 2 * elem_inputs)),
             ParSeqSelection::Seq(i) => ParSeqDynamicConfig::new()
+                .init_code(Some(INIT_OPENCL_CODE))
                 .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
                 .aggr_output_len(Some(
                     (1 << elem_inputs) / (group_lens[i] * opencl_type_lens[i] * 2),
@@ -3473,6 +3475,7 @@ mod tests {
                 "formula",
                 circuit.clone(),
                 CodeConfig::new()
+                    .init_code(Some(INIT_OPENCL_CODE))
                     .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
                     .aggr_output_len(Some(1)),
             );
@@ -3801,6 +3804,7 @@ mod tests {
                 "formula",
                 circuit.clone(),
                 CodeConfig::new()
+                    .init_code(Some(INIT_OPENCL_CODE))
                     .aggr_output_code(Some(AGGR_OUTPUT_OPENCL_CODE))
                     .aggr_output_len(Some((reduce_len + 1) >> 1)),
             );
