@@ -42,10 +42,6 @@ use std::time::SystemTime;
 enum ExecType {
     CPU,
     OpenCL(usize),
-    CPUAndOpenCL,
-    CPUAndOpenCLD,
-    CPUAndOpenCL1(usize),
-    CPUAndOpenCL1D(usize),
 }
 
 impl FromStr for ExecType {
@@ -56,18 +52,6 @@ impl FromStr for ExecType {
         } else if s.starts_with("opencl:") {
             Ok(ExecType::OpenCL(
                 usize::from_str(&s[7..]).map_err(|e| e.to_string())?,
-            ))
-        } else if s == "cpu_and_opencl" {
-            Ok(ExecType::CPUAndOpenCL)
-        } else if s == "cpu_and_opencl_d" {
-            Ok(ExecType::CPUAndOpenCLD)
-        } else if s.starts_with("cpu_and_opencl_1:") {
-            Ok(ExecType::CPUAndOpenCL1(
-                usize::from_str(&s[17..]).map_err(|e| e.to_string())?,
-            ))
-        } else if s.starts_with("cpu_and_opencl_1d:") {
-            Ok(ExecType::CPUAndOpenCL1D(
-                usize::from_str(&s[18..]).map_err(|e| e.to_string())?,
             ))
         } else {
             Err("Unknown exec type".to_string())
@@ -1710,12 +1694,6 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
                     unknown_fill_bits,
                     &cmd_args,
                 )
-            }
-            ExecType::CPUAndOpenCL
-            | ExecType::CPUAndOpenCLD
-            | ExecType::CPUAndOpenCL1(_)
-            | ExecType::CPUAndOpenCL1D(_) => {
-                panic!("Unsupported!");
             }
         }
     } else {
