@@ -4440,7 +4440,7 @@ mod tests {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // for i in 0..1000000 {
     //     println!(
     //         "Hashfunction: {:016x} = {:016x}",
@@ -4453,8 +4453,8 @@ fn main() {
         get_all_devices(CL_DEVICE_TYPE_GPU).unwrap_or(vec![])
     );
     let cmd_args = CommandArgs::parse();
-    let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
-    let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
+    let circuit_str = fs::read_to_string(cmd_args.circuit.clone())?;
+    let circuit = Circuit::<usize>::from_str(&circuit_str)?;
     let input_len = circuit.input_len();
     assert_eq!(input_len + 1, circuit.outputs().len());
     assert!(cmd_args.unknowns <= input_len);
@@ -4463,4 +4463,5 @@ fn main() {
     } else {
         do_solve(circuit, cmd_args.unknowns, cmd_args);
     }
+    Ok(())
 }

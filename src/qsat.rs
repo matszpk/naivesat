@@ -6260,21 +6260,22 @@ mod tests {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "OpenCL devices: {:?}",
         get_all_devices(CL_DEVICE_TYPE_GPU).unwrap_or(vec![])
     );
     let cmd_args = CommandArgs::parse();
-    let circuit_str = fs::read_to_string(cmd_args.circuit.clone()).unwrap();
+    let circuit_str = fs::read_to_string(cmd_args.circuit.clone())?;
     let qcircuit = match QuantCircuit::<usize>::from_str(&circuit_str) {
         Ok(c) => c,
         Err(_) => {
             println!("Load as circuit with quantifiers");
-            let circuit = Circuit::<usize>::from_str(&circuit_str).unwrap();
+            let circuit = Circuit::<usize>::from_str(&circuit_str)?;
             let input_len = circuit.input_len();
             QuantCircuit::new(std::iter::repeat(Quant::Exists).take(input_len), circuit).unwrap()
         }
     };
     do_command(qcircuit, cmd_args);
+    Ok(())
 }
