@@ -62,13 +62,25 @@ impl FromStr for ExecType {
 #[derive(Clone, Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct CommandArgs {
+    #[arg(help = "Circuit file")]
     circuit: String,
+    #[arg(help = "Number of unknowns at end of circuit inputs")]
     unknowns: usize,
-    #[arg(short = 'S', long)]
+    #[arg(short = 'S', long, help = "Not real mode")]
     simple: bool,
-    #[arg(short = 'e', long, default_value_t = 24)]
+    #[arg(
+        short = 'e',
+        long,
+        default_value_t = 24,
+        help = "Power of two of number of elements executed at call"
+    )]
     elem_inputs: usize,
-    #[arg(short = 'H', long, default_value_t = 24)]
+    #[arg(
+        short = 'H',
+        long,
+        default_value_t = 24,
+        help = "Power of two of size of hashmap"
+    )]
     hashmap_len_bits: usize,
     #[arg(short = 'U', long)]
     unknown_fill_bits: Option<usize>,
@@ -76,11 +88,13 @@ struct CommandArgs {
     max_predecessors: u32,
     #[arg(short = 'C', long, default_value_t = 20)]
     iters_per_clear_predecessors: u32,
-    #[arg(short = 't', long)]
+    #[arg(short = 't', long, help = "Execution type: {cpu,opencl:{dev}}")]
     exec_type: ExecType,
-    #[arg(short = 'G', long)]
+    #[arg(short = 'n', long, help = "Disable optimize_negs")]
+    no_optimize_negs: bool,
+    #[arg(short = 'G', long, help = "OpenCL group length")]
     opencl_group_len: Option<usize>,
-    #[arg(short = 'v', long)]
+    #[arg(short = 'v', long, help = "Verify if solution found")]
     verify: bool,
 }
 
@@ -1659,12 +1673,17 @@ fn do_solve(circuit: Circuit<usize>, unknowns: usize, cmd_args: CommandArgs) {
         );
         println!("Unknowns: {}", cmd_args.unknowns);
         println!("Unknown fill bits: {}", unknown_fill_bits);
-        let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT.group_len(cmd_args.opencl_group_len);
+        let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT
+            .group_len(cmd_args.opencl_group_len)
+            .optimize_negs(!cmd_args.no_optimize_negs);
         let exec_type = cmd_args.exec_type;
         match exec_type {
             ExecType::CPU => {
                 println!("Execute in CPU");
-                let builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(None, Some(2048)));
+                let builder = BasicMapperBuilder::new(CPUBuilder::new_parallel(
+                    Some(CPU_BUILDER_CONFIG_DEFAULT.optimize_negs(!cmd_args.no_optimize_negs)),
+                    Some(2048),
+                ));
                 do_solve_with_cpu_mapper(
                     builder,
                     circuit.clone(),
