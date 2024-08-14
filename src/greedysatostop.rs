@@ -28,15 +28,23 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Clone, Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct CommandArgs {
+    #[arg(help = "Circuit file")]
     circuit: String,
+    #[arg(help = "Number of unknowns in circuit inputs")]
     unknowns: usize,
-    #[arg(short = 'C', long)]
+    #[arg(short = 'C', long, help = "Use OpenCL to execute circuits")]
     opencl: Option<usize>,
-    #[arg(short = 'p', long)]
+    #[arg(short = 'n', long, help = "Disable optimize_negs")]
+    no_optimize_negs: bool,
+    #[arg(
+        short = 'p',
+        long,
+        help = "Partitions that can be used if too small memory"
+    )]
     partitions: Option<usize>,
     #[arg(short = 'x', long)]
     file_image_prefix: Option<String>,
-    #[arg(short = 'v', long)]
+    #[arg(short = 'v', long, help = "Verify if solution found")]
     verify: bool,
 }
 
@@ -628,7 +636,10 @@ fn do_solve_with_cpu_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs) ->
     let output_len = input_len + 1;
     let words_per_elem = (output_len + 31) >> 5;
     let (output, start) = {
-        let mut builder = CPUBuilder::new_parallel(None, Some(2048));
+        let mut builder = CPUBuilder::new_parallel(
+            Some(CPU_BUILDER_CONFIG_DEFAULT.optimize_negs(!cmd_args.no_optimize_negs)),
+            Some(2048),
+        );
         builder.transform_helpers();
         builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
         builder.user_defs(&gen_output_transform_code(output_len));
@@ -1038,7 +1049,10 @@ fn do_solve_with_opencl_builder(circuit: Circuit<usize>, cmd_args: &CommandArgs)
             .get(cmd_args.opencl.unwrap())
             .unwrap(),
     );
-    let mut builder = OpenCLBuilder::new(&device, None);
+    let mut builder = OpenCLBuilder::new(
+        &device,
+        Some(OPENCL_BUILDER_CONFIG_DEFAULT.optimize_negs(!cmd_args.no_optimize_negs)),
+    );
     builder.transform_helpers();
     builder.user_defs(&format!("#define OUTPUT_NUM ({})\n", output_len));
     builder.user_defs(&gen_output_transform_code(output_len));
