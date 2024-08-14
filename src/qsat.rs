@@ -74,12 +74,24 @@ impl FromStr for ExecType {
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct CommandArgs {
+    #[arg(help = "Circuit file")]
     circuit: String,
-    #[arg(short = 'e', long, default_value_t = 24)]
+    #[arg(
+        short = 'e',
+        long,
+        default_value_t = 24,
+        help = "Power of two of number of elements executed at call"
+    )]
     elem_inputs: usize,
-    #[arg(short = 't', long)]
+    #[arg(
+        short = 't',
+        long,
+        help = "Execution type: {cpu|opencl:{dev},cpu_and_openclXX}"
+    )]
     exec_type: ExecType,
-    #[arg(short = 'G', long)]
+    #[arg(short = 'n', long, help = "Disable optimize_negs")]
+    no_optimize_negs: bool,
+    #[arg(short = 'G', long, help = "OpenCL group length")]
     opencl_group_len: Option<usize>,
 }
 
@@ -1834,7 +1846,9 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
         match exec_type {
             ExecType::CPU => {
                 println!("Execute in CPU");
-                let builder = ParBasicMapperBuilder::new(CPUBuilder::new(None));
+                let builder = ParBasicMapperBuilder::new(CPUBuilder::new(Some(
+                    CPU_BUILDER_CONFIG_DEFAULT.optimize_negs(!cmd_args.no_optimize_negs),
+                )));
                 do_command_with_par_mapper(builder, qcircuit.clone(), elem_inputs)
             }
             ExecType::OpenCL(didx) => {
@@ -1850,8 +1864,9 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                     .unwrap_or(usize::try_from(device.max_work_group_size().unwrap()).unwrap());
                 let (group_len, _) = adjust_opencl_group_len(group_len);
                 println!("GroupLen: {}", group_len);
-                let opencl_config =
-                    OPENCL_BUILDER_CONFIG_DEFAULT.group_len(cmd_args.opencl_group_len);
+                let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT
+                    .group_len(cmd_args.opencl_group_len)
+                    .optimize_negs(!cmd_args.no_optimize_negs);
                 let builder =
                     BasicMapperBuilder::new(OpenCLBuilder::new(&device, Some(opencl_config)));
                 do_command_with_opencl_mapper(builder, qcircuit.clone(), elem_inputs, group_len)
@@ -1860,7 +1875,9 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
             | ExecType::CPUAndOpenCLD
             | ExecType::CPUAndOpenCL1(_)
             | ExecType::CPUAndOpenCL1D(_) => {
-                let par_builder = CPUBuilder::new(None);
+                let par_builder = CPUBuilder::new(Some(
+                    CPU_BUILDER_CONFIG_DEFAULT.optimize_negs(!cmd_args.no_optimize_negs),
+                ));
                 let seq_builders_and_group_lens = if let ExecType::CPUAndOpenCL1(didx) = exec_type {
                     println!("Execute in CPUAndOpenCL1");
                     get_all_devices(CL_DEVICE_TYPE_GPU).unwrap()[didx..=didx]
@@ -1872,8 +1889,9 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config =
-                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
+                            let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT
+                                .group_len(Some(group_len))
+                                .optimize_negs(!cmd_args.no_optimize_negs);
                             (OpenCLBuilder::new(&device, Some(opencl_config)), group_len)
                         })
                         .collect::<Vec<_>>()
@@ -1888,8 +1906,9 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config =
-                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
+                            let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT
+                                .group_len(Some(group_len))
+                                .optimize_negs(!cmd_args.no_optimize_negs);
                             [
                                 (
                                     OpenCLBuilder::new(&device, Some(opencl_config.clone())),
@@ -1915,8 +1934,9 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config =
-                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
+                            let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT
+                                .group_len(Some(group_len))
+                                .optimize_negs(!cmd_args.no_optimize_negs);
                             (OpenCLBuilder::new(&device, Some(opencl_config)), group_len)
                         })
                         .collect::<Vec<_>>()
@@ -1932,8 +1952,9 @@ fn do_command(qcircuit: QuantCircuit<usize>, cmd_args: CommandArgs) {
                             );
                             let (group_len, _) = adjust_opencl_group_len(group_len);
                             println!("GroupLen for {:?}: {}", dev_id, group_len);
-                            let opencl_config =
-                                OPENCL_BUILDER_CONFIG_DEFAULT.group_len(Some(group_len));
+                            let opencl_config = OPENCL_BUILDER_CONFIG_DEFAULT
+                                .group_len(Some(group_len))
+                                .optimize_negs(!cmd_args.no_optimize_negs);
                             [
                                 (
                                     OpenCLBuilder::new(&device, Some(opencl_config.clone())),
