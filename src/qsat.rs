@@ -6003,7 +6003,7 @@ mod tests {
     fn gen_circuit(solution_bits: usize, solution: u128, values: u32) -> Circuit<usize> {
         use gategen::boolexpr::*;
         use gategen::dynintexpr::*;
-        use gateutil::*;
+        use gategen::gateutil::*;
         let ec = ExprCreatorSys::new();
         let input = UDynExprNode::variable(ec.clone(), solution_bits + 5);
         let out = dynint_booltable(
