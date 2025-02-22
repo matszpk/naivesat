@@ -1,7 +1,13 @@
 [package]
 name = "naivesat"
+authors = ["Mateusz Szpakowski"]
+license = "Apache-2.0"
 version = "0.1.0"
 edition = "2021"
+description = "The few solvers that uses the Gate project."
+repository = "https://github.com/matszpk/naivesat"
+keywords = ["gate", "logic", "circuit"]
+categories = ["science", "mathematics"]
 
 [[bin]]
 name = "naivesat"
