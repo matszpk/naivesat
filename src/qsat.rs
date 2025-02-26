@@ -1030,14 +1030,21 @@ impl OpenCLQuantReducer {
             source_code += "\n";
         }
         //println!("source: {}", source_code);
-        let program = Program::create_and_build_from_source(&context, &source_code, "").unwrap();
+        let program = if kernel_num != 0 {
+            Some(Program::create_and_build_from_source(&context, &source_code, "").unwrap())
+        } else {
+            None
+        };
         Self {
             cmd_queue: cmd_queue.clone(),
             group_len,
             group_len_bits,
             input_len: 1 << quants_len,
             kernels: (0..kernel_num)
-                .map(|ki| Kernel::create(&program, &format!("quant_reducer_{}", ki)).unwrap())
+                .map(|ki| {
+                    Kernel::create(program.as_ref().unwrap(), &format!("quant_reducer_{}", ki))
+                        .unwrap()
+                })
                 .collect::<Vec<_>>(),
             outputs: (0..kernel_num)
                 .map(|ki| {
