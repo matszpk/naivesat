@@ -2,7 +2,7 @@
 name = "naivesat"
 authors = ["Mateusz Szpakowski"]
 license = "Apache-2.0"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "Few solvers that uses the Gate project."
 repository = "https://github.com/matszpk/naivesat"
@@ -31,4 +31,4 @@ clap = { version = "4.5.3", features = ["derive"] }
 rayon = "1.0"
 
 [dev-dependencies]
-gategen = "0.1.0"
+gategen = "0.2.0"
