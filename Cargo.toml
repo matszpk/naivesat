@@ -2,7 +2,7 @@
 name = "naivesat"
 authors = ["Mateusz Szpakowski"]
 license = "Apache-2.0"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 description = "Few solvers that uses the Gate project."
 repository = "https://github.com/matszpk/naivesat"
@@ -26,7 +26,7 @@ name = "greedysatostop"
 path = "src/greedysatostop.rs"
 
 [dependencies]
-gatenative = "0.1.0"
+gatenative = "0.2.0"
 clap = { version = "4.5.3", features = ["derive"] }
 rayon = "1.0"
 
